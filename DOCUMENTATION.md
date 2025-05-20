@@ -730,15 +730,10 @@ The frontend is built using Next.js (App Router) and React with TypeScript. Tail
 
 ## Usage
 
-(This section should be filled out with details on how to use the application's features, typical user workflows, and any specific functionalities available to different user roles, if applicable. Currently, this information is not available and needs to be added.)
+Geared for the management users at the cooperative.
 
 ## Contributing
-
-(This section should outline guidelines for contributing to the project, such as coding standards, pull request processes, and how to set up a development environment for contributing. Currently, this information is not available and needs to be added.)
-
-## License
-
-(This section should specify the project's license (e.g., MIT, GPL, Proprietary). It should reference a `LICENSE` file if one exists in the repository. Currently, this information is not available and needs to be added.)
+Antônio Guimarães - UnB
 
 ## Learn More (from original README.md)
 

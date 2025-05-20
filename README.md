@@ -1,0 +1,1 @@
+# DMS_NextJS_MGM

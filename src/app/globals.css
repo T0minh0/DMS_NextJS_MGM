@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  /* DMS Palette */
+  --dms-primary: #2e7d32;
+  --dms-secondary: #4caf50;
+  --dms-accent: #8bc34a;
+  --dms-text-color: #333333; /* Renamed to avoid conflict with Tailwind's text-* */
+  --dms-light-gray: #f8f9fa;
+  --dms-background-color: #f1f8e9; /* Renamed to avoid conflict with Tailwind's bg-* */
+}
+
+@theme inline {
+  /* You can map CSS variables to Tailwind's theme here if needed,
+     but for direct usage in CSS, the :root variables are sufficient.
+     For now, we'll rely on Tailwind utility classes for applying these colors
+     which will use the definitions from tailwind.config.ts.
+     This @theme block might be part of a specific Next.js/Tailwind setup,
+     so we'll clear its default color/font vars to avoid conflicts for now.
+  */
+  --color-background: var(--dms-background-color);
+  --color-foreground: var(--dms-text-color);
+  /* --font-sans: var(--font-geist-sans); /* Keep or remove default fonts as desired */
+  /* --font-mono: var(--font-geist-mono); */
+}
+
+/* Remove default dark mode for now to focus on DMS palette */
+/*
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+*/
+
+body {
+  /* Use Tailwind utility classes for consistency where possible,
+     but setting a base like this in globals.css is also common.
+     Here, we directly use the CSS variable we defined.
+  */
+  background-color: var(--dms-background-color);
+  color: var(--dms-text-color);
+  /* font-family: Arial, Helvetica, sans-serif; /* Or use Tailwind font utilities */
+}
+
+/* Add Tailwind base, components, and utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

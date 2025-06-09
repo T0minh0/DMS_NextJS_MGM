@@ -14,17 +14,22 @@ This document provides a comprehensive overview of the "DMS Dashboard" project, 
   - [5. Run the Development Server](#5-run-the-development-server)
   - [6. Building for Production](#6-building-for-production)
 - [Project Structure](#project-structure)
+  - [Password Generation Script (`generatepass.js`)](#password-generation-script-generatepassjs)
 - [API Endpoints](#api-endpoints)
   - [Authentication](#authentication)
   - [Birthdays](#birthdays)
+  - [Cooperatives](#cooperatives)
   - [Debug Endpoints](#debug-endpoints)
+  - [Data Utilities](#data-utilities)
   - [Earnings Comparison](#earnings-comparison)
   - [Materials](#materials)
   - [Price Fluctuation](#price-fluctuation)
+  - [Sales](#sales)
   - [Stock](#stock)
   - [User](#user)
   - [Users](#users)
   - [Worker Collections](#worker-collections)
+  - [Worker Productivity](#worker-productivity)
 - [Data Models](#data-models)
   - [Defined Mongoose Models](#defined-mongoose-models)
   - [Other Important Collections (Inferred from API Routes)](#other-important-collections-inferred-from-api-routes)
@@ -101,10 +106,13 @@ JWT_SECRET="your_strong_jwt_secret_key" # Crucial for security. Used by /api/aut
 - Ensure your MongoDB instance is running and accessible with the credentials provided in `MONGODB_URI`.
 - The application interacts with several collections (e.g., `users`, `materials`, `measurements`, `sales`). If starting with an empty database:
     - The application may attempt to create collections as new data is added if Mongoose models are used for insertion.
-    - However, for full functionality and to avoid relying on sample data fallbacks in API routes, you might need to:
-        - Manually create these collections.
-        - Or, if available, run a database seeding script (e.g., `repopulate_db.py`, which is mentioned in code comments but not provided in the standard project structure).
-- Without initial or correctly structured data, some dashboard features might not display information as expected or might default to sample data as coded in some API endpoints.
+    - However, for full functionality and to avoid relying on sample data fallbacks in API routes, you might need to manually populate essential data for collections such as `users` and `materials`.
+    - **Regarding Database Seeding**: Code comments in some parts of the application mention a Python script named `repopulate_db.py` for database seeding. However, this script is **not provided** in the current project repository.
+    - Therefore, developers starting with an empty database should:
+        - Be prepared to create initial user accounts (e.g., an admin user). The `generatepass.js` script can be used to create password hashes for manual insertion into the `users` collection.
+        - Add some initial materials to the `materials` collection.
+        - Other collections like `measurements` and `sales` will be populated as data is generated through application usage.
+- Without initial or correctly structured data (especially for `users` and `materials`), some dashboard features might have limited functionality or might default to sample data as coded in some API endpoints.
 
 ### 5. Run the Development Server
 
@@ -172,9 +180,36 @@ Key configuration files at the root:
 - **`tailwind.config.ts`**: Configuration file for Tailwind CSS utility classes and theming.
 - **`tsconfig.json`**: Configuration file for the TypeScript compiler.
 - **`package.json`**: Lists project dependencies, scripts (like `dev`, `build`, `start`), and project metadata.
-- **`generatepass.js`**: A standalone Node.js script. **Purpose**: Likely used for generating password hashes for users, possibly during initial setup or for testing. Its exact usage should be verified if user creation is part of development workflows.
+- **`generatepass.js`**: A standalone Node.js script for generating bcrypt password hashes. See the ["Password Generation Script (`generatepass.js`)"](#password-generation-script-generatepassjs) subsection under "Project Structure" for full details.
 - **`eslint.config.mjs`**: Configuration for ESLint, a static code analysis tool for identifying problematic patterns in JavaScript/TypeScript code.
 - **`postcss.config.mjs`**: Configuration for PostCSS, a tool for transforming CSS with JavaScript plugins.
+
+### Password Generation Script (`generatepass.js`)
+
+-   **Purpose**: The `generatepass.js` script is a utility for generating password hashes using `bcrypt`. This is necessary because passwords should be stored in a hashed format for security, rather than as plain text.
+-   **How to Use**:
+    1.  **Modify Script**: Open `generatepass.js` in a text editor. Locate the `password` variable (which defaults to `'123456'`) and change its value to the desired plain-text password you want to hash.
+        ```javascript
+        // Inside generatepass.js
+        const password = 'your-desired-password-here';
+        // ... rest of the script
+        ```
+    2.  **Run from Command Line**: Execute the script using Node.js:
+        ```bash
+        node generatepass.js
+        ```
+    3.  **Output**: The script will print the original plain-text password and the generated bcrypt hash to the console.
+        ```
+        Plaintext password: your-desired-password-here
+        Hashed password: $2b$10$.....................................................
+        ```
+-   **Typical Use Cases**:
+    -   **Initial User Setup**: When creating the first admin user or other initial users directly in the database.
+    -   **Test Accounts**: For creating test user accounts with known passwords for development and testing purposes.
+    -   **Manual Database Entries**: If you need to manually insert a user into the database and require a correctly hashed password.
+-   **Security Note**:
+    -   Always change the default password (`'123456'`) in the script to your desired password before running it.
+    -   This script is a development utility. It is not part of the production application's runtime and should not be deployed or made accessible in a production environment. Ensure it is used in a secure, local development context.
 
 ## API Endpoints
 
@@ -251,6 +286,24 @@ This section details the available API endpoints, their functionalities, and exp
       { "error": "Failed to fetch birthdays data", "details": "Error message string" }
       ```
 
+### Cooperatives
+
+- **`GET /api/cooperatives`**
+  - **Description**: Fetches a list of cooperatives.
+  - **Query Parameters**: To be determined by code review.
+  - **Response**:
+    - **Success (200)**: Array of cooperative objects.
+    - **Error Responses**: (500) Server Error.
+  - **Note**: Methods (GET, POST) inferred from route file presence. Actual implementation details need code review.
+
+- **`POST /api/cooperatives`**
+  - **Description**: Creates a new cooperative.
+  - **Request Body**: Cooperative data. (To be determined by code review).
+  - **Response**:
+    - **Success (201)**: Cooperative object created.
+    - **Error Responses**: (400) Bad Request, (500) Server Error.
+  - **Note**: Methods (GET, POST) inferred from route file presence. Actual implementation details need code review.
+
 ### Debug Endpoints
 
 These endpoints appear to be for development and debugging purposes.
@@ -272,6 +325,22 @@ These endpoints appear to be for development and debugging purposes.
     ```
   - **Error (500)**: Server-side error.
 
+- **`GET /api/debug/check-data`**
+  - **Description**: Checks some data consistency or status in the database.
+  - **Query Parameters**: To be determined by code review.
+  - **Response**:
+    - **Success (200)**: Status message or data check results.
+    - **Error Responses**: (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`POST /api/debug/create-test-user`**
+  - **Description**: Creates a test user in the system.
+  - **Request Body**: Test user data (To be determined by code review).
+  - **Response**:
+    - **Success (201)**: Created test user object.
+    - **Error Responses**: (400) Bad Request, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
 - **`GET /api/debug/wastepickers`**
   - **Description**: Attempts to find a specific wastepicker (user) using various query methods (by `wastepicker_id`, CPF, ObjectId). It may also attempt to insert a test user if not found.
   - **Response (200)**: An object containing results of different find/insert attempts.
@@ -286,6 +355,16 @@ These endpoints appear to be for development and debugging purposes.
     }
     ```
   - **Error (500)**: Server-side error.
+
+### Data Utilities
+
+- **`POST /api/recalculate-contributions`**
+  - **Description**: Triggers a recalculation of contributions or similar aggregate data.
+  - **Request Body**: Potentially parameters for recalculation (To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Message confirming recalculation started or completed.
+    - **Error Responses**: (400) Bad Request, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
 
 ### Earnings Comparison
 
@@ -348,6 +427,43 @@ These endpoints appear to be for development and debugging purposes.
       { "error": "Failed to fetch materials", "details": "Error message string" }
       ```
 
+- **`POST /api/materials`**
+  - **Description**: Creates a new material.
+  - **Request Body**: Material data (To be determined by code review).
+  - **Response**:
+    - **Success (201)**: Material object created.
+    - **Error Responses**: (400) Bad Request, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`GET /api/materials/{id}`**
+  - **Description**: Fetches a specific material by its ID.
+  - **Path Parameters**:
+    - `id`: The ID of the material.
+  - **Query Parameters**: None.
+  - **Response**:
+    - **Success (200)**: Material object.
+    - **Error Responses**: (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`PUT /api/materials/{id}`**
+  - **Description**: Updates a specific material by its ID.
+  - **Path Parameters**:
+    - `id`: The ID of the material to update.
+  - **Request Body**: Updated material data (To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Updated material object.
+    - **Error Responses**: (400) Bad Request, (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`DELETE /api/materials/{id}`**
+  - **Description**: Deletes a specific material by its ID.
+  - **Path Parameters**:
+    - `id`: The ID of the material to delete.
+  - **Response**:
+    - **Success (200)**: Message confirming deletion.
+    - **Error Responses**: (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
 ### Price Fluctuation
 
 - **`GET /api/price-fluctuation`**
@@ -400,6 +516,61 @@ These endpoints appear to be for development and debugging purposes.
         "message": "Erro ao buscar dados de preços"
       }
       ```
+
+### Sales
+
+- **`GET /api/sales`**
+  - **Description**: Fetches a list of sales records.
+  - **Query Parameters**: To be determined by code review (e.g., filters for material, date range).
+  - **Response**:
+    - **Success (200)**: Array of sales objects.
+    - **Error Responses**: (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`POST /api/sales`**
+  - **Description**: Creates a new sales record.
+  - **Request Body**: Sales data (To be determined by code review).
+  - **Response**:
+    - **Success (201)**: Sales object created.
+    - **Error Responses**: (400) Bad Request, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`GET /api/sales/{id}`**
+  - **Description**: Fetches a specific sales record by its ID.
+  - **Path Parameters**:
+    - `id`: The ID of the sales record.
+  - **Query Parameters**: None.
+  - **Response**:
+    - **Success (200)**: Sales object.
+    - **Error Responses**: (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`PUT /api/sales/{id}`**
+  - **Description**: Updates a specific sales record by its ID.
+  - **Path Parameters**:
+    - `id`: The ID of the sales record to update.
+  - **Request Body**: Updated sales data (To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Updated sales object.
+    - **Error Responses**: (400) Bad Request, (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`DELETE /api/sales/{id}`**
+  - **Description**: Deletes a specific sales record by its ID.
+  - **Path Parameters**:
+    - `id`: The ID of the sales record to delete.
+  - **Response**:
+    - **Success (200)**: Message confirming deletion.
+    - **Error Responses**: (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`GET /api/sales/buyers`**
+  - **Description**: Fetches a list of unique buyers from sales records.
+  - **Query Parameters**: To be determined by code review.
+  - **Response**:
+    - **Success (200)**: Array of buyer names or objects.
+    - **Error Responses**: (500) Server Error.
+  - **Note**: Actual implementation details need code review.
 
 ### Stock
 
@@ -458,6 +629,29 @@ These endpoints appear to be for development and debugging purposes.
       { "message": "Error fetching user data" }
       ```
 
+- **`POST /api/user/change-password`**
+  - **Description**: Allows an authenticated user to change their password.
+  - **Request Body**:
+    ```json
+    {
+      "currentPassword": "current_user_password",
+      "newPassword": "new_user_password"
+    }
+    ```
+    (Details to be confirmed by code review)
+  - **Response**:
+    - **Success (200)**: Message confirming password change.
+    - **Error Responses**: (400) Bad Request (e.g., incorrect current password, weak new password), (401) Unauthorized, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`PUT /api/user/update`**
+  - **Description**: Allows an authenticated user to update their own profile information.
+  - **Request Body**: User data to update (e.g., email, phone; To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Updated user object.
+    - **Error Responses**: (400) Bad Request, (401) Unauthorized, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
 ### Users
 
 - **`GET /api/users`**
@@ -507,6 +701,38 @@ These endpoints appear to be for development and debugging purposes.
       ```json
       { "message": "Error fetching users data" }
       ```
+
+- **`POST /api/users/create`**
+  - **Description**: Creates a new user.
+  - **Request Body**: User data for the new user (To be determined by code review).
+  - **Response**:
+    - **Success (201)**: Created user object.
+    - **Error Responses**: (400) Bad Request, (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
+- **`PUT /api/users/update`**
+  - **Description**: Updates an existing user's information. Likely requires user ID in the body or as a query parameter.
+  - **Request Body**: User data to update, including ID of the user (To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Updated user object.
+    - **Error Responses**: (400) Bad Request, (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review. The path does not include an ID, so ID must be in payload.
+
+- **`DELETE /api/users/delete`**
+  - **Description**: Deletes a user. Likely requires user ID in the body or as a query parameter.
+  - **Request Body**: Object containing the ID of the user to delete, e.g. `{ "id": "user_id" }` (To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Message confirming deletion.
+    - **Error Responses**: (400) Bad Request, (404) Not Found, (500) Server Error.
+  - **Note**: Actual implementation details need code review. The path does not include an ID, so ID must be in payload or query.
+
+- **`POST /api/users/assign-wastepicker-ids`**
+  - **Description**: Assigns `wastepicker_id` to users who are workers and do not have one.
+  - **Request Body**: None expected, or potentially parameters for assignment batch. (To be determined by code review).
+  - **Response**:
+    - **Success (200)**: Report of assignments made.
+    - **Error Responses**: (500) Server Error.
+  - **Note**: Actual implementation details need code review.
 
 ### Worker Collections
 
@@ -568,6 +794,16 @@ These endpoints appear to be for development and debugging purposes.
       }
       ```
 
+### Worker Productivity
+
+- **`GET /api/worker-productivity`**
+  - **Description**: Fetches data related to worker productivity metrics.
+  - **Query Parameters**: To be determined by code review (e.g., `worker_id`, `period_type`).
+  - **Response**:
+    - **Success (200)**: Productivity data for workers.
+    - **Error Responses**: (500) Server Error.
+  - **Note**: Actual implementation details need code review.
+
 ## Data Models
 
 The application uses Mongoose to define schemas and interact with the MongoDB database. The primary Mongoose models are defined in `src/models/index.ts`. However, as noted below, some API endpoints derive data from collections not strictly governed by these explicit models or use different field names than defined in the schemas.
@@ -577,8 +813,7 @@ The application uses Mongoose to define schemas and interact with the MongoDB da
 The following models have schemas defined in `src/models/index.ts`:
 
 1.  **Material (`MaterialSchema`)**
-    -   **Intended Collection Name**: `waste_type` (as specified in `mongoose.model('Material', MaterialSchema, 'waste_type')`).
-    -   **Note on Actual Usage**: Some API routes (e.g., `/api/materials`) appear to query a collection named `materials`. This could be an alias, a different collection, or the schema is intended for `waste_type` but `materials` is used in practice. **This naming should be verified and unified.**
+    -   **Collection Name**: `materials` (as specified in the schema: `{ collection: 'materials' }`).
     -   **Description**: Represents a type of waste material.
     -   **Schema Fields**:
         -   `material_id`: `Number` (Required, Unique) - An application-specific identifier for the material.
@@ -587,21 +822,22 @@ The following models have schemas defined in `src/models/index.ts`:
 
 2.  **User (`UserSchema`)**
     -   **Collection Name**: `users`
-    -   **Description**: Represents users of the system, including administrators and workers (waste pickers).
+    -   **Description**: Represents users of the system, including administrators and workers (wastepickers).
     -   **Schema Fields**:
-        -   `wastepicker_id`: `Number` (Unique, Sparse) - Specific identifier for waste pickers.
+        -   **Important Note on Field Usage**: Developers should be aware that some API routes might expect or use field names not explicitly defined in this schema or with different casing/spacing. For instance, the login API (`/api/auth/login`) uses a `cpf` field which is not in the schema, and the birthdays API (`/api/birthdays`) refers to `"Birth date"` (with a space) which differs from the `birthdate` schema field. Always cross-verify with the specific API implementation.
+        -   `wastepicker_id`: `Number` (Unique, Sparse) - Specific identifier for wastepickers.
         -   `user_id`: `Number` (Required, Unique) - General unique user identifier.
-        -   `user_type`: `Number` (Required) - Type of user (e.g., `0` for admin, `1` for waste picker/worker).
+        -   `user_type`: `Number` (Required) - Type of user (e.g., `0` for admin, `1` for wastepicker/worker).
         -   `username`: `String` (Required, Unique) - Login username.
         -   `password_hash`: `String` - Hashed password for the user. (Login API expects `password` in request, implying hashing before storage or comparison with this field).
         -   `full_name`: `String` - Full name of the user.
         -   `email`: `String` - Email address.
         -   `phone`: `String` - Phone number.
-        -   `birthdate`: `Date` - User's birthdate. (Note: The `/api/birthdays` API refers to a field `"Birth date"` (with a space) from the database for workers, which might be an alternative or legacy field name not matching this schema field directly).
+        -   `birthdate`: `Date` - User's birthdate. (Note: As mentioned above, the `/api/birthdays` API specifically uses a field named `"Birth date"` (with a space) from the database for workers, which might be an alternative or legacy field name not matching this schema field directly).
         -   `active`: `Boolean` (Default: `true`) - Whether the user account is active.
         -   `created_at`: `Date` (Default: `Date.now`) - Timestamp of user creation.
-    -   **Other Fields Observed in DB/APIs (potentially not in schema but used)**:
-        -   `cpf`: `String` (Used in login).
+    -   **Other Fields Observed in DB/APIs (potentially not in schema but used, illustrating the note above)**:
+        -   `cpf`: `String` (Used in login API `/api/auth/login`).
         -   `coopeative_id`: `String` (Typo for `cooperative_id`?).
         -   `"Entry date"`: `Date` (Entry date of the worker).
         -   `PIS`: `String` (PIS number).
@@ -615,7 +851,8 @@ The following models have schemas defined in `src/models/index.ts`:
         -   `material_id`: `Number` (Required, Ref: `Material`) - Reference to the material.
         -   `weight`: `Number` (Required) - Weight of the material in stock.
         -   `date`: `Date` (Default: `Date.now`) - Date when the stock was recorded.
-    -   **Note on Usage**: The `/api/stock` route calculates current stock dynamically from `measurements` and `sales` collections, not directly from this `stock` collection. The purpose of this `Stock` model and its collection needs clarification (e.g., for historical snapshots, manual adjustments, or if it's currently unused by main dashboard features).
+    -   **Note on Usage**: While the `StockSchema` exists and defines a `stock` collection, the primary API route for dashboard stock data (`/api/stock`) dynamically calculates current stock levels primarily from the `measurements` (for additions) and `sales` (for subtractions) collections.
+        This `stock` collection and its Mongoose model might be intended for specific backend operations, historical data storage, manual data entry, or could be a legacy structure not fully utilized by the current dashboard's read APIs. Developers should verify its specific use case if they intend to interact directly with this collection.
 
 4.  **Collection (`CollectionSchema`)**
     -   **Collection Name**: `collections`
@@ -625,7 +862,8 @@ The following models have schemas defined in `src/models/index.ts`:
         -   `material_id`: `Number` (Required, Ref: `Material`) - Reference to the collected material.
         -   `weight`: `Number` (Required) - Weight of the material collected.
         -   `date`: `Date` (Default: `Date.now`) - Date of the collection.
-    -   **Note on Usage**: The `/api/worker-collections` route uses the `measurements` collection, not this `collections` collection, to determine worker collection data. The purpose of this `Collection` model and its collection needs clarification (e.g., for a different type of collection record, an older data structure, or if it's currently unused).
+    -   **Note on Usage**: While the `CollectionSchema` exists and defines a `collections` collection (intended for worker collections), the primary API route for dashboard worker collection data (`/api/worker-collections`) dynamically calculates this data primarily from the `measurements` collection.
+        This `collections` collection and its Mongoose model might be intended for specific backend operations, historical data storage, manual data entry, or could be a legacy structure not fully utilized by the current dashboard's read APIs. Developers should verify its specific use case if they intend to interact directly with this collection.
 
 5.  **Price (`PriceSchema`)**
     -   **Collection Name**: `prices`
@@ -634,7 +872,8 @@ The following models have schemas defined in `src/models/index.ts`:
         -   `material_id`: `Number` (Required, Ref: `Material`) - Reference to the material.
         -   `price`: `Number` (Required) - Price of the material (likely per unit of weight, e.g., per kg).
         -   `date`: `Date` (Default: `Date.now`) - Date when the price was set.
-    -   **Note on Usage**: The `/api/price-fluctuation` route uses the `sales` collection (specifically `price_kg` or `price/kg` field) to determine price history. The purpose of this `Price` model and its collection needs clarification (e.g., for base prices, price lists, or if it's currently unused).
+    -   **Note on Usage**: While the `PriceSchema` exists and defines a `prices` collection, the primary API route for dashboard price fluctuation data (`/api/price-fluctuation`) dynamically calculates this data primarily from the `sales` collection (using fields like `price_kg`).
+        This `prices` collection and its Mongoose model might be intended for specific backend operations, historical data storage (e.g., base prices, price lists), manual data entry, or could be a legacy structure not fully utilized by the current dashboard's read APIs. Developers should verify its specific use case if they intend to interact directly with this collection.
 
 ### Other Important Collections (Inferred from API Routes)
 
@@ -642,27 +881,40 @@ Several API routes heavily rely on collections that might not have explicit Mong
 
 -   **`measurements`**
     -   **Description**: Stores records of individual material measurements or collections by workers. This collection is central to calculating current stock (total input) and worker collection statistics.
-    -   **Key Fields (inferred from API usage)**: `material_id` (String or Number, referencing a material), `Weight` (Number, weight of material), `timestamp` (Date or Number, when it was measured), `wastepicker_id` (String or Number, referencing a user/worker).
+    -   **Key Fields (inferred from API usage)**:
+        -   `material_id`: String or Number (referencing a material, often the `_id` from the `materials` collection or an application-specific ID).
+        -   `Weight`: Number (weight of material, typically in kg).
+        -   `timestamp`: Date or Number (when the material was measured/collected).
+        -   `wastepicker_id`: String or Number (e.g., `WP001`, referencing a user/worker).
 
 -   **`sales`**
     -   **Description**: Stores records of material sales. This collection is used for calculating earnings, price fluctuations, and current stock (total output).
-    -   **Key Fields (inferred from API usage)**: `material_id` (String or Number), `date` (Date or String), `price_kg` (Number, price per kg, sometimes seen as `price/kg`), `weight_sold` (Number).
+    -   **Key Fields (inferred from API usage)**:
+        -   `material_id`: String or Number (referencing a material).
+        -   `date`: Date or String (date of the sale).
+        -   `price_kg`: Number (price per kg, sometimes seen as `price/kg` or `unit_price`).
+        -   `weight_sold`: Number (quantity sold, typically in kg).
+        -   `buyer`: String (name or ID of the buyer, if available).
 
 ### Important Note on Data Model Usage
 
-**Discrepancies exist between the formally defined Mongoose schemas in `src/models/index.ts` (e.g., `Stock`, `Collection`, `Price` models) and the actual data sources and field names used by several key API endpoints.**
-For example:
--   `/api/stock` primarily uses `measurements` (for additions) and `sales` (for subtractions) collections to calculate current stock, rather than querying a `stock` collection.
--   `/api/worker-collections` queries the `measurements` collection.
--   `/api/price-fluctuation` queries the `sales` collection.
--   Field names in API responses (e.g., `material.name` vs `material.material`, `user.birthdate` vs `user."Birth date"`) sometimes vary from schema definitions.
+A key takeaway for developers is that while Mongoose schemas are defined in `src/models/index.ts`, their application and usage can vary, especially concerning API data retrieval for the dashboard.
 
-This suggests one or more of the following:
-1.  The Mongoose models in `src/models/index.ts` might be partially outdated or not fully representative of the data structures actively used by all parts of the application.
-2.  They might represent a target schema or are used for specific operations (like creating new entries via a specific admin interface not covered here), while read operations for the dashboard are more flexible.
-3.  The application relies on a more dynamic schema approach for some queries, directly interacting with MongoDB collections and adapting to existing field names.
+**1. API Data Sourcing vs. Defined Schemas:**
+-   **`Stock`, `Collection`, `Price` Models**: As detailed in their respective notes, the Mongoose models `StockSchema`, `CollectionSchema`, and `PriceSchema` (defining `stock`, `collections`, and `prices` collections) are not the primary sources for the main dashboard API routes (`/api/stock`, `/api/worker-collections`, `/api/price-fluctuation`). These routes dynamically calculate data primarily from the `measurements` and `sales` collections. The `stock`, `collections`, and `prices` collections might be for other backend uses, historical data, manual entries, or are legacy.
+-   **`Material` Model**: The `MaterialSchema` correctly defines its collection as `materials`.
 
-**Developers should be cautious and verify the actual collection names and field structures by inspecting API route code and database contents when working with these parts of the system.** The documentation above for `measurements` and `sales` is based on their inferred usage in the API routes.
+**2. Field Name and Usage Variations:**
+-   **User Model Example**: The `UserSchema` defines fields like `birthdate`. However, some APIs expect or use fields not explicitly in the schema (e.g., `cpf` for `/api/auth/login`) or use different naming conventions (e.g., `"Birth date"` with a space by `/api/birthdays`, as highlighted in the `User` model section).
+-   Other similar variations might exist across different models and API routes.
+
+**3. Implications for Development:**
+-   The Mongoose models in `src/models/index.ts` might not always be the single source of truth for understanding data structures as used by all API endpoints, particularly read-heavy dashboard APIs.
+-   Some models might represent a target schema, are used for specific write operations, or are partially legacy.
+-   The application employs a dynamic approach for some data aggregation and retrieval, interacting directly with MongoDB collections.
+
+**Recommendation:**
+**Developers must always cross-verify data models, collection names, and field structures by inspecting the relevant API route implementations (`src/app/api/...`) and, if possible, the actual database contents.** This is crucial for understanding how data is fetched, processed, and returned. The descriptions for `measurements` and `sales` collections are based on their inferred usage in the current API routes.
 
 ## Frontend Components
 

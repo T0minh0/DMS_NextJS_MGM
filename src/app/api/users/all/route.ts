@@ -1,28 +1,31 @@
 import { NextResponse } from 'next/server';
 import clientPromise, { getDbFromClient } from '@/lib/mongodb';
+import { ObjectId } from 'mongodb';
 
-export async function GET() {
+// Get all users
+export async function GET(request: Request) {
   try {
     // Connect to MongoDB
     const client = await clientPromise;
     const db = getDbFromClient(client);
     
-    // Get all users
-    const users = await db.collection('users').find({}).toArray();
+    // Get all users from the database
+    const users = await db.collection('users')
+      .find({})
+      .project({ password: 0 }) // Exclude passwords from response
+      .toArray();
     
-    // Return users data, omitting sensitive fields
-    const safeUsersData = users.map(user => {
-      const { password, ...safeUserData } = user;
-      return safeUserData;
-    });
+    // Format the response
+    const formattedUsers = users.map(user => ({
+      ...user,
+      id: user._id.toString(), // Add string ID for client-side use
+    }));
     
-    console.log(`Found ${safeUsersData.length} users`);
-    
-    return NextResponse.json(safeUsersData);
+    return NextResponse.json(formattedUsers, { status: 200 });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Failed to fetch users:', error);
     return NextResponse.json(
-      { message: 'Error fetching users data' },
+      { message: 'Falha ao buscar usuários' }, 
       { status: 500 }
     );
   }

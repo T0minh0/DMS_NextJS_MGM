@@ -76,66 +76,167 @@ export async function GET(request: Request) {
     
     // Add material filter if provided
     if (materialId) {
-      // Try both string and number conversions for flexibility
-      query.$or = [
-        { material_id: materialId.toString() },
-        { material_id: parseInt(materialId) }
-      ];
-      
-      // Log query for debugging
-      console.log('API: Material query:', JSON.stringify(query));
-      
-      // Check if this material has any sales first
-      const salesCount = await salesCollection.countDocuments(query);
-      console.log(`API: Found ${salesCount} sales for material ID ${materialId}`);
-      
-      if (salesCount === 0) {
-        console.log(`API: No sales found for material ID ${materialId}`);
-        return NextResponse.json({ 
-          noData: true, 
-          message: "Não há histórico de preços para este material" 
-        });
-      }
-      
-      // Fetch the last 10 sales for this material, sorted by date descending
-      const recentSales = await salesCollection.find(query)
-        .sort({ date: -1 })
-        .limit(10)
-        .toArray();
+      // Check if this is a group selection
+      if (materialId.startsWith('group_')) {
+        const groupName = materialId.replace('group_', '');
+        console.log(`API: Processing group: ${groupName}`);
         
-      console.log(`API: Found ${recentSales.length} recent sales records`);
-      
-      // Reverse to get chronological order (oldest to newest)
-      recentSales.reverse();
-      
-      // Get the material name from our mapping
-      const materialName = materialNameMap[materialId] || `Material ${materialId}`;
-      console.log(`API: Using material name: ${materialName}`);
-      
-      // Format the sales data with proper dates
-      const formattedData = recentSales.map(sale => {
-        const date = new Date(sale.date);
-        const monthNames = [
-          'jan', 'fev', 'mar', 'abr',
-          'mai', 'jun', 'jul', 'ago',
-          'set', 'out', 'nov', 'dez'
-        ];
-        const monthName = monthNames[date.getMonth()];
-        const day = date.getDate();
-        const year = date.getFullYear().toString().slice(-2); // Get last 2 digits of year
+        // Find all materials that belong to this group
+        const groupMaterials = await materialsCollection.find({ group: groupName }).toArray();
+        console.log(`API: Found ${groupMaterials.length} materials in group "${groupName}"`);
         
-        return {
-          date: sale.date,
-          material: materialName,
-          price: sale["price/kg"],
-          dateLabel: `${day} ${monthName} ${year}`,
-          // Store timestamp for sorting
-          timestamp: date.getTime()
+        if (groupMaterials.length === 0) {
+          return NextResponse.json({ 
+            noData: true, 
+            message: "Não há materiais neste grupo" 
+          });
+        }
+        
+        // Get material IDs and handle both string and number types
+        const materialIds = groupMaterials.map(mat => 
+          mat.material_id || mat._id
+        );
+        console.log(`API: Material IDs in group: ${materialIds}`);
+        
+        // Query to find sales for any of these materials - handle type conversion
+        const query = {
+          $or: materialIds.flatMap(id => [
+            { material_id: parseInt(id) },
+            { material_id: id.toString() },
+            { material_id: id }
+          ])
         };
-      });
-      
-      console.log('API: Formatted sale data sample:', formattedData.slice(0, 2));
-      return NextResponse.json(formattedData);
+        
+        // Check if these materials have any sales
+        const salesCount = await salesCollection.countDocuments(query);
+        console.log(`API: Found ${salesCount} total sales for group "${groupName}"`);
+        
+        if (salesCount === 0) {
+          return NextResponse.json({ 
+            noData: true, 
+            message: "Não há histórico de preços para materiais neste grupo" 
+          });
+        }
+        
+        // Get all sales for the materials in this group
+        const allSales = await salesCollection.find(query).toArray();
+        
+        // Organize sales by date (aggregate by day)
+        const salesByDate = {};
+        
+        allSales.forEach(sale => {
+          // Create a date string without time component (YYYY-MM-DD)
+          const dateObj = new Date(sale.date);
+          const dateString = dateObj.toISOString().split('T')[0];
+          
+          if (!salesByDate[dateString]) {
+            salesByDate[dateString] = {
+              date: dateObj,
+              prices: [],
+              materials: new Set()
+            };
+          }
+          
+          salesByDate[dateString].prices.push(sale["price/kg"]);
+          salesByDate[dateString].materials.add(sale.material_id);
+        });
+        
+        // Convert to array and sort by date
+        const sortedSales = Object.values(salesByDate)
+          .sort((a, b) => a.date - b.date)
+          .slice(-10); // Get the last 10 days with sales data
+        
+        // Format the sales data with proper dates and average prices
+        const formattedData = sortedSales.map(sale => {
+          const date = new Date(sale.date);
+          const monthNames = [
+            'jan', 'fev', 'mar', 'abr',
+            'mai', 'jun', 'jul', 'ago',
+            'set', 'out', 'nov', 'dez'
+          ];
+          const monthName = monthNames[date.getMonth()];
+          const day = date.getDate();
+          const year = date.getFullYear().toString().slice(-2);
+          
+          // Calculate average price
+          const avgPrice = sale.prices.reduce((sum, price) => sum + price, 0) / sale.prices.length;
+          
+          return {
+            date: sale.date,
+            material: `Grupo: ${groupName}`,
+            price: avgPrice.toFixed(2),
+            dateLabel: `${day} ${monthName} ${year}`,
+            timestamp: date.getTime(),
+            materialsCount: sale.materials.size
+          };
+        });
+        
+        console.log('API: Formatted group sale data sample:', formattedData.slice(0, 2));
+        return NextResponse.json(formattedData);
+      } else {
+        // Single material - handle both string and number types
+        const materialIdNum = parseInt(materialId);
+        query.$or = [
+          { material_id: materialId },
+          { material_id: materialId.toString() },
+          ...(isNaN(materialIdNum) ? [] : [{ material_id: materialIdNum }])
+        ];
+        
+        // Log query for debugging
+        console.log('API: Material query:', JSON.stringify(query));
+        
+        // Check if this material has any sales first
+        const salesCount = await salesCollection.countDocuments(query);
+        console.log(`API: Found ${salesCount} sales for material ID ${materialId}`);
+        
+        if (salesCount === 0) {
+          console.log(`API: No sales found for material ID ${materialId}`);
+          return NextResponse.json({ 
+            noData: true, 
+            message: "Não há histórico de preços para este material" 
+          });
+        }
+        
+        // Fetch the last 10 sales for this material, sorted by date descending
+        const recentSales = await salesCollection.find(query)
+          .sort({ date: -1 })
+          .limit(10)
+          .toArray();
+          
+        console.log(`API: Found ${recentSales.length} recent sales records`);
+        
+        // Reverse to get chronological order (oldest to newest)
+        recentSales.reverse();
+        
+        // Get the material name from our mapping
+        const materialName = materialNameMap[materialId] || `Material ${materialId}`;
+        console.log(`API: Using material name: ${materialName}`);
+        
+        // Format the sales data with proper dates
+        const formattedData = recentSales.map(sale => {
+          const date = new Date(sale.date);
+          const monthNames = [
+            'jan', 'fev', 'mar', 'abr',
+            'mai', 'jun', 'jul', 'ago',
+            'set', 'out', 'nov', 'dez'
+          ];
+          const monthName = monthNames[date.getMonth()];
+          const day = date.getDate();
+          const year = date.getFullYear().toString().slice(-2); // Get last 2 digits of year
+          
+          return {
+            date: sale.date,
+            material: materialName,
+            price: sale["price/kg"],
+            dateLabel: `${day} ${monthName} ${year}`,
+            // Store timestamp for sorting
+            timestamp: date.getTime()
+          };
+        });
+        
+        console.log('API: Formatted sale data sample:', formattedData.slice(0, 2));
+        return NextResponse.json(formattedData);
+      }
     } else {
       // Get top 5 materials with recent sales
       const materialsWithSales = await salesCollection.aggregate([

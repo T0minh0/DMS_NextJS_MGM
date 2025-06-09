@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise, { getDbFromClient } from '@/lib/mongodb';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import bcrypt from 'bcryptjs';
 
 // JWT secret key - in production this should be stored in environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'dms-dashboard-secret-key';
@@ -38,7 +39,17 @@ export async function POST(request: Request) {
           const user = await db.collection('users').findOne(query);
           
           if (user) {
-            console.log('User found in database:', user);
+            // Log only non-sensitive information
+            console.log('User found in database with ID:', user._id);
+            
+            // Check if user is a manager (user_type 0)
+            if (user.user_type !== 0) {
+              console.log('User is not a manager. Access denied.');
+              return NextResponse.json(
+                { message: 'Acesso restrito apenas para gerentes' },
+                { status: 403 }
+              );
+            }
             
             // Extract name from different possible fields
             const possibleNameFields = ['full_name', 'name', 'fullName', 'fullname', 'username'];
@@ -46,7 +57,7 @@ export async function POST(request: Request) {
             
             userData = {
               ...user,
-              full_name: foundName ? user[foundName] : (user.full_name || "Carlos Ferreira")
+              full_name: foundName ? user[foundName] : (user.full_name || "User")
             };
             
             break;
@@ -58,26 +69,51 @@ export async function POST(request: Request) {
       
       if (!userData) {
         console.log('User not found in database');
+        return NextResponse.json(
+          { message: 'Usuário não encontrado' },
+          { status: 401 }
+        );
       }
     } catch (error) {
       console.error('Database error:', error);
+      return NextResponse.json(
+        { message: 'Erro ao acessar o banco de dados' },
+        { status: 500 }
+      );
     }
     
-    // Fallback to mock user if not found
-    const finalUser = userData || {
-      _id: "67fe65f101ef7b5bde6e19c7",
-      full_name: "Erro ao buscar usuário",
-      cpf: "56789012345",
-      user_type: 0
-    };
+    // Verify password
+    let passwordIsValid = false;
     
-    // Create JWT token
+    // If we have a hashed password in the database
+    if (userData.password_hash) {
+      passwordIsValid = await bcrypt.compare(password, userData.password_hash);
+    } 
+    // If we have a password field that starts with $2a$ or $2b$ (bcrypt hash format)
+    else if (userData.password && (userData.password.startsWith('$2a$') || userData.password.startsWith('$2b$'))) {
+      // It's a bcrypt hash, use compare
+      passwordIsValid = await bcrypt.compare(password, userData.password);
+    }
+    // If we have a plain text password in the database (legacy case)
+    else if (userData.password) {
+      passwordIsValid = password === userData.password;
+    }
+    
+    // If password is invalid
+    if (!passwordIsValid) {
+      return NextResponse.json(
+        { message: 'Senha incorreta' },
+        { status: 401 }
+      );
+    }
+    
+    // Password is valid, create JWT token
     const token = jwt.sign(
       { 
-        id: finalUser._id,
-        name: finalUser.full_name,
-        cpf: finalUser.cpf,
-        userType: finalUser.user_type
+        id: userData._id,
+        name: userData.full_name,
+        cpf: userData.cpf,
+        userType: userData.user_type
       },
       JWT_SECRET,
       { expiresIn: '8h' }
@@ -98,11 +134,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: 'Login realizado com sucesso',
       user: {
-        id: finalUser._id,
-        name: finalUser.full_name,
-        full_name: finalUser.full_name,
-        userType: finalUser.user_type,
-        notFound: userData === null // Add a flag for frontend to know if user was found
+        id: userData._id,
+        name: userData.full_name,
+        full_name: userData.full_name,
+        userType: userData.user_type
       }
     });
   } catch (error) {

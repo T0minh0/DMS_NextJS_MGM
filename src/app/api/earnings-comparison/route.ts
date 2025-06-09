@@ -30,6 +30,53 @@ export async function GET(request: Request) {
     // Collections
     const salesColl = db.collection('sales');
     
+    // Helper function to add material filter to the query
+    async function addMaterialFilter(periodQuery: any, materialId: string) {
+      // Check if this is a group selection
+      if (materialId.startsWith('group_')) {
+        const groupName = materialId.replace('group_', '');
+        console.log(`API: Processing group: ${groupName} for earnings`);
+        
+        // Find all materials that belong to this group
+        const materialsCollection = db.collection('materials');
+        const groupMaterials = await materialsCollection.find({ group: groupName }).toArray();
+        console.log(`API: Found ${groupMaterials.length} materials in group "${groupName}"`);
+        
+        if (groupMaterials.length === 0) {
+          return { 
+            success: false, 
+            response: NextResponse.json({ 
+              noData: true, 
+              message: "Não há materiais neste grupo" 
+            })
+          };
+        }
+        
+        // Get material IDs
+        const materialIds = groupMaterials.map(m => m.material_id || m._id);
+        console.log(`API: Material IDs in group: ${materialIds}`);
+        
+        // Add filter for multiple materials - handle both string and number types
+        periodQuery.$or = materialIds.flatMap(id => [
+          { material_id: parseInt(id) },
+          { material_id: id.toString() },
+          { material_id: id }
+        ]);
+        
+        console.log(`API: Using group query with ${materialIds.length} materials for earnings`);
+        return { success: true };
+      } else {
+        // Single material - handle both string and number types
+        const materialIdNum = parseInt(materialId);
+        periodQuery.$or = [
+          { material_id: materialId },
+          { material_id: materialId.toString() },
+          ...(isNaN(materialIdNum) ? [] : [{ material_id: materialIdNum }])
+        ];
+        return { success: true };
+      }
+    }
+    
     // Get the current date
     const now = new Date();
     
@@ -58,7 +105,8 @@ export async function GET(request: Request) {
         
         // Add material filter if provided
         if (materialId) {
-          periodQuery.material_id = materialId;
+          const result = await addMaterialFilter(periodQuery, materialId);
+          if (!result.success) return result.response;
         }
         
         // Get all sales for this week
@@ -97,7 +145,8 @@ export async function GET(request: Request) {
         
         // Add material filter if provided
         if (materialId) {
-          periodQuery.material_id = materialId;
+          const result = await addMaterialFilter(periodQuery, materialId);
+          if (!result.success) return result.response;
         }
         
         // Get all sales for this year
@@ -130,7 +179,8 @@ export async function GET(request: Request) {
         
         // Add material filter if provided
         if (materialId) {
-          periodQuery.material_id = materialId;
+          const result = await addMaterialFilter(periodQuery, materialId);
+          if (!result.success) return result.response;
         }
         
         // Get all sales for this month

@@ -48,10 +48,14 @@ export async function GET(request: Request) {
       );
     }
     
-    // Return user data, omitting sensitive fields
-    const { password, ...safeUserData } = user;
+    // Return user data, omitting only sensitive fields
+    const { password, password_hash, ...safeUserData } = user;
     
-    console.log('Found user:', safeUserData);
+    // Log only limited information
+    console.log('Found user:', {
+      _id: safeUserData._id,
+      userType: safeUserData.user_type
+    });
     
     return NextResponse.json(safeUserData);
   } catch (error) {

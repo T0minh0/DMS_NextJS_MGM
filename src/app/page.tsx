@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Layout from '@/components/Layout'; // Assuming @ is configured for src
-import { FaFilter, FaBirthdayCake, FaBoxes, FaUsers, FaWeightHanging, FaDollarSign, FaCalendarAlt } from 'react-icons/fa'; // Added Fa* icons
+import { FaFilter, FaBirthdayCake, FaBoxes, FaUsers, FaWeightHanging, FaDollarSign, FaCalendarAlt, FaCog, FaIdCard } from 'react-icons/fa'; // Added FaIdCard
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 
@@ -79,6 +79,13 @@ export default function HomePage() {
     priceFluctuation: true,
     birthdays: true,
   });
+
+  const [recalculating, setRecalculating] = useState(false);
+  const [recalculationMessage, setRecalculationMessage] = useState<string | null>(null);
+  const [assigningIds, setAssigningIds] = useState(false);
+  const [assignmentMessage, setAssignmentMessage] = useState<string | null>(null);
+  const [debugging, setDebugging] = useState(false);
+  const [debugMessage, setDebugMessage] = useState<string | null>(null);
 
   // Get user data from localStorage on page load
   useEffect(() => {
@@ -235,7 +242,7 @@ export default function HomePage() {
         // Ensure we have a valid object
         else if (data && typeof data === 'object') {
           // Transform stock data to use proper material names
-          const transformedStockData = {};
+          const transformedStockData: Record<string, number> = {};
           
           // Debug materials array
           console.log('Materials available for mapping:', materials.map(m => ({
@@ -274,15 +281,15 @@ export default function HomePage() {
                 const materialName = material.name || material.material;
                 console.log(`✅ Found material match: ${materialId} -> ${materialName}`);
                 // Use the proper material name as the key
-                transformedStockData[materialName] = value;
+                transformedStockData[materialName] = value as number;
               } else {
                 console.log(`❌ No material match found for: ${materialId}`);
                 // Keep original if no match found
-                transformedStockData[key] = value;
+                transformedStockData[key] = value as number;
               }
             } else {
               // Keep keys that don't match the "Material X" pattern
-              transformedStockData[key] = value;
+              transformedStockData[key] = value as number;
             }
           });
           
@@ -578,6 +585,138 @@ export default function HomePage() {
     currentMonthEarnings
   });
 
+  // Add recalculation function
+  const handleRecalculateContributions = async () => {
+    if (!user || user.userType !== 0) {
+      alert('Apenas administradores podem executar o recálculo.');
+      return;
+    }
+
+    if (!confirm('Tem certeza que deseja recalcular todas as contribuições? Isso pode levar alguns minutos.')) {
+      return;
+    }
+
+    try {
+      setRecalculating(true);
+      setRecalculationMessage(null);
+      
+      const response = await fetch('/api/recalculate-contributions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setRecalculationMessage(`✅ Recálculo concluído! Processados ${data.processed} registros. Total: ${data.statistics.totalWeight} kg e R$ ${data.statistics.totalEarnings.toFixed(2)}`);
+        
+        // Refresh the data on the dashboard
+        window.location.reload();
+      } else {
+        setRecalculationMessage(`❌ Erro no recálculo: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error recalculating contributions:', error);
+      setRecalculationMessage('❌ Erro ao recalcular contribuições. Tente novamente.');
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  // Add function to assign wastepicker_ids
+  const handleAssignWastepickerIds = async () => {
+    if (!user || user.userType !== 0) {
+      alert('Apenas administradores podem executar esta operação.');
+      return;
+    }
+
+    if (!confirm('Tem certeza que deseja atribuir IDs para catadores que não possuem? Esta operação é segura e não afeta dados existentes.')) {
+      return;
+    }
+
+    try {
+      setAssigningIds(true);
+      setAssignmentMessage(null);
+      
+      const response = await fetch('/api/users/assign-wastepicker-ids', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.updated > 0) {
+          setAssignmentMessage(`✅ IDs atribuídos com sucesso! ${data.updated} catadores atualizados.`);
+          
+          // Refresh the workers data
+          const fetchWorkers = async () => {
+            try {
+              const response = await fetch('/api/users');
+              if (!response.ok) throw new Error('Failed to fetch workers');
+              const data = await response.json();
+              setWorkers(data);
+            } catch (error) {
+              console.error('Error fetching workers:', error);
+            }
+          };
+          fetchWorkers();
+        } else {
+          setAssignmentMessage('ℹ️ Todos os catadores já possuem IDs atribuídos.');
+        }
+      } else {
+        setAssignmentMessage(`❌ Erro na atribuição: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error assigning wastepicker IDs:', error);
+      setAssignmentMessage('❌ Erro ao atribuir IDs. Tente novamente.');
+    } finally {
+      setAssigningIds(false);
+    }
+  };
+
+  // Add debug function
+  const handleDebugData = async () => {
+    if (!user || user.userType !== 0) {
+      alert('Apenas administradores podem executar esta operação.');
+      return;
+    }
+
+    try {
+      setDebugging(true);
+      setDebugMessage(null);
+      
+      const response = await fetch('/api/debug/check-data');
+      const data = await response.json();
+
+      if (response.ok) {
+        const summary = `🔍 DIAGNÓSTICO DOS DADOS:
+📊 Catadores: ${data.workers.total} total, ${data.workers.withWastepickerId} com ID, ${data.workers.withoutWastepickerId} sem ID
+📏 Medições: ${data.measurements.total} registros
+💼 Contribuições: ${data.worker_contributions.total} registros calculados
+🏷️ Materiais: ${data.materials.total} tipos
+
+${data.workers.withoutWastepickerId > 0 ? '⚠️ AÇÃO NECESSÁRIA: Atribuir IDs aos catadores primeiro!' : ''}
+${data.measurements.total === 0 ? '⚠️ PROBLEMA: Nenhuma medição encontrada!' : ''}
+${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuição calculada!' : ''}`;
+
+        setDebugMessage(summary);
+        console.log('Debug Data Full:', data);
+      } else {
+        setDebugMessage(`❌ Erro no diagnóstico: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error debugging data:', error);
+      setDebugMessage('❌ Erro ao diagnosticar dados. Tente novamente.');
+    } finally {
+      setDebugging(false);
+    }
+  };
+
   return (
     <Layout activePath="/">
       {/* Welcome Banner */}
@@ -586,7 +725,7 @@ export default function HomePage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
               <h2 className="text-xl font-bold text-[#7a1c44]">
-                Bem-vindo ao Dashboard, {user.notFound ? 'Erro ao buscar usuário' : 'Carlos Ferreira'}!
+                Bem-vindo ao Dashboard, {user.full_name || user.name || 'Usuário'}!
               </h2>
               <p className="text-gray-600 mt-1 flex items-center">
                 <FaCalendarAlt className="mr-2 text-[#c15079]" />
@@ -619,8 +758,28 @@ export default function HomePage() {
               onChange={handleMaterialFilterChange}
             >
               <option value="">Todos os Materiais</option>
-              {materials.map((material) => (
-                <option key={material.material_id || material._id} value={material.material_id || material._id}>
+              {/* Groups first */}
+              {materials.filter(material => material.isGroup).map((material) => (
+                <option 
+                  key={material.material_id || material._id} 
+                  value={material.material_id || material._id}
+                  style={{ fontWeight: 'bold', color: '#8A2736' }}
+                >
+                  📁 {material.name || material.material}
+                </option>
+              ))}
+              {/* Separator if there are groups */}
+              {materials.some(material => material.isGroup) && materials.some(material => !material.isGroup) && (
+                <option key="separator" disabled style={{ color: '#ccc', fontSize: '12px' }}>
+                  ──────────────────
+                </option>
+              )}
+              {/* Individual materials */}
+              {materials.filter(material => !material.isGroup).map((material) => (
+                <option 
+                  key={material.material_id || material._id} 
+                  value={material.material_id || material._id}
+                >
                   {material.name || material.material || `Material ${material.material_id || material._id}`}
                 </option>
               ))}
@@ -635,9 +794,13 @@ export default function HomePage() {
               onChange={handleWorkerFilterChange}
             >
               <option value="">Todos os Trabalhadores</option>
-              {workers.map((worker) => (
-                <option key={worker.wastepicker_id} value={worker.wastepicker_id}>
-                  {worker.full_name}
+              {workers.map((worker, index) => (
+                <option 
+                  key={worker.wastepicker_id || worker._id || worker.id || `worker-${index}`} 
+                  value={worker.wastepicker_id || worker._id || worker.id}
+                  disabled={!worker.wastepicker_id}
+                >
+                  {worker.full_name}{!worker.wastepicker_id ? ' (ID não atribuído)' : ''}
                 </option>
               ))}
             </select>
@@ -664,7 +827,7 @@ export default function HomePage() {
           { title: 'Materiais', value: loading.materials ? '-' : totalMaterials, iconName: 'FaBoxes', labelKey: 'totalMaterials' },
           { title: 'Trabalhadores', value: loading.workers ? '-' : totalWorkers, iconName: 'FaUsers', labelKey: 'totalWorkers' },
           { title: 'Estoque Total (kg)', value: loading.stock ? '-' : formatWeight(totalStock), iconName: 'FaWeightHanging', labelKey: 'totalStock' },
-          { title: 'Ganhos Mensais', value: loading.earnings ? '-' : formatCurrency(currentMonthEarnings), iconName: 'FaDollarSign', labelKey: 'totalEarnings' },
+          { title: `Ganho ${getPeriodTypeLabel()}`, value: loading.earnings ? '-' : formatCurrency(currentMonthEarnings), iconName: 'FaDollarSign', labelKey: 'totalEarnings' },
         ].map(stat => {
           const IconComponent = iconComponents[stat.iconName];
           return (
@@ -1122,6 +1285,133 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Admin Tools Section - Only show for administrators */}
+      {user && user.userType === 0 && (
+        <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-orange-500">
+          <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
+            <FaCog className="mr-2 text-orange-500" />
+            Ferramentas de Administração
+          </h3>
+          <div className="space-y-6">
+            {/* Recalculate Contributions */}
+            <div>
+              <p className="text-gray-600 mb-3">
+                Recalcular todas as contribuições dos trabalhadores baseado nas medições. 
+                Isso corrige problemas de dupla contagem e atualiza os dados automaticamente.
+              </p>
+              <button
+                onClick={handleRecalculateContributions}
+                disabled={recalculating}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 mr-4 ${
+                  recalculating
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-orange-500 text-white hover:bg-orange-600'
+                }`}
+              >
+                {recalculating ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Recalculando...
+                  </span>
+                ) : (
+                  'Recalcular Contribuições'
+                )}
+              </button>
+              {recalculationMessage && (
+                <div className={`p-4 rounded-lg mt-3 ${
+                  recalculationMessage.startsWith('✅') 
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {recalculationMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Assign Wastepicker IDs */}
+            <div className="border-t pt-6">
+              <p className="text-gray-600 mb-3">
+                Atribuir IDs únicos (WP001, WP002, etc.) para catadores que ainda não possuem. 
+                Necessário para rastreamento de produtividade e contribuições.
+              </p>
+              <button
+                onClick={handleAssignWastepickerIds}
+                disabled={assigningIds}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${
+                  assigningIds
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+              >
+                {assigningIds ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Atribuindo IDs...
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <FaIdCard className="mr-2" />
+                    Atribuir IDs aos Catadores
+                  </span>
+                )}
+              </button>
+              {assignmentMessage && (
+                <div className={`p-4 rounded-lg mt-3 ${
+                  assignmentMessage.startsWith('✅') || assignmentMessage.startsWith('ℹ️')
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {assignmentMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Debug Data */}
+            <div className="border-t pt-6">
+              <p className="text-gray-600 mb-3">
+                Verificar o estado atual dos dados para ajudar a solucionar problemas.
+              </p>
+              <button
+                onClick={handleDebugData}
+                disabled={debugging}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${
+                  debugging
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-purple-500 text-white hover:bg-purple-600'
+                }`}
+              >
+                {debugging ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verificando...
+                  </span>
+                ) : (
+                  'Verificar Dados'
+                )}
+              </button>
+              {debugMessage && (
+                <div className={`p-4 rounded-lg mt-3 ${
+                  debugMessage.startsWith('🔍')
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {debugMessage}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

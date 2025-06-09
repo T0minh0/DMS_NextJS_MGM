@@ -34,6 +34,7 @@ const navItems = [
   { href: '/materials', icon: FaBox, label: 'Materiais' },
   { href: '/manage-workers', icon: FaUsers, label: 'Usuários' },
   { href: '/sales', icon: FaShoppingCart, label: 'Vendas' },
+  { href: '/profile', icon: FaUser, label: 'Meu Perfil' },
 ];
 
 const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
@@ -176,17 +177,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
                       textShadow: '0 1px 1px rgba(0,0,0,0.5)',
                     }}
                   >
-                    <div className="flex items-center">
+                    <Link href="/profile" className="flex items-center hover:text-[#c15079]">
                       <div className="bg-[#c15079] rounded-full h-8 w-8 flex items-center justify-center mr-2 shadow-md">
                         <FaUser className="text-white" />
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm text-gray-300">Bem-vindo,</span>
                         <span className="font-semibold -mt-1">
-                          {user.notFound ? 'Erro ao buscar usuário' : 'Carlos Ferreira'}
+                          {user?.full_name || user?.name || 'Usuário'}
                         </span>
                       </div>
-                    </div>
+                    </Link>
                   </div>
                   <button 
                     onClick={handleLogout}

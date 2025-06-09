@@ -19,7 +19,8 @@ const connectMongo = async () => {
 const MaterialSchema = new mongoose.Schema({
   material_id: { type: Number, required: true, unique: true },
   material: { type: String, required: true },
-}, { collection: 'waste_type' }); // Assuming the collection is named 'waste_type'
+  group: { type: String, required: false },
+}, { collection: 'materials' });
 
 // User/Worker Schema
 const UserSchema = new mongoose.Schema({

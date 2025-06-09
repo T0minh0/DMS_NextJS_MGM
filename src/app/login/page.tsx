@@ -68,8 +68,19 @@ export default function LoginPage() {
         // Successful login
         router.push('/');
       } else {
-        // Handle error
-        setError(data.message || 'Falha na autenticação. Verifique suas credenciais.');
+        // Handle specific error messages from the API
+        const errorMessages = {
+          401: 'CPF ou senha incorretos. Verifique suas credenciais.',
+          403: 'Acesso restrito. Apenas gerentes podem acessar o sistema.',
+          500: 'Erro no servidor. Tente novamente mais tarde.',
+        };
+        
+        // Use the API message or fallback to status-specific message or general error
+        setError(
+          data.message || 
+          errorMessages[response.status as keyof typeof errorMessages] || 
+          'Falha na autenticação. Verifique suas credenciais.'
+        );
       }
     } catch (err) {
       console.error('Login error:', err);

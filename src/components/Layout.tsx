@@ -26,6 +26,8 @@ interface User {
   full_name?: string;
   userType: number;
   notFound?: boolean;
+  cooperative_id?: string;
+  cooperative_name?: string | null;
 }
 
 const navItems = [
@@ -56,7 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
         const fetchRealUserData = async () => {
           try {
             // First try by ID
-            let response = await fetch(`/api/user?id=${parsedUser.id}`);
+            const response = await fetch(`/api/user?id=${parsedUser.id}`);
             
             // If not found, try fetching all users to see available data
             if (!response.ok) {
@@ -75,7 +77,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
               const updatedUser = {
                 ...parsedUser,
                 full_name: realUserData.full_name || "Carlos Ferreira",
-                name: realUserData.name
+                name: realUserData.name,
+                cooperative_id: realUserData.cooperative_id,
+                cooperative_name: realUserData.cooperative_name
               };
               
               setUser(updatedUser);
@@ -87,7 +91,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
               const updatedUser = {
                 ...parsedUser,
                 full_name: "Carlos Ferreira",
-                notFound: true
+                notFound: true,
+                cooperative_id: parsedUser.cooperative_id,
+                cooperative_name: parsedUser.cooperative_name
               };
               setUser(updatedUser);
               localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -99,7 +105,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
             const updatedUser = {
               ...parsedUser,
               full_name: "Carlos Ferreira",
-              notFound: true
+              notFound: true,
+              cooperative_id: parsedUser.cooperative_id,
+              cooperative_name: parsedUser.cooperative_name
             };
             setUser(updatedUser);
             localStorage.setItem('user', JSON.stringify(updatedUser));

@@ -1,0 +1,32 @@
+# Node & package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build artifacts
+.next/
+dist/
+out/
+build/
+
+# Logs & coverage
+*.log
+logs/
+coverage/
+
+# Editor & OS cache
+.DS_Store
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+

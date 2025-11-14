@@ -1,99 +1,107 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
   try {
-    // Connect to MongoDB
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    
-    const body = await request.json();
-    
-    // Extract user data from request body
-    const { 
+    const {
       id,
-      full_name, 
-      email, 
-      phone, 
-      PIS, 
-      RG, 
-      user_type, 
-      password 
-    } = body;
-    
-    // Validate required fields
-    if (!id || !full_name) {
-      return NextResponse.json(
-        { message: 'ID e nome são obrigatórios' }, 
-        { status: 400 }
-      );
-    }
-    
-    // Check if user exists
-    const existingUser = await db.collection('users').findOne({ 
-      $or: [
-        { _id: new ObjectId(id) },
-        { id: id }
-      ]
-    });
-    
-    if (!existingUser) {
-      return NextResponse.json(
-        { message: 'Usuário não encontrado' }, 
-        { status: 404 }
-      );
-    }
-    
-    // Prepare update object
-    const updateData: any = {
       full_name,
       email,
-      phone,
       PIS,
       RG,
-      user_type: Number(user_type),
-      updated_at: new Date()
+      user_type,
+      password,
+      birth_date,
+      enter_date,
+      exit_date,
+      gender,
+      cooperative_id,
+    } = await request.json();
+
+    if (!id || !full_name || !birth_date || !enter_date || !cooperative_id || !PIS || !RG) {
+      return NextResponse.json(
+        { message: 'ID, nome, datas, cooperativa, PIS e RG são obrigatórios' },
+        { status: 400 },
+      );
+    }
+
+    let workerId: bigint;
+    try {
+      workerId = BigInt(id);
+    } catch {
+      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+    }
+
+    const existing = await prisma.workers.findUnique({
+      where: { workerId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const userTypeNumber = Number(user_type);
+    if (!Number.isFinite(userTypeNumber) || (userTypeNumber !== 0 && userTypeNumber !== 1)) {
+      return NextResponse.json({ message: 'Tipo de usuário inválido' }, { status: 400 });
+    }
+
+    let cooperativeBigInt: bigint;
+    try {
+      cooperativeBigInt = BigInt(cooperative_id);
+    } catch {
+      return NextResponse.json({ message: 'Cooperativa inválida' }, { status: 400 });
+    }
+
+    const pisDigits = sanitizeDigits(PIS);
+    const rgDigits = sanitizeDigits(RG);
+    if (!pisDigits || !rgDigits) {
+      return NextResponse.json({ message: 'PIS e RG devem conter apenas números' }, { status: 400 });
+    }
+
+    const birthDateObj = new Date(birth_date);
+    const enterDateObj = new Date(enter_date);
+    if (Number.isNaN(birthDateObj.getTime()) || Number.isNaN(enterDateObj.getTime())) {
+      return NextResponse.json({ message: 'Datas inválidas' }, { status: 400 });
+    }
+
+    let exitDateObj: Date | null = null;
+    if (exit_date) {
+      exitDateObj = new Date(exit_date);
+      if (Number.isNaN(exitDateObj.getTime())) {
+        return NextResponse.json({ message: 'Data de saída inválida' }, { status: 400 });
+      }
+    }
+
+    const updateData: Prisma.WorkersUpdateInput = {
+      workerName: full_name.trim(),
+      email: email?.trim() || existing.email,
+      pis: Buffer.from(pisDigits, 'utf8'),
+      rg: Buffer.from(rgDigits, 'utf8'),
+      userType: String(userTypeNumber),
+      birthDate: birthDateObj,
+      enterDate: enterDateObj,
+      exitDate: exitDateObj,
+      gender: gender?.trim() || null,
+      cooperative: cooperativeBigInt,
+      lastUpdate: new Date(),
     };
-    
-    // If password is provided, hash it
+
     if (password) {
-      const salt = await bcrypt.genSalt(10);
-      updateData.password = await bcrypt.hash(password, salt);
+      const passwordHash = await bcrypt.hash(password, 10);
+      updateData.password = Buffer.from(passwordHash, 'utf8');
     }
-    
-    // Update user in database
-    const result = await db.collection('users').updateOne(
-      { $or: [
-        { _id: new ObjectId(id) },
-        { id: id }
-      ]},
-      { $set: updateData }
-    );
-    
-    if (!result.matchedCount) {
-      return NextResponse.json(
-        { message: 'Usuário não encontrado' }, 
-        { status: 404 }
-      );
-    }
-    
-    if (!result.modifiedCount && !result.upsertedCount) {
-      return NextResponse.json(
-        { message: 'Nenhuma alteração feita' }, 
-        { status: 304 }
-      );
-    }
-    
-    return NextResponse.json({
-      message: 'Usuário atualizado com sucesso'
-    }, { status: 200 });
+
+    await prisma.workers.update({
+      where: { workerId },
+      data: updateData,
+    });
+
+    return NextResponse.json({ message: 'Usuário atualizado com sucesso' }, { status: 200 });
   } catch (error) {
     console.error('Error updating user:', error);
-    return NextResponse.json(
-      { message: 'Erro ao atualizar usuário' }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Erro ao atualizar usuário' }, { status: 500 });
   }
-} 
+}

@@ -1,48 +1,52 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+import prisma from '@/lib/prisma';
 
 export async function POST(request: Request) {
   try {
-    // Connect to MongoDB
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    
-    const body = await request.json();
-    
-    // Extract user ID from request body
-    const { id } = body;
-    
+    const { id } = await request.json();
+
     if (!id) {
-      return NextResponse.json(
-        { message: 'ID do usuário é obrigatório' }, 
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'ID do usuário é obrigatório' }, { status: 400 });
     }
-    
-    // Delete user from database
-    const result = await db.collection('users').deleteOne({
-      $or: [
-        { _id: new ObjectId(id) },
-        { id: id }
-      ]
+
+    let workerId: bigint;
+    try {
+      workerId = BigInt(id);
+    } catch {
+      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+    }
+
+    const existing = await prisma.workers.findUnique({
+      where: { workerId },
     });
-    
-    if (!result.deletedCount) {
+
+    if (!existing) {
+      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const [salesUsage, measurementUsage, contributionsUsage] = await Promise.all([
+      prisma.sales.count({ where: { responsible: workerId } }),
+      prisma.measurments.count({ where: { wastepicker: workerId } }),
+      prisma.workerContributions.count({ where: { wastepicker: workerId } }),
+    ]);
+
+    if (salesUsage > 0 || measurementUsage > 0 || contributionsUsage > 0) {
       return NextResponse.json(
-        { message: 'Usuário não encontrado' }, 
-        { status: 404 }
+        {
+          message:
+            'Não é possível excluir este usuário. Existem registros de vendas, medições ou contribuições associados.',
+        },
+        { status: 400 },
       );
     }
-    
-    return NextResponse.json({
-      message: 'Usuário excluído com sucesso'
-    }, { status: 200 });
+
+    await prisma.workers.delete({
+      where: { workerId },
+    });
+
+    return NextResponse.json({ message: 'Usuário excluído com sucesso' }, { status: 200 });
   } catch (error) {
     console.error('Error deleting user:', error);
-    return NextResponse.json(
-      { message: 'Erro ao excluir usuário' }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Erro ao excluir usuário' }, { status: 500 });
   }
-} 
+}

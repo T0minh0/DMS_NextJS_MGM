@@ -1,157 +1,186 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ObjectId } from 'mongodb';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+
+type MaterialWithGroup = Prisma.MaterialsGetPayload<{
+  include: { group: true };
+}>;
+
+function parseMaterialId(id: string) {
+  try {
+    return BigInt(id);
+  } catch {
+    return null;
+  }
+}
+
+function formatMaterial(material: MaterialWithGroup) {
+  return {
+    _id: material.materialId.toString(),
+    material_id: Number(material.materialId),
+    material: material.materialName,
+    name: material.materialName,
+    group: material.group?.groupName ?? '',
+  };
+}
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
+    const id = parseMaterialId(params.id);
+    if (id === null) {
+      return NextResponse.json(
+        { error: 'ID de material inválido' },
+        { status: 400 },
+      );
+    }
+
     const body = await request.json();
-    const materialId = params.id;
+    const materialName = body.material?.trim();
+    const groupName = body.group?.trim();
 
-    // Validate ObjectId
-    if (!ObjectId.isValid(materialId)) {
-      return NextResponse.json({ 
-        error: 'ID de material inválido' 
-      }, { status: 400 });
+    if (!materialName || !groupName) {
+      return NextResponse.json(
+        { error: 'Nome do material e grupo são obrigatórios' },
+        { status: 400 },
+      );
     }
 
-    // Validate required fields
-    if (!body.material || !body.group) {
-      return NextResponse.json({ 
-        error: 'Nome do material e grupo são obrigatórios' 
-      }, { status: 400 });
-    }
+    const existingMaterial = await prisma.materials.findUnique({
+      where: { materialId: id },
+      include: { group: true },
+    });
 
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    const materialsCollection = db.collection('materials');
-
-    // Check if material exists
-    const existingMaterial = await materialsCollection.findOne({ _id: new ObjectId(materialId) });
     if (!existingMaterial) {
-      return NextResponse.json({ 
-        error: 'Material não encontrado' 
-      }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Material não encontrado' },
+        { status: 404 },
+      );
     }
 
-    // Check if another material with the same name already exists (excluding current one)
-    const duplicateMaterial = await materialsCollection.findOne({ 
-      material: { $regex: new RegExp(`^${body.material.trim()}$`, 'i') },
-      _id: { $ne: new ObjectId(materialId) }
+    const duplicateMaterial = await prisma.materials.findFirst({
+      where: {
+        materialId: { not: id },
+        materialName: {
+          equals: materialName,
+          mode: 'insensitive',
+        },
+      },
     });
 
     if (duplicateMaterial) {
-      return NextResponse.json({ 
-        error: 'Já existe outro material com este nome' 
-      }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Já existe outro material com este nome' },
+        { status: 400 },
+      );
     }
 
-    // Prepare update document
-    const updateDocument = {
-      material: body.material.trim(),
-      group: body.group.trim(),
-      price_per_kg: body.price_per_kg || undefined,
-      updated_at: new Date()
-    };
+    let group = await prisma.groups.findFirst({
+      where: {
+        groupName: {
+          equals: groupName,
+          mode: 'insensitive',
+        },
+      },
+    });
 
-    console.log('API: Updating material:', JSON.stringify(updateDocument, null, 2));
-
-    const result = await materialsCollection.updateOne(
-      { _id: new ObjectId(materialId) },
-      { $set: updateDocument }
-    );
-
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ 
-        error: 'Material não encontrado' 
-      }, { status: 404 });
+    if (!group) {
+      group = await prisma.groups.create({
+        data: { groupName },
+      });
     }
 
-    console.log(`API: Material updated successfully: ${materialId}`);
+    const updatedMaterial = await prisma.materials.update({
+      where: { materialId: id },
+      data: {
+        materialName,
+        materialGroup: group.groupId,
+      },
+      include: { group: true },
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Material atualizado com sucesso',
-      material: { ...updateDocument, _id: materialId, material_id: existingMaterial.material_id }
+      material: formatMaterial(updatedMaterial as MaterialWithGroup),
     });
-
   } catch (error) {
     console.error('Error updating material:', error);
-    return NextResponse.json({ 
-      error: 'Erro ao atualizar material',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Erro ao atualizar material',
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: { id: string } },
 ) {
   try {
-    const materialId = params.id;
-
-    // Validate ObjectId
-    if (!ObjectId.isValid(materialId)) {
-      return NextResponse.json({ 
-        error: 'ID de material inválido' 
-      }, { status: 400 });
+    const id = parseMaterialId(params.id);
+    if (id === null) {
+      return NextResponse.json(
+        { error: 'ID de material inválido' },
+        { status: 400 },
+      );
     }
 
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    const materialsCollection = db.collection('materials');
+    const existingMaterial = await prisma.materials.findUnique({
+      where: { materialId: id },
+    });
 
-    // Check if material exists before deleting
-    const existingMaterial = await materialsCollection.findOne({ _id: new ObjectId(materialId) });
     if (!existingMaterial) {
-      return NextResponse.json({ 
-        error: 'Material não encontrado' 
-      }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Material não encontrado' },
+        { status: 404 },
+      );
     }
 
-    // Check if material is being used in measurements or sales
-    const measurementsCollection = db.collection('measurements');
-    const salesCollection = db.collection('sales');
+    const [measurementUsage, salesUsage, stockUsage, contributionUsage] =
+      await Promise.all([
+        prisma.measurments.count({ where: { material: id } }),
+        prisma.sales.count({ where: { material: id } }),
+        prisma.stock.count({ where: { material: id } }),
+        prisma.workerContributions.count({ where: { material: id } }),
+      ]);
 
-    const measurementUsage = await measurementsCollection.findOne({ 
-      material_id: existingMaterial.material_id.toString() 
+    if (
+      measurementUsage > 0 ||
+      salesUsage > 0 ||
+      stockUsage > 0 ||
+      contributionUsage > 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Este material não pode ser excluído pois está sendo usado em medições, vendas, estoque ou contribuições',
+        },
+        { status: 400 },
+      );
+    }
+
+    await prisma.materials.delete({
+      where: { materialId: id },
     });
-    
-    const salesUsage = await salesCollection.findOne({ 
-      material_id: existingMaterial.material_id.toString() 
-    });
-
-    if (measurementUsage || salesUsage) {
-      return NextResponse.json({ 
-        error: 'Este material não pode ser excluído pois está sendo usado em medições ou vendas' 
-      }, { status: 400 });
-    }
-
-    console.log(`API: Deleting material: ${materialId}`);
-
-    const result = await materialsCollection.deleteOne({ _id: new ObjectId(materialId) });
-
-    if (result.deletedCount === 0) {
-      return NextResponse.json({ 
-        error: 'Material não encontrado' 
-      }, { status: 404 });
-    }
-
-    console.log(`API: Material deleted successfully: ${materialId}`);
 
     return NextResponse.json({
       success: true,
-      message: 'Material excluído com sucesso'
+      message: 'Material excluído com sucesso',
     });
-
   } catch (error) {
     console.error('Error deleting material:', error);
-    return NextResponse.json({ 
-      error: 'Erro ao excluir material',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Erro ao excluir material',
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
   }
-} 
+}

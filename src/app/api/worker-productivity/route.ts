@@ -1,28 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, ObjectId } from 'mongodb';
+import prisma from '@/lib/prisma';
+import { decimalToNumber } from '@/lib/db-utils';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-const client = new MongoClient(MONGODB_URI);
-
-interface Measurement {
-  _id: ObjectId;
-  Weight: number;
-  timestamp: string;
-  wastepicker_id: string;
-  material_id: string;
-  device_id: string;
-  bag_filled: string;
-}
-
-interface ProcessedMeasurement {
-  date: string;
-  weight: number;
-  bag_filled: string;
-  timestamp: string;
-  net_contribution: number;
-}
-
-interface MaterialContribution {
+type MaterialContribution = {
   materialName: string;
   weight: number;
   measurements: Array<{
@@ -31,17 +11,17 @@ interface MaterialContribution {
     bag_filled: string;
     timestamp: string;
   }>;
-}
+};
 
-interface WeeklyContribution {
+type WeeklyContribution = {
   week: string;
   weekStart: string;
   weekEnd: string;
-  materials: { [materialId: string]: MaterialContribution };
+  materials: Record<string, MaterialContribution>;
   totalWeight: number;
-}
+};
 
-interface ProductivityStats {
+type ProductivityStats = {
   totalWeeks: number;
   totalWeight: number;
   averageWeekly: number;
@@ -53,9 +33,46 @@ interface ProductivityStats {
     materialName: string;
     totalWeight: number;
   }>;
+};
+
+type MeasurementRecord = {
+  weight: number;
+  timestamp: Date;
+  materialId: bigint;
+  bagFilled: boolean;
+};
+
+type ProcessedMeasurement = {
+  dateLabel: string;
+  weight: number;
+  bagFilled: string;
+  timestamp: Date;
+  netContribution: number;
+  materialId: bigint;
+};
+
+function parseWorkerId(workerParam: string) {
+  const digits = workerParam.replace(/\D/g, '');
+  if (!digits) {
+    return null;
+  }
+  try {
+    return BigInt(digits);
+  } catch {
+    return null;
+  }
 }
 
-function getWeekNumber(date: Date): string {
+function computeDateRange(weeks: number) {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(endDate.getDate() - weeks * 7);
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(23, 59, 59, 999);
+  return { startDate, endDate };
+}
+
+function getWeekKey(date: Date) {
   const year = date.getFullYear();
   const startOfYear = new Date(year, 0, 1);
   const pastDaysOfYear = (date.getTime() - startOfYear.getTime()) / 86400000;
@@ -63,130 +80,106 @@ function getWeekNumber(date: Date): string {
   return `${year}W${weekNumber.toString().padStart(2, '0')}`;
 }
 
-function getWeekStartEnd(weekString: string): { start: string; end: string } {
-  const [year, weekNum] = weekString.split('W');
-  const yearNum = parseInt(year);
-  const week = parseInt(weekNum);
-  
-  // Get the first day of the year
-  const firstDay = new Date(yearNum, 0, 1);
-  
-  // Find the first Monday of the year
+function getWeekRange(weekKey: string) {
+  const [yearPart, weekPart] = weekKey.split('W');
+  const year = Number(yearPart);
+  const week = Number(weekPart);
+
+  const firstDay = new Date(year, 0, 1);
   const firstMonday = new Date(firstDay);
   const dayOfWeek = firstDay.getDay();
   const daysToAdd = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
   firstMonday.setDate(firstDay.getDate() + daysToAdd);
-  
-  // Calculate the start of the target week
+
   const weekStart = new Date(firstMonday);
   weekStart.setDate(firstMonday.getDate() + (week - 2) * 7);
-  
-  // Calculate the end of the week (Sunday)
+  weekStart.setHours(0, 0, 0, 0);
+
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
-  
+  weekEnd.setHours(23, 59, 59, 999);
+
   return {
     start: weekStart.toLocaleDateString('pt-BR'),
-    end: weekEnd.toLocaleDateString('pt-BR')
+    end: weekEnd.toLocaleDateString('pt-BR'),
   };
 }
 
-function calculateNetContributions(measurements: Measurement[]): ProcessedMeasurement[] {
-  // Group measurements by date and material
-  const groupedByDay: { [key: string]: Measurement[] } = {};
-  
-  measurements.forEach(measurement => {
-    const date = new Date(measurement.timestamp).toLocaleDateString('pt-BR');
-    const key = `${date}-${measurement.material_id}`;
-    
-    if (!groupedByDay[key]) {
-      groupedByDay[key] = [];
-    }
-    groupedByDay[key].push(measurement);
+function calculateNetContributions(measurements: MeasurementRecord[]) {
+  const grouped = new Map<string, MeasurementRecord[]>();
+
+  measurements.forEach((measurement) => {
+    const dateKey = measurement.timestamp.toISOString().split('T')[0];
+    const key = `${dateKey}-${measurement.materialId.toString()}`;
+    const list = grouped.get(key) ?? [];
+    list.push(measurement);
+    grouped.set(key, list);
   });
-  
-  const processedMeasurements: ProcessedMeasurement[] = [];
-  
-  // Process each day-material combination
-  Object.keys(groupedByDay).forEach(key => {
-    const dayMeasurements = groupedByDay[key].sort((a, b) => 
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    
+
+  const processed: ProcessedMeasurement[] = [];
+
+  grouped.forEach((list) => {
+    list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     let previousWeight = 0;
-    
-    dayMeasurements.forEach((measurement, index) => {
-      let netContribution = 0;
-      
-      if (index === 0) {
-        // First measurement of the day
-        netContribution = measurement.Weight;
-      } else {
-        // Subsequent measurements - calculate the difference
-        netContribution = measurement.Weight - previousWeight;
+
+    list.forEach((measurement, index) => {
+      let net = index === 0 ? measurement.weight : measurement.weight - previousWeight;
+      if (measurement.bagFilled) {
+        const initialWeight = list[0]?.weight ?? 0;
+        net = measurement.weight - (index > 0 ? initialWeight : 0);
       }
-      
-      // If bag is filled (marked as 'Y' or 'S'), this is the final contribution
-      if (measurement.bag_filled === 'Y' || measurement.bag_filled === 'S') {
-        // The net contribution is the final weight minus any previous measurements
-        netContribution = measurement.Weight - (index > 0 ? dayMeasurements[0].Weight : 0);
-      }
-      
-      processedMeasurements.push({
-        date: new Date(measurement.timestamp).toLocaleDateString('pt-BR'),
-        weight: measurement.Weight,
-        bag_filled: measurement.bag_filled,
+
+      processed.push({
+        dateLabel: measurement.timestamp.toLocaleDateString('pt-BR'),
+        weight: measurement.weight,
+        bagFilled: measurement.bagFilled ? 'S' : 'N',
         timestamp: measurement.timestamp,
-        net_contribution: Math.max(0, netContribution) // Ensure no negative contributions
+        netContribution: Math.max(0, net),
+        materialId: measurement.materialId,
       });
-      
-      previousWeight = measurement.Weight;
+
+      previousWeight = measurement.weight;
     });
   });
-  
-  return processedMeasurements;
+
+  return processed;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    await client.connect();
-    const db = client.db('DMS');
-    
     const { searchParams } = new URL(request.url);
-    const workerId = searchParams.get('worker_id');
-    const weeks = parseInt(searchParams.get('weeks') || '12');
-    
-    if (!workerId) {
+    const workerParam = searchParams.get('worker_id');
+    const weeks = Number(searchParams.get('weeks') ?? '12');
+
+    if (!workerParam) {
       return NextResponse.json({ error: 'Worker ID is required' }, { status: 400 });
     }
-    
-    // Calculate date range for the requested number of weeks
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - (weeks * 7));
-    
-    console.log(`API: Fetching measurements for ${workerId} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
-    
-    // Fetch measurements for the worker in the specified period
-    const measurements = await db.collection('measurements').find({
-      wastepicker_id: workerId,
-      timestamp: {
-        $gte: startDate,
-        $lte: endDate
-      }
-    }).toArray() as Measurement[];
-    
-    console.log(`API: Found ${measurements.length} measurements for ${workerId}`);
-    
-    // Fetch materials for proper naming
-    const materials = await db.collection('materials').find({}).toArray();
-    const materialMap = new Map();
-    materials.forEach(material => {
-      materialMap.set(material.material_id?.toString() || material._id.toString(), 
-                     material.name || material.material || `Material ${material.material_id || material._id}`);
+
+    const workerId = parseWorkerId(workerParam);
+    if (!workerId) {
+      return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
+    }
+
+    const { startDate, endDate } = computeDateRange(weeks);
+
+    const prismaMeasurements = await prisma.measurments.findMany({
+      where: {
+        wastepicker: workerId,
+        timeStamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      orderBy: { timeStamp: 'asc' },
+      select: {
+        weightKg: true,
+        timeStamp: true,
+        material: true,
+        bagFilled: true,
+      },
     });
-    
-    if (measurements.length === 0) {
+
+    if (prismaMeasurements.length === 0) {
       return NextResponse.json({
         weeklyContributions: [],
         stats: {
@@ -194,149 +187,130 @@ export async function GET(request: NextRequest) {
           totalWeight: 0,
           averageWeekly: 0,
           bestWeek: { week: '', weight: 0 },
-          topMaterials: []
-        }
+          topMaterials: [],
+        },
       });
     }
-    
-    // Calculate net contributions
-    const processedMeasurements = calculateNetContributions(measurements);
-    
-    // Group by week and material
-    const weeklyData: { [week: string]: { [materialId: string]: ProcessedMeasurement[] } } = {};
-    
-    processedMeasurements.forEach(measurement => {
-      const date = new Date(measurement.timestamp);
-      const week = getWeekNumber(date);
-      const materialId = measurements.find(m => m.timestamp === measurement.timestamp)?.material_id || 'unknown';
-      
-      if (!weeklyData[week]) {
-        weeklyData[week] = {};
-      }
-      
-      if (!weeklyData[week][materialId]) {
-        weeklyData[week][materialId] = [];
-      }
-      
-      weeklyData[week][materialId].push(measurement);
+
+    const measurements: MeasurementRecord[] = prismaMeasurements.map((measurement) => ({
+      weight: decimalToNumber(measurement.weightKg) ?? 0,
+      timestamp: measurement.timeStamp,
+      materialId: measurement.material,
+      bagFilled: Boolean(measurement.bagFilled),
+    }));
+
+    const materialIds = Array.from(new Set(measurements.map((measurement) => measurement.materialId)));
+    const materials = await prisma.materials.findMany({
+      where: { materialId: { in: materialIds } },
+      select: { materialId: true, materialName: true },
     });
-    
-    // Build weekly contributions
+
+    const materialNameMap = new Map(materials.map((material) => [material.materialId, material.materialName]));
+
+    const processed = calculateNetContributions(measurements);
+
+    const weeklyMap = new Map<string, ProcessedMeasurement[]>();
+    processed.forEach((measurement) => {
+      const weekKey = getWeekKey(measurement.timestamp);
+      const list = weeklyMap.get(weekKey) ?? [];
+      list.push(measurement);
+      weeklyMap.set(weekKey, list);
+    });
+
     const weeklyContributions: WeeklyContribution[] = [];
-    
-    Object.keys(weeklyData).sort().forEach(week => {
-      const weekMaterials: { [materialId: string]: MaterialContribution } = {};
-      let totalWeight = 0;
-      
-      Object.keys(weeklyData[week]).forEach(materialId => {
-        const materialMeasurements = weeklyData[week][materialId];
-        const materialWeight = materialMeasurements.reduce((sum, m) => sum + m.net_contribution, 0);
-        
-        weekMaterials[materialId] = {
-          materialName: materialMap.get(materialId) || materialId,
-          weight: materialWeight,
-          measurements: materialMeasurements.map(m => ({
-            date: m.date,
-            weight: m.weight,
-            bag_filled: m.bag_filled,
-            timestamp: m.timestamp
-          }))
-        };
-        
-        totalWeight += materialWeight;
+
+    Array.from(weeklyMap.entries())
+      .sort(([a], [b]) => (a > b ? 1 : -1))
+      .forEach(([weekKey, list]) => {
+        const materialsMap = new Map<string, ProcessedMeasurement[]>();
+        list.forEach((measurement) => {
+          const materialKey = measurement.materialId.toString();
+          const materialList = materialsMap.get(materialKey) ?? [];
+          materialList.push(measurement);
+          materialsMap.set(materialKey, materialList);
+        });
+
+        const contributions: Record<string, MaterialContribution> = {};
+        let totalWeight = 0;
+
+        materialsMap.forEach((materialMeasurements, materialKey) => {
+          const name = materialNameMap.get(BigInt(materialKey)) ?? `Material ${materialKey}`;
+          const weight = materialMeasurements.reduce((sum, measurement) => sum + measurement.netContribution, 0);
+          totalWeight += weight;
+
+          contributions[materialKey] = {
+            materialName: name,
+            weight: Number(weight.toFixed(2)),
+            measurements: materialMeasurements.map((measurement) => ({
+              date: measurement.dateLabel,
+              weight: Number(measurement.weight.toFixed(2)),
+              bag_filled: measurement.bagFilled,
+              timestamp: measurement.timestamp.toISOString(),
+            })),
+          };
+        });
+
+        const { start, end } = getWeekRange(weekKey);
+
+        weeklyContributions.push({
+          week: weekKey,
+          weekStart: start,
+          weekEnd: end,
+          materials: contributions,
+          totalWeight: Number(totalWeight.toFixed(2)),
+        });
       });
-      
-      const { start, end } = getWeekStartEnd(week);
-      
-      weeklyContributions.push({
-        week,
-        weekStart: start,
-        weekEnd: end,
-        materials: weekMaterials,
-        totalWeight
-      });
-    });
-    
-    // Calculate statistics
+
     const totalWeight = weeklyContributions.reduce((sum, week) => sum + week.totalWeight, 0);
     const totalWeeks = weeklyContributions.length;
-    const averageWeekly = totalWeeks > 0 ? totalWeight / totalWeeks : 0;
-    
-    const bestWeek = weeklyContributions.reduce((best, current) => 
-      current.totalWeight > best.totalWeight ? current : best,
-      { week: '', totalWeight: 0 }
-    );
-    
-    // Calculate top materials
-    const materialTotals: { [materialName: string]: number } = {};
-    weeklyContributions.forEach(week => {
-      Object.values(week.materials).forEach(material => {
-        if (!materialTotals[material.materialName]) {
-          materialTotals[material.materialName] = 0;
-        }
-        materialTotals[material.materialName] += material.weight;
+    const averageWeekly = totalWeeks > 0 ? Number((totalWeight / totalWeeks).toFixed(2)) : 0;
+
+    const bestWeekEntry =
+      weeklyContributions.length > 0
+        ? weeklyContributions.reduce((best, current) =>
+            current.totalWeight > best.totalWeight ? current : best,
+          weeklyContributions[0])
+        : undefined;
+
+    const materialTotals = new Map<string, number>();
+    weeklyContributions.forEach((week) => {
+      Object.values(week.materials).forEach((material) => {
+        const current = materialTotals.get(material.materialName) ?? 0;
+        materialTotals.set(material.materialName, current + material.weight);
       });
     });
-    
-    const topMaterials = Object.entries(materialTotals)
-      .map(([materialName, totalWeight]) => ({ materialName, totalWeight }))
+
+    const topMaterials = Array.from(materialTotals.entries())
+      .map(([materialName, total]) => ({
+        materialName,
+        totalWeight: Number(total.toFixed(2)),
+      }))
       .sort((a, b) => b.totalWeight - a.totalWeight)
       .slice(0, 5);
-    
+
     const stats: ProductivityStats = {
       totalWeeks,
-      totalWeight,
+      totalWeight: Number(totalWeight.toFixed(2)),
       averageWeekly,
       bestWeek: {
-        week: bestWeek.week,
-        weight: bestWeek.totalWeight
+        week: bestWeekEntry?.week ?? '',
+        weight: Number((bestWeekEntry?.totalWeight ?? 0).toFixed(2)),
       },
-      topMaterials
+      topMaterials,
     };
-    
-    // Update worker_contributions collection with calculated data
-    for (const week of weeklyContributions) {
-      for (const [materialId, material] of Object.entries(week.materials)) {
-        if (material.weight > 0) {
-          const existingContribution = await db.collection('worker_contributions').findOne({
-            wastepicker_id: workerId,
-            material_id: materialId,
-            'period.week': week.week.split('W')[1],
-            'period.year': parseInt(week.week.split('W')[0])
-          });
-          
-          if (!existingContribution) {
-            // Calculate earnings (this would depend on material prices - placeholder for now)
-            const earnings = material.weight * 2.5; // Example: R$ 2.50 per kg
-            
-            await db.collection('worker_contributions').insertOne({
-              wastepicker_id: workerId,
-              material_id: materialId,
-              weight: material.weight,
-              earnings: earnings,
-              period: {
-                week: parseInt(week.week.split('W')[1]),
-                year: parseInt(week.week.split('W')[0])
-              },
-              last_updated: new Date()
-            });
-          }
-        }
-      }
-    }
-    
+
     return NextResponse.json({
-      weeklyContributions: weeklyContributions.reverse(), // Most recent first
-      stats
+      weeklyContributions: weeklyContributions.reverse(),
+      stats,
     });
-    
   } catch (error) {
     console.error('Error fetching worker productivity:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch worker productivity data',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  } finally {
-    await client.close();
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch worker productivity data',
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    );
   }
-} 
+}

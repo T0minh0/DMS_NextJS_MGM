@@ -1,382 +1,232 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
+import { decimalToNumber } from '@/lib/db-utils';
+
+type MaterialContext = {
+  nameMap: Map<bigint, string>;
+  groupMap: Map<string, bigint[]>;
+};
+
+const MONTH_LABELS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+async function loadMaterialContext(): Promise<MaterialContext> {
+  const materials = await prisma.materials.findMany({
+    include: { group: true },
+  });
+
+  const nameMap = new Map<bigint, string>();
+  const groupMap = new Map<string, bigint[]>();
+
+  materials.forEach((material) => {
+    nameMap.set(material.materialId, material.materialName);
+    if (material.group) {
+      const key = material.group.groupName.toLowerCase();
+      const list = groupMap.get(key) ?? [];
+      list.push(material.materialId);
+      groupMap.set(key, list);
+    }
+  });
+
+  return { nameMap, groupMap };
+}
+
+function formatDateLabel(date: Date) {
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = MONTH_LABELS[date.getMonth()] ?? '';
+  const year = date.getFullYear().toString().slice(-2);
+  return `${day} ${month} ${year}`;
+}
+
+
+async function resolveMaterialIds(
+  materialParam: string,
+  context: MaterialContext,
+): Promise<{ ids?: bigint[]; error?: NextResponse }> {
+  if (materialParam.startsWith('group_')) {
+    const groupName = materialParam.replace('group_', '').toLowerCase();
+    const ids = context.groupMap.get(groupName);
+    if (!ids || ids.length === 0) {
+      return {
+        error: NextResponse.json({ noData: true, message: 'Não há materiais neste grupo' }),
+      };
+    }
+    return { ids };
+  }
+
+  try {
+    return { ids: [BigInt(materialParam)] };
+  } catch {
+    return {
+      error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }),
+    };
+  }
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const materialId = searchParams.get('material_id');
-    
-    console.log('API: Connecting to MongoDB for price fluctuation...');
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    
-    console.log('API: Material ID filter:', materialId);
-    
-    // Check if sales collection exists
-    const salesExist = await db.listCollections({ name: 'sales' }).hasNext();
-    
-    console.log(`API: Sales collection exists: ${salesExist}`);
-    
-    // If required collections don't exist, return no data message
-    if (!salesExist) {
-      console.log('API: Sales collection not found, returning no data message');
-      return NextResponse.json({ 
-        noData: true, 
-        message: materialId 
-          ? "Não há histórico de preços para este material" 
-          : "Não há histórico de preços disponível"
+    const materialParam = searchParams.get('material_id');
+    const context = await loadMaterialContext();
+
+    if (materialParam) {
+      const resolved = await resolveMaterialIds(materialParam, context);
+      if (resolved.error) {
+        return resolved.error;
+      }
+      const materialIds = resolved.ids!;
+
+      const sales = await prisma.sales.findMany({
+        where: { material: { in: materialIds } },
+        orderBy: { date: 'desc' },
+        take: materialIds.length > 1 ? 200 : 10,
+        select: {
+          date: true,
+          material: true,
+          priceKg: true,
+        },
       });
-    }
-    
-    // Collections
-    const salesCollection = db.collection('sales');
-    let materialsCollection;
-    
-    try {
-      // Try both "materials" and "waste_type" collections for material names
-      const materialsExists = await db.listCollections({ name: 'materials' }).hasNext();
-      const wasteTypeExists = await db.listCollections({ name: 'waste_type' }).hasNext();
-      
-      if (materialsExists) {
-        materialsCollection = db.collection('materials');
-        console.log('API: Using materials collection');
-      } else if (wasteTypeExists) {
-        materialsCollection = db.collection('waste_type');
-        console.log('API: Using waste_type collection');
+
+      if (sales.length === 0) {
+        return NextResponse.json({
+          noData: true,
+          message: materialIds.length > 1
+            ? 'Não há histórico de preços para materiais neste grupo'
+            : 'Não há histórico de preços para este material',
+        });
       }
-    } catch (error) {
-      console.error('Error checking material collections:', error);
-    }
-    
-    // Log all available collections to debug
-    const collections = await db.listCollections().toArray();
-    console.log('Available collections:', collections.map(c => c.name));
-    
-    // Get all materials first to have a proper name mapping
-    const materialNameMap = {};
-    try {
-      if (materialsCollection) {
-        const allMaterials = await materialsCollection.find({}).toArray();
-        console.log(`API: Found ${allMaterials.length} materials`);
-        
-        allMaterials.forEach(material => {
-          // Store by both material_id and _id for flexible lookups
-          const matId = material.material_id?.toString() || material._id?.toString();
-          materialNameMap[matId] = material.name || material.material || `Material ${matId}`;
-        });
-        
-        console.log('Material name map:', materialNameMap);
-      }
-    } catch (error) {
-      console.error('Error fetching materials:', error);
-    }
-    
-    // Base query to get sales data - no date restriction
-    const query: any = {};
-    
-    // Add material filter if provided
-    if (materialId) {
-      // Check if this is a group selection
-      if (materialId.startsWith('group_')) {
-        const groupName = materialId.replace('group_', '');
-        console.log(`API: Processing group: ${groupName}`);
-        
-        // Find all materials that belong to this group
-        const groupMaterials = await materialsCollection.find({ group: groupName }).toArray();
-        console.log(`API: Found ${groupMaterials.length} materials in group "${groupName}"`);
-        
-        if (groupMaterials.length === 0) {
-          return NextResponse.json({ 
-            noData: true, 
-            message: "Não há materiais neste grupo" 
-          });
-        }
-        
-        // Get material IDs and handle both string and number types
-        const materialIds = groupMaterials.map(mat => 
-          mat.material_id || mat._id
-        );
-        console.log(`API: Material IDs in group: ${materialIds}`);
-        
-        // Query to find sales for any of these materials - handle type conversion
-        const query = {
-          $or: materialIds.flatMap(id => [
-            { material_id: parseInt(id) },
-            { material_id: id.toString() },
-            { material_id: id }
-          ])
-        };
-        
-        // Check if these materials have any sales
-        const salesCount = await salesCollection.countDocuments(query);
-        console.log(`API: Found ${salesCount} total sales for group "${groupName}"`);
-        
-        if (salesCount === 0) {
-          return NextResponse.json({ 
-            noData: true, 
-            message: "Não há histórico de preços para materiais neste grupo" 
-          });
-        }
-        
-        // Get all sales for the materials in this group
-        const allSales = await salesCollection.find(query).toArray();
-        
-        // Organize sales by date (aggregate by day)
-        const salesByDate = {};
-        
-        allSales.forEach(sale => {
-          // Create a date string without time component (YYYY-MM-DD)
-          const dateObj = new Date(sale.date);
-          const dateString = dateObj.toISOString().split('T')[0];
-          
-          if (!salesByDate[dateString]) {
-            salesByDate[dateString] = {
-              date: dateObj,
-              prices: [],
-              materials: new Set()
-            };
-          }
-          
-          salesByDate[dateString].prices.push(sale["price/kg"]);
-          salesByDate[dateString].materials.add(sale.material_id);
-        });
-        
-        // Convert to array and sort by date
-        const sortedSales = Object.values(salesByDate)
-          .sort((a, b) => a.date - b.date)
-          .slice(-10); // Get the last 10 days with sales data
-        
-        // Format the sales data with proper dates and average prices
-        const formattedData = sortedSales.map(sale => {
-          const date = new Date(sale.date);
-          const monthNames = [
-            'jan', 'fev', 'mar', 'abr',
-            'mai', 'jun', 'jul', 'ago',
-            'set', 'out', 'nov', 'dez'
-          ];
-          const monthName = monthNames[date.getMonth()];
-          const day = date.getDate();
-          const year = date.getFullYear().toString().slice(-2);
-          
-          // Calculate average price
-          const avgPrice = sale.prices.reduce((sum, price) => sum + price, 0) / sale.prices.length;
-          
-          return {
-            date: sale.date,
-            material: `Grupo: ${groupName}`,
-            price: avgPrice.toFixed(2),
-            dateLabel: `${day} ${monthName} ${year}`,
-            timestamp: date.getTime(),
-            materialsCount: sale.materials.size
-          };
-        });
-        
-        console.log('API: Formatted group sale data sample:', formattedData.slice(0, 2));
-        return NextResponse.json(formattedData);
-      } else {
-        // Single material - handle both string and number types
-        const materialIdNum = parseInt(materialId);
-        query.$or = [
-          { material_id: materialId },
-          { material_id: materialId.toString() },
-          ...(isNaN(materialIdNum) ? [] : [{ material_id: materialIdNum }])
-        ];
-        
-        // Log query for debugging
-        console.log('API: Material query:', JSON.stringify(query));
-        
-        // Check if this material has any sales first
-        const salesCount = await salesCollection.countDocuments(query);
-        console.log(`API: Found ${salesCount} sales for material ID ${materialId}`);
-        
-        if (salesCount === 0) {
-          console.log(`API: No sales found for material ID ${materialId}`);
-          return NextResponse.json({ 
-            noData: true, 
-            message: "Não há histórico de preços para este material" 
-          });
-        }
-        
-        // Fetch the last 10 sales for this material, sorted by date descending
-        const recentSales = await salesCollection.find(query)
-          .sort({ date: -1 })
-          .limit(10)
-          .toArray();
-          
-        console.log(`API: Found ${recentSales.length} recent sales records`);
-        
-        // Reverse to get chronological order (oldest to newest)
-        recentSales.reverse();
-        
-        // Get the material name from our mapping
-        const materialName = materialNameMap[materialId] || `Material ${materialId}`;
-        console.log(`API: Using material name: ${materialName}`);
-        
-        // Format the sales data with proper dates
-        const formattedData = recentSales.map(sale => {
-          const date = new Date(sale.date);
-          const monthNames = [
-            'jan', 'fev', 'mar', 'abr',
-            'mai', 'jun', 'jul', 'ago',
-            'set', 'out', 'nov', 'dez'
-          ];
-          const monthName = monthNames[date.getMonth()];
-          const day = date.getDate();
-          const year = date.getFullYear().toString().slice(-2); // Get last 2 digits of year
-          
-          return {
+
+      if (materialIds.length === 1) {
+        const materialId = materialIds[0];
+        const materialName = context.nameMap.get(materialId) ?? `Material ${materialId.toString()}`;
+        const formatted = sales
+          .reverse()
+          .map((sale) => ({
             date: sale.date,
             material: materialName,
-            price: sale["price/kg"],
-            dateLabel: `${day} ${monthName} ${year}`,
-            // Store timestamp for sorting
-            timestamp: date.getTime()
-          };
-        });
-        
-        console.log('API: Formatted sale data sample:', formattedData.slice(0, 2));
-        return NextResponse.json(formattedData);
+            price: decimalToNumber(sale.priceKg) ?? 0,
+            dateLabel: formatDateLabel(sale.date),
+            timestamp: sale.date.getTime(),
+          }));
+        return NextResponse.json(formatted);
       }
-    } else {
-      // Get top 5 materials with recent sales
-      const materialsWithSales = await salesCollection.aggregate([
-        { $sort: { date: -1 } }, // Sort by most recent sales first
-        { 
-          $group: { 
-            _id: "$material_id", 
-            lastSaleDate: { $first: "$date" },
-            lastPrice: { $first: "$price/kg" },
-            count: { $sum: 1 } 
-          } 
-        },
-        { $match: { count: { $gt: 0 } } },
-        { $sort: { lastSaleDate: -1 } }, // Sort by most recently sold materials
-        { $limit: 5 }
-      ]).toArray();
-      
-      console.log(`API: Found ${materialsWithSales.length} materials with sales`);
-      
-      // If no materials with sales found, return no data
-      if (materialsWithSales.length === 0) {
-        console.log('API: No materials with sales found');
-        return NextResponse.json({ 
-          noData: true, 
-          message: "Não há histórico de preços disponível" 
-        });
-      }
-      
-      // Map material IDs to their proper names
-      const materialsWithNames = materialsWithSales.map(material => {
-        const matId = material._id?.toString();
+
+      const byDate = new Map<
+        string,
+        { date: Date; prices: number[]; materialSet: Set<bigint> }
+      >();
+
+      sales.forEach((sale) => {
+        const dateKey = sale.date.toISOString().split('T')[0];
+        const entry =
+          byDate.get(dateKey) ??
+          { date: sale.date, prices: [], materialSet: new Set<bigint>() };
+        entry.prices.push(decimalToNumber(sale.priceKg) ?? 0);
+        entry.materialSet.add(sale.material);
+        byDate.set(dateKey, entry);
+      });
+
+      const sorted = Array.from(byDate.values())
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .slice(-10);
+
+      const groupLabel = materialParam.replace('group_', '');
+      const formatted = sorted.map((entry) => {
+        const avgPrice =
+          entry.prices.reduce((sum, value) => sum + value, 0) / entry.prices.length;
         return {
-          material_id: matId,
-          material: materialNameMap[matId] || `Material ${matId}`,
-          lastSaleDate: material.lastSaleDate,
-          lastPrice: material.lastPrice
+          date: entry.date,
+          material: `Grupo: ${groupLabel}`,
+          price: Number(avgPrice.toFixed(2)),
+          dateLabel: formatDateLabel(entry.date),
+          timestamp: entry.date.getTime(),
+          materialsCount: entry.materialSet.size,
         };
       });
-      
-      console.log('API: Materials with names:', materialsWithNames);
-      
-      // For each material, get the last 10 sales
-      const salesByMaterial = {};
-      
-      for (const material of materialsWithNames) {
-        const materialQuery = {
-          $or: [
-            { material_id: material.material_id.toString() },
-            { material_id: parseInt(material.material_id) }
-          ]
-        };
-        
-        // Get last 10 sales for this material, sorted by most recent first
-        const recentSales = await salesCollection.find(materialQuery)
-          .sort({ date: -1 })
-          .limit(10)
-          .toArray();
-          
-        // Reverse to get chronological order
-        recentSales.reverse();
-        
-        // Format the sales data
-        const formattedSales = recentSales.map(sale => {
-          const date = new Date(sale.date);
-          const monthNames = [
-            'jan', 'fev', 'mar', 'abr',
-            'mai', 'jun', 'jul', 'ago',
-            'set', 'out', 'nov', 'dez'
-          ];
-          const monthName = monthNames[date.getMonth()];
-          const day = date.getDate();
-          const year = date.getFullYear().toString().slice(-2);
-          
-          return {
-            date: sale.date,
-            price: sale["price/kg"],
-            dateLabel: `${day} ${monthName} ${year}`,
-            timestamp: date.getTime()
-          };
-        });
-        
-        salesByMaterial[material.material] = formattedSales;
-      }
-      
-      // Collect all unique dates across all materials
-      const allDates = new Set();
-      Object.values(salesByMaterial).forEach((sales: any[]) => {
-        sales.forEach(sale => {
-          allDates.add(sale.dateLabel);
-        });
-      });
-      
-      // Convert to array and sort chronologically by timestamp
-      const uniqueDatesMap = {};
-      
-      // Get timestamps for each date label for proper sorting
-      Object.entries(salesByMaterial).forEach(([material, sales]) => {
-        (sales as any[]).forEach(sale => {
-          if (!uniqueDatesMap[sale.dateLabel]) {
-            uniqueDatesMap[sale.dateLabel] = sale.timestamp;
-          }
-        });
-      });
-      
-      const sortedLabels = Object.keys(uniqueDatesMap).sort((a, b) => {
-        return uniqueDatesMap[a] - uniqueDatesMap[b];
-      });
-      
-      // Create the formatted data structure
-      const priceData = sortedLabels.map(dateLabel => {
-        const materials = {};
-        
-        // For each material, find the sale on this date if exists
-        Object.entries(salesByMaterial).forEach(([material, sales]) => {
-          const sale = (sales as any[]).find(s => s.dateLabel === dateLabel);
-          if (sale) {
-            materials[material] = sale.price;
-          }
-        });
-        
-        return {
-          weekLabel: dateLabel,
-          date: new Date(uniqueDatesMap[dateLabel]),
-          materials
-        };
-      });
-      
-      console.log('API: Final price data points:', priceData.length);
-      
+
+      return NextResponse.json(formatted);
+    }
+
+    const recentMaterials = await prisma.sales.groupBy({
+      by: ['material'],
+      _max: { date: true },
+      orderBy: { _max: { date: 'desc' } },
+      take: 5,
+    });
+
+    if (recentMaterials.length === 0) {
       return NextResponse.json({
-        materials: materialsWithNames.map(m => m.material),
-        priceData
+        noData: true,
+        message: 'Não há histórico de preços disponível',
       });
     }
+
+    const priceSeriesByMaterial = await Promise.all(
+      recentMaterials.map(async (entry) => {
+        const materialId = entry.material;
+        const materialSales = await prisma.sales.findMany({
+          where: { material: materialId },
+          orderBy: { date: 'desc' },
+          take: 10,
+          select: {
+            date: true,
+            priceKg: true,
+          },
+        });
+
+        const sortedSales = materialSales.reverse();
+        const series = sortedSales.map((sale) => ({
+          dateLabel: formatDateLabel(sale.date),
+          timestamp: sale.date.getTime(),
+          price: decimalToNumber(sale.priceKg) ?? 0,
+        }));
+
+        const materialName =
+          context.nameMap.get(materialId) ?? `Material ${materialId.toString()}`;
+
+        return { materialId, materialName, series };
+      }),
+    );
+
+    const uniqueLabels = new Map<string, number>();
+    priceSeriesByMaterial.forEach((series) => {
+      series.series.forEach((point) => {
+        if (!uniqueLabels.has(point.dateLabel)) {
+          uniqueLabels.set(point.dateLabel, point.timestamp);
+        }
+      });
+    });
+
+    const sortedLabels = Array.from(uniqueLabels.entries())
+      .sort((a, b) => a[1] - b[1])
+      .map(([label]) => label);
+
+    const priceData = sortedLabels.map((label) => {
+      const materials: Record<string, number> = {};
+      priceSeriesByMaterial.forEach((series) => {
+        const match = series.series.find((point) => point.dateLabel === label);
+        if (match) {
+          materials[series.materialName] = match.price;
+        }
+      });
+      return {
+        weekLabel: label,
+        date: new Date(uniqueLabels.get(label)!),
+        materials,
+      };
+    });
+
+    return NextResponse.json({
+      materials: priceSeriesByMaterial.map((series) => series.materialName),
+      priceData,
+    });
   } catch (error) {
     console.error('Error fetching price fluctuation:', error);
-    
-    return NextResponse.json({ 
-      noData: true, 
-      message: "Erro ao buscar dados de preços" 
-    });
+    return NextResponse.json(
+      {
+        noData: true,
+        message: 'Erro ao buscar dados de preços',
+      },
+      { status: 500 },
+    );
   }
-} 
+}

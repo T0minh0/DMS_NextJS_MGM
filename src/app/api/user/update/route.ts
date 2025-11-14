@@ -1,73 +1,65 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { id, full_name, email, phone, PIS, RG } = body;
-    
+    const { id, full_name, email, PIS, RG } = await request.json();
+
     if (!id) {
-      return NextResponse.json(
-        { message: 'ID do usuário é obrigatório' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'ID do usuário é obrigatório' }, { status: 400 });
     }
-    
-    // Connect to MongoDB
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    
-    // Prepare update data
-    const updateData = {
-      updated_at: new Date()
-    };
-    
-    // Add fields if provided
-    if (full_name) updateData['full_name'] = full_name;
-    if (email) updateData['email'] = email;
-    if (phone) updateData['phone'] = phone;
-    if (PIS) updateData['PIS'] = PIS.replace(/\D/g, ''); // Remove non-numeric characters
-    if (RG) updateData['RG'] = RG.replace(/\D/g, ''); // Remove non-numeric characters
-    
-    // Try to update the user with ObjectId
-    let result;
+
+    let workerId: bigint;
     try {
-      result = await db.collection('users').updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updateData }
-      );
-    } catch (e) {
-      // If that fails, try with string ID
-      result = await db.collection('users').updateOne(
-        { _id: id },
-        { $set: updateData }
-      );
+      workerId = BigInt(id);
+    } catch {
+      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
     }
-    
-    // Check if user was updated
-    if (result.matchedCount === 0) {
-      return NextResponse.json(
-        { message: 'Usuário não encontrado' },
-        { status: 404 }
-      );
-    }
-    
-    // Log limited information
-    console.log('User profile updated:', {
-      id,
-      updated_fields: Object.keys(updateData).filter(key => key !== 'updated_at')
+
+    const worker = await prisma.workers.findUnique({
+      where: { workerId },
     });
-    
-    return NextResponse.json({ 
+
+    if (!worker) {
+      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const updateData: Prisma.WorkersUpdateInput = {
+      lastUpdate: new Date(),
+    };
+
+    if (full_name) {
+      updateData.workerName = full_name.trim();
+    }
+    if (email) {
+      updateData.email = email.trim();
+    }
+    if (PIS) {
+      const pisDigits = sanitizeDigits(PIS);
+      if (pisDigits) {
+        updateData.pis = Buffer.from(pisDigits, 'utf8');
+      }
+    }
+    if (RG) {
+      const rgDigits = sanitizeDigits(RG);
+      if (rgDigits) {
+        updateData.rg = Buffer.from(rgDigits, 'utf8');
+      }
+    }
+
+    await prisma.workers.update({
+      where: { workerId },
+      data: updateData,
+    });
+
+    return NextResponse.json({
       message: 'Perfil atualizado com sucesso',
-      updated: result.modifiedCount > 0
+      updated: true,
     });
   } catch (error) {
     console.error('Error updating user profile:', error);
-    return NextResponse.json(
-      { message: 'Erro ao atualizar perfil' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Erro ao atualizar perfil' }, { status: 500 });
   }
-} 
+}

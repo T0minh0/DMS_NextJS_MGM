@@ -3,10 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
-import { 
-  FaUser, FaIdCard, FaPhone, FaEnvelope, FaLock, 
-  FaSave, FaExclamationCircle, FaUserPlus, FaEdit, 
-  FaTrash, FaUserCog, FaSearch, FaTimes 
+import {
+  FaUser,
+  FaExclamationCircle,
+  FaUserPlus,
+  FaEdit,
+  FaTrash,
+  FaSearch,
+  FaTimes,
 } from 'react-icons/fa';
 
 interface User {
@@ -20,12 +24,27 @@ interface User {
   user_type: number;
   PIS?: string;
   RG?: string;
+  birthdate?: string;
+  enter_date?: string;
+  exit_date?: string | null;
+  gender?: string | null;
+  cooperative_id?: string;
+  cooperative?: string;
+  cooperative_name?: string | null;
+}
+
+interface Cooperative {
+  _id: string;
+  cooperative_id: string;
+  name: string;
 }
 
 export default function ManageWorkersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cooperatives, setCooperatives] = useState<Cooperative[]>([]);
+  const [loadingCooperatives, setLoadingCooperatives] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
@@ -43,9 +62,23 @@ export default function ManageWorkersPage() {
   const [pis, setPis] = useState('');
   const [rg, setRg] = useState('');
   const [userType, setUserType] = useState<number>(1); // Default: Catador (1)
+  const [birthDate, setBirthDate] = useState('');
+  const [enterDate, setEnterDate] = useState('');
+  const [exitDate, setExitDate] = useState('');
+  const [gender, setGender] = useState('');
+  const [cooperativeId, setCooperativeId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  const formatDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value.slice(0, 10);
+    }
+    return date.toISOString().split('T')[0];
+  };
+
   // Load users on component mount
   useEffect(() => {
     const fetchUsers = async () => {
@@ -68,6 +101,30 @@ export default function ManageWorkersPage() {
     
     fetchUsers();
   }, [router]);
+
+  useEffect(() => {
+    const fetchCooperatives = async () => {
+      try {
+        setLoadingCooperatives(true);
+        const response = await fetch('/api/cooperatives');
+        if (!response.ok) {
+          throw new Error('Erro ao carregar cooperativas');
+        }
+        const data = await response.json();
+        setCooperatives(data);
+        if (data.length > 0) {
+          setCooperativeId((current) => current || data[0].cooperative_id);
+        }
+      } catch (err) {
+        console.error('Error loading cooperatives:', err);
+        setError((prev) => prev || 'Erro ao carregar cooperativas');
+      } finally {
+        setLoadingCooperatives(false);
+      }
+    };
+
+    fetchCooperatives();
+  }, []);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -117,6 +174,11 @@ export default function ManageWorkersPage() {
     setPis(user.PIS || '');
     setRg(user.RG || '');
     setUserType(user.user_type);
+    setBirthDate(formatDateForInput(user.birthdate));
+    setEnterDate(formatDateForInput(user.enter_date));
+    setExitDate(formatDateForInput(user.exit_date));
+    setGender(user.gender || '');
+    setCooperativeId(user.cooperative_id || cooperatives[0]?.cooperative_id || cooperativeId);
     setPassword('');
     setConfirmPassword('');
     setShowModal(true);
@@ -132,6 +194,11 @@ export default function ManageWorkersPage() {
     setPis('');
     setRg('');
     setUserType(1);
+    setBirthDate('');
+    setEnterDate('');
+    setExitDate('');
+    setGender('');
+    setCooperativeId(cooperatives[0]?.cooperative_id || '');
     setPassword('');
     setConfirmPassword('');
   };
@@ -160,6 +227,31 @@ export default function ManageWorkersPage() {
       return;
     }
     
+    if (!birthDate) {
+      setError('Data de nascimento é obrigatória');
+      return;
+    }
+
+    if (!enterDate) {
+      setError('Data de entrada é obrigatória');
+      return;
+    }
+
+    if (!cooperativeId) {
+      setError('Selecione uma cooperativa');
+      return;
+    }
+
+    if (!pis.trim()) {
+      setError('PIS/NIS é obrigatório');
+      return;
+    }
+
+    if (!rg.trim()) {
+      setError('RG é obrigatório');
+      return;
+    }
+
     // Validate password for new users
     if (modalMode === 'create') {
       if (password.length < 6) {
@@ -184,14 +276,19 @@ export default function ManageWorkersPage() {
         ? '/api/users/create' 
         : '/api/users/update';
         
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         full_name: fullName,
         CPF: cpf,
         email: email || undefined,
         phone: phone || undefined,
         PIS: pis || undefined,
         RG: rg || undefined,
-        user_type: userType
+        user_type: userType,
+        birth_date: birthDate,
+        enter_date: enterDate,
+        exit_date: exitDate || undefined,
+        gender: gender || undefined,
+        cooperative_id: cooperativeId
       };
       
       // Add ID for updates
@@ -503,7 +600,7 @@ export default function ManageWorkersPage() {
                 
                 <div className="mb-4">
                   <label htmlFor="pis" className="block text-sm font-medium text-gray-700 mb-1">
-                    PIS/NIS
+                    PIS/NIS *
                   </label>
                   <input
                     id="pis"
@@ -512,12 +609,13 @@ export default function ManageWorkersPage() {
                     onChange={(e) => setPis(e.target.value)}
                     placeholder="000.00000.00-0"
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    required
                   />
                 </div>
                 
                 <div className="mb-4">
                   <label htmlFor="rg" className="block text-sm font-medium text-gray-700 mb-1">
-                    RG
+                    RG *
                   </label>
                   <input
                     id="rg"
@@ -526,9 +624,108 @@ export default function ManageWorkersPage() {
                     onChange={(e) => setRg(e.target.value)}
                     placeholder="00.000.000-0"
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    required
                   />
                 </div>
                 
+                <div className="mb-4">
+                  <label htmlFor="cooperative" className="block text-sm font-medium text-gray-700 mb-1">
+                    Cooperativa *
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="cooperative"
+                      value={cooperativeId}
+                      onChange={(e) => setCooperativeId(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736] appearance-none disabled:bg-gray-100"
+                      disabled={loadingCooperatives || cooperatives.length === 0}
+                    >
+                      {loadingCooperatives && <option>Carregando...</option>}
+                      {!loadingCooperatives && cooperatives.length === 0 && (
+                        <option>Nenhuma cooperativa cadastrada</option>
+                      )}
+                      {!loadingCooperatives &&
+                        cooperatives.map((coop) => (
+                          <option key={coop.cooperative_id} value={coop.cooperative_id}>
+                            {coop.name}
+                          </option>
+                        ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="mb-4">
+                    <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-1">
+                      Data de Nascimento *
+                    </label>
+                    <input
+                      id="birthDate"
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                      required
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label htmlFor="enterDate" className="block text-sm font-medium text-gray-700 mb-1">
+                      Data de Entrada *
+                    </label>
+                    <input
+                      id="enterDate"
+                      type="date"
+                      value={enterDate}
+                      onChange={(e) => setEnterDate(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="mb-4">
+                    <label htmlFor="exitDate" className="block text-sm font-medium text-gray-700 mb-1">
+                      Data de Saída
+                    </label>
+                    <input
+                      id="exitDate"
+                      type="date"
+                      value={exitDate}
+                      onChange={(e) => setExitDate(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
+                      Gênero
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="gender"
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736] appearance-none"
+                      >
+                        <option value="">Não informar</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mb-4">
                   <label htmlFor="userType" className="block text-sm font-medium text-gray-700 mb-1">
                     Tipo de Usuário *
@@ -601,12 +798,18 @@ export default function ManageWorkersPage() {
                       type="submit"
                       className="px-4 py-2 bg-[#5C1D2E] text-white rounded-lg hover:bg-[#8A2736] transition-colors duration-200"
                       disabled={
-                        modalMode === 'create' && (
+                        loadingCooperatives ||
+                        (modalMode === 'create' && (
                           !fullName.trim() || 
-                          !cpf.trim() || 
+                          !cpf.trim() ||
+                          !pis.trim() ||
+                          !rg.trim() ||
+                          !birthDate ||
+                          !enterDate ||
+                          !cooperativeId ||
                           password.length < 6 || 
                           password !== confirmPassword
-                        )
+                        ))
                       }
                     >
                       {modalMode === 'create' ? 'Criar Usuário' : 'Salvar Alterações'}

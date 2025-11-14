@@ -1,233 +1,132 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
+import prisma from '@/lib/prisma';
+import { decimalToNumber } from '@/lib/db-utils';
+
+type PeriodType = 'weekly' | 'monthly' | 'yearly';
+
+async function resolveMaterialIds(materialParam: string) {
+  if (materialParam.startsWith('group_')) {
+    const groupName = materialParam.replace('group_', '');
+    const materials = await prisma.materials.findMany({
+      where: {
+        group: {
+          groupName: {
+            equals: groupName,
+            mode: 'insensitive',
+          },
+        },
+      },
+      select: { materialId: true },
+    });
+
+    if (materials.length === 0) {
+      return { ids: null, error: NextResponse.json({ noData: true, message: 'Não há materiais neste grupo' }) };
+    }
+    return { ids: materials.map((m) => m.materialId) };
+  }
+
+  try {
+    return { ids: [BigInt(materialParam)] };
+  } catch {
+    return { ids: null, error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }) };
+  }
+}
+
+function formatPeriodLabel(periodType: PeriodType, start: Date, end: Date) {
+  if (periodType === 'weekly') {
+    const startStr = start.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const endStr = end.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    return `${startStr} - ${endStr}`;
+  }
+  if (periodType === 'yearly') {
+    return start.getFullYear().toString();
+  }
+  return start.toLocaleDateString('pt-BR', { month: 'short' });
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const materialId = searchParams.get('material_id');
-    const periodType = searchParams.get('period_type') || 'monthly'; // Default to monthly if not specified
-    
-    console.log(`API: Connecting to MongoDB for earnings comparison (${periodType})...`);
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    
-    // Check if sales collection exists
-    const salesExist = await db.listCollections({ name: 'sales' }).hasNext();
-    
-    console.log(`API: Collections exist - sales: ${salesExist}`);
-    
-    // If sales collection doesn't exist, return no data message
-    if (!salesExist) {
-      console.log('API: Required collections not found, returning no data message');
-      return NextResponse.json({ 
-        noData: true, 
-        message: materialId 
-          ? "Não há vendas registradas para este material" 
-          : "Não há dados de vendas disponíveis"
-      });
+    const materialParam = searchParams.get('material_id');
+    const periodType = (searchParams.get('period_type') as PeriodType) || 'monthly';
+
+    const materialIds = materialParam ? await resolveMaterialIds(materialParam) : { ids: null };
+    if (materialIds.error) {
+      return materialIds.error;
     }
-    
-    // Collections
-    const salesColl = db.collection('sales');
-    
-    // Helper function to add material filter to the query
-    async function addMaterialFilter(periodQuery: any, materialId: string) {
-      // Check if this is a group selection
-      if (materialId.startsWith('group_')) {
-        const groupName = materialId.replace('group_', '');
-        console.log(`API: Processing group: ${groupName} for earnings`);
-        
-        // Find all materials that belong to this group
-        const materialsCollection = db.collection('materials');
-        const groupMaterials = await materialsCollection.find({ group: groupName }).toArray();
-        console.log(`API: Found ${groupMaterials.length} materials in group "${groupName}"`);
-        
-        if (groupMaterials.length === 0) {
-          return { 
-            success: false, 
-            response: NextResponse.json({ 
-              noData: true, 
-              message: "Não há materiais neste grupo" 
-            })
-          };
-        }
-        
-        // Get material IDs
-        const materialIds = groupMaterials.map(m => m.material_id || m._id);
-        console.log(`API: Material IDs in group: ${materialIds}`);
-        
-        // Add filter for multiple materials - handle both string and number types
-        periodQuery.$or = materialIds.flatMap(id => [
-          { material_id: parseInt(id) },
-          { material_id: id.toString() },
-          { material_id: id }
-        ]);
-        
-        console.log(`API: Using group query with ${materialIds.length} materials for earnings`);
-        return { success: true };
-      } else {
-        // Single material - handle both string and number types
-        const materialIdNum = parseInt(materialId);
-        periodQuery.$or = [
-          { material_id: materialId },
-          { material_id: materialId.toString() },
-          ...(isNaN(materialIdNum) ? [] : [{ material_id: materialIdNum }])
-        ];
-        return { success: true };
-      }
-    }
-    
-    // Get the current date
+
     const now = new Date();
-    
-    // Number of periods to fetch and format settings based on period type
-    const periodsData = [];
+    const periods = [];
     const numberOfPeriods = 6;
-    
-    // Handle different period types
-    if (periodType === 'weekly') {
-      // Weekly periods - each period is 7 days
-      for (let i = 0; i < numberOfPeriods; i++) {
-        // Calculate start and end of the week
-        const endWeek = new Date(now);
-        endWeek.setDate(now.getDate() - (i * 7));
-        
-        const startWeek = new Date(endWeek);
-        startWeek.setDate(endWeek.getDate() - 6);
-        
-        // Build the query
-        const periodQuery: any = {
-          date: {
-            $gte: startWeek,
-            $lte: endWeek
-          }
-        };
-        
-        // Add material filter if provided
-        if (materialId) {
-          const result = await addMaterialFilter(periodQuery, materialId);
-          if (!result.success) return result.response;
-        }
-        
-        // Get all sales for this week
-        const weeklySales = await salesColl.find(periodQuery).toArray();
-        
-        // Calculate total earnings (price/kg is already in the document)
-        let totalEarnings = 0;
-        weeklySales.forEach(sale => {
-          totalEarnings += (sale.price_kg || sale['price/kg'] || 0) * (sale.weight_sold || 0);
-        });
-        
-        // Format the week as "DD/MM - DD/MM"
-        const startStr = `${startWeek.getDate().toString().padStart(2, '0')}/${(startWeek.getMonth() + 1).toString().padStart(2, '0')}`;
-        const endStr = `${endWeek.getDate().toString().padStart(2, '0')}/${(endWeek.getMonth() + 1).toString().padStart(2, '0')}`;
-        const weekLabel = `${startStr} - ${endStr}`;
-        
-        periodsData.push({
-          period: weekLabel,
-          earnings: totalEarnings
-        });
-      }
-    } else if (periodType === 'yearly') {
-      // Yearly periods
-      for (let i = 0; i < numberOfPeriods; i++) {
+
+    for (let i = numberOfPeriods - 1; i >= 0; i -= 1) {
+      let start: Date;
+      let end: Date;
+
+      if (periodType === 'weekly') {
+        end = new Date(now);
+        end.setDate(end.getDate() - i * 7);
+        start = new Date(end);
+        start.setDate(end.getDate() - 6);
+      } else if (periodType === 'yearly') {
         const year = now.getFullYear() - i;
-        const startYear = new Date(year, 0, 1); // January 1st
-        const endYear = new Date(year, 11, 31, 23, 59, 59); // December 31st
-        
-        // Build the query
-        const periodQuery: any = {
-          date: {
-            $gte: startYear,
-            $lte: endYear
-          }
-        };
-        
-        // Add material filter if provided
-        if (materialId) {
-          const result = await addMaterialFilter(periodQuery, materialId);
-          if (!result.success) return result.response;
-        }
-        
-        // Get all sales for this year
-        const yearlySales = await salesColl.find(periodQuery).toArray();
-        
-        // Calculate total earnings (price/kg is already in the document)
-        let totalEarnings = 0;
-        yearlySales.forEach(sale => {
-          totalEarnings += (sale.price_kg || sale['price/kg'] || 0) * (sale.weight_sold || 0);
-        });
-        
-        periodsData.push({
-          period: year.toString(),
-          earnings: totalEarnings
-        });
+        start = new Date(year, 0, 1);
+        end = new Date(year, 11, 31, 23, 59, 59);
+      } else {
+        start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
       }
-    } else {
-      // Monthly periods (default)
-      for (let i = 0; i < numberOfPeriods; i++) {
-        const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-        
-        // Build the query
-        const periodQuery: any = {
+
+      const sales = await prisma.sales.findMany({
+        where: {
           date: {
-            $gte: month,
-            $lte: nextMonth
-          }
-        };
-        
-        // Add material filter if provided
-        if (materialId) {
-          const result = await addMaterialFilter(periodQuery, materialId);
-          if (!result.success) return result.response;
-        }
-        
-        // Get all sales for this month
-        const monthlySales = await salesColl.find(periodQuery).toArray();
-        
-        // Calculate total earnings (price/kg is already in the document)
-        let totalEarnings = 0;
-        monthlySales.forEach(sale => {
-          totalEarnings += (sale.price_kg || sale['price/kg'] || 0) * (sale.weight_sold || 0);
-        });
-        
-        // Format the month name
-        const monthLabel = month.toLocaleString('pt-BR', { month: 'short' });
-        
-        periodsData.push({
-          period: monthLabel,
-          earnings: totalEarnings
-        });
-      }
-    }
-    
-    // Reverse the array to get chronological order
-    periodsData.reverse();
-    
-    // Log the results for debugging
-    console.log(`API: Earnings data for ${periodType} periods:`, 
-      periodsData.map(pd => `${pd.period}: ${pd.earnings.toFixed(2)}`));
-    
-    // If no data or no earnings, return an appropriate message
-    if (periodsData.length === 0 || periodsData.every(item => item.earnings === 0)) {
-      console.log('API: No earnings data found');
-      return NextResponse.json({ 
-        noData: true, 
-        message: materialId 
-          ? "Não há vendas registradas para este material" 
-          : "Não há dados de vendas disponíveis"
+            gte: start,
+            lte: end,
+          },
+          ...(materialIds.ids
+            ? {
+                material: {
+                  in: materialIds.ids,
+                },
+              }
+            : {}),
+        },
+        select: {
+          priceKg: true,
+          weight: true,
+        },
+      });
+
+      const earnings = sales.reduce((sum, sale) => {
+        const price = decimalToNumber(sale.priceKg) ?? 0;
+        const weight = decimalToNumber(sale.weight) ?? 0;
+        return sum + price * weight;
+      }, 0);
+
+      periods.push({
+        period: formatPeriodLabel(periodType, start, end),
+        earnings,
       });
     }
-    
-    return NextResponse.json(periodsData);
+
+    if (periods.every((item) => item.earnings === 0)) {
+      return NextResponse.json({
+        noData: true,
+        message: materialParam
+          ? 'Não há vendas registradas para este material'
+          : 'Não há dados de vendas disponíveis',
+      });
+    }
+
+    return NextResponse.json(periods);
   } catch (error) {
     console.error('Error fetching earnings comparison:', error);
-    
-    // Return error message
-    return NextResponse.json({ 
-      noData: true, 
-      message: "Erro ao buscar dados de vendas. Por favor, tente novamente mais tarde."
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        noData: true,
+        message: 'Erro ao buscar dados de vendas. Por favor, tente novamente mais tarde.',
+      },
+      { status: 500 },
+    );
   }
-} 
+}

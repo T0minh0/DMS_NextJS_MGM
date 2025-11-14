@@ -64,6 +64,8 @@ export default function SalesPage() {
   const [cooperatives, setCooperatives] = useState<Cooperative[]>([]);
   const [stock, setStock] = useState<StockData>({});
   const [buyers, setBuyers] = useState<string[]>([]);
+  const [managerCooperativeId, setManagerCooperativeId] = useState<string>('');
+  const [managerCooperativeName, setManagerCooperativeName] = useState<string>('');
   
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [showBuyerForm, setShowBuyerForm] = useState(false);
@@ -105,6 +107,45 @@ export default function SalesPage() {
     fetchBuyers();
   }, []);
 
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed.cooperative_id) {
+          setManagerCooperativeId(parsed.cooperative_id);
+        }
+        if (parsed.cooperative_name) {
+          setManagerCooperativeName(parsed.cooperative_name);
+        }
+      } catch (error) {
+        console.error('Failed to parse stored user:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (managerCooperativeId && cooperatives.length > 0) {
+      const coop = cooperatives.find(
+        (c) =>
+          c.cooperative_id === managerCooperativeId ||
+          c.cooperative_id?.toString() === managerCooperativeId,
+      );
+      if (coop) {
+        setManagerCooperativeName(coop.name);
+      }
+    }
+  }, [managerCooperativeId, cooperatives]);
+
+  useEffect(() => {
+    if (managerCooperativeId && !editingSale) {
+      setFormData((prev) => ({
+        ...prev,
+        cooperative_id: managerCooperativeId,
+      }));
+    }
+  }, [managerCooperativeId, editingSale]);
+
   const fetchSales = async () => {
     try {
       const response = await fetch('/api/sales');
@@ -122,9 +163,14 @@ export default function SalesPage() {
     try {
       const response = await fetch('/api/materials');
       if (!response.ok) throw new Error('Failed to fetch materials');
-      const data = await response.json();
-      // Filter out groups, keep only materials
-      const materialsOnly = data.filter((item: any) => item.material_id);
+      const data: unknown[] = await response.json();
+      const materialsOnly = data.filter((item): item is Material => {
+        if (typeof item !== 'object' || item === null) {
+          return false;
+        }
+        const candidate = item as { material_id?: unknown };
+        return typeof candidate.material_id === 'string' && candidate.material_id.length > 0;
+      });
       setMaterials(materialsOnly);
     } catch (error) {
       console.error('Error fetching materials:', error);
@@ -174,8 +220,13 @@ export default function SalesPage() {
     e.preventDefault();
     
     // Validation
-    if (!formData.material_id || !formData.cooperative_id || !formData.buyer) {
+    if (!formData.material_id || !formData.buyer) {
       alert('Por favor, preencha todos os campos obrigatórios');
+      return;
+    }
+    
+    if (!managerCooperativeId) {
+      alert('Não foi possível identificar a cooperativa do gestor. Refaça o login.');
       return;
     }
     
@@ -199,7 +250,7 @@ export default function SalesPage() {
     try {
       const saleData = {
         material_id: formData.material_id,
-        cooperative_id: formData.cooperative_id,
+        cooperative_id: managerCooperativeId,
         'price/kg': formData.price_per_kg,
         weight_sold: formData.weight_sold,
         date: new Date(formData.date).toISOString(),
@@ -265,6 +316,7 @@ export default function SalesPage() {
 
   const handleEdit = (sale: Sale) => {
     setEditingSale(sale);
+    setManagerCooperativeId(sale.cooperative_id);
     setFormData({
       material_id: sale.material_id,
       cooperative_id: sale.cooperative_id,
@@ -298,7 +350,7 @@ export default function SalesPage() {
   const resetForm = () => {
     setFormData({
       material_id: '',
-      cooperative_id: '',
+      cooperative_id: managerCooperativeId,
       price_per_kg: 0,
       weight_sold: 0,
       date: new Date().toISOString().split('T')[0],
@@ -590,21 +642,13 @@ export default function SalesPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-[#7a1c44] mb-2">
-                      Cooperativa *
+                      Cooperativa responsável
                     </label>
-                    <select
-                      required
-                      className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
-                      value={formData.cooperative_id}
-                      onChange={(e) => setFormData(prev => ({ ...prev, cooperative_id: e.target.value }))}
-                    >
-                      <option value="">Selecione uma cooperativa</option>
-                      {cooperatives.map((cooperative) => (
-                        <option key={cooperative._id} value={cooperative.cooperative_id}>
-                          {cooperative.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="w-full py-2 px-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-700">
+                      {managerCooperativeName ||
+                        getCooperativeName(formData.cooperative_id || managerCooperativeId) ||
+                        'Cooperativa não definida'}
+                    </div>
                   </div>
                 </div>
 

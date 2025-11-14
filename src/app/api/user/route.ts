@@ -1,68 +1,63 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { getDbFromClient } from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+import prisma from '@/lib/prisma';
+import { decodeBytes, formatWorkerId } from '@/lib/db-utils';
 
 export async function GET(request: Request) {
   try {
-    // Get user ID from query parameter
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
-    if (!id) {
-      return NextResponse.json(
-        { message: 'User ID is required' },
-        { status: 400 }
-      );
+    const idParam = searchParams.get('id');
+    const cpfParam = searchParams.get('cpf');
+
+    if (!idParam && !cpfParam) {
+      return NextResponse.json({ message: 'ID ou CPF é obrigatório' }, { status: 400 });
     }
-    
-    console.log(`Fetching user with ID: ${id}`);
-    
-    // Connect to MongoDB
-    const client = await clientPromise;
-    const db = getDbFromClient(client);
-    
-    // Query for the user - try both string ID and ObjectId
-    let user;
-    try {
-      // First attempt with ObjectId
-      user = await db.collection('users').findOne({ _id: new ObjectId(id) });
-    } catch (e) {
-      // If that fails, try with string ID
-      user = await db.collection('users').findOne({ _id: id });
+
+    let worker = null;
+
+    if (idParam) {
+      try {
+        const workerId = BigInt(idParam);
+        worker = await prisma.workers.findUnique({
+          where: { workerId },
+          include: { cooperativeRef: true },
+        });
+      } catch {
+        return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+      }
     }
-    
-    // If user not found, try alternative fields
-    if (!user) {
-      user = await db.collection('users').findOne({ id: id });
+
+    if (!worker && cpfParam) {
+      const sanitizedCpf = cpfParam.replace(/\D/g, '');
+      worker = await prisma.workers.findFirst({
+        where: { cpf: Buffer.from(sanitizedCpf, 'utf8') },
+        include: { cooperativeRef: true },
+      });
     }
-    
-    // Try by CPF if still not found
-    if (!user) {
-      user = await db.collection('users').findOne({ cpf: "56789012345" });
+
+    if (!worker) {
+      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
     }
-    
-    if (!user) {
-      return NextResponse.json(
-        { message: 'User not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Return user data, omitting only sensitive fields
-    const { password, password_hash, ...safeUserData } = user;
-    
-    // Log only limited information
-    console.log('Found user:', {
-      _id: safeUserData._id,
-      userType: safeUserData.user_type
-    });
-    
-    return NextResponse.json(safeUserData);
+
+    const cpfValue = decodeBytes(worker.cpf);
+    const response = {
+      id: worker.workerId.toString(),
+      worker_id: Number(worker.workerId),
+      wastepicker_id: formatWorkerId(worker.workerId),
+      full_name: worker.workerName,
+      cpf: cpfValue,
+      user_type: Number(worker.userType),
+      email: worker.email,
+      gender: worker.gender,
+      birth_date: worker.birthDate?.toISOString().split('T')[0] ?? null,
+      enter_date: worker.enterDate?.toISOString().split('T')[0] ?? null,
+      exit_date: worker.exitDate?.toISOString().split('T')[0] ?? null,
+      cooperative_id: worker.cooperative.toString(),
+      cooperative_name: worker.cooperativeRef?.cooperativeName ?? null,
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching user:', error);
-    return NextResponse.json(
-      { message: 'Error fetching user data' },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Erro ao buscar dados do usuário' }, { status: 500 });
   }
-} 
+}

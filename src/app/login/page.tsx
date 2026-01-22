@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaLock, FaIdCard, FaExclamationCircle } from 'react-icons/fa';
 
@@ -15,7 +15,7 @@ export default function LoginPage() {
   // Handle CPF input with formatting
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, ''); // Remove non-digits
-    
+
     if (value.length <= 11) {
       // Format as CPF: 000.000.000-00
       let formattedValue = value;
@@ -28,7 +28,7 @@ export default function LoginPage() {
       if (value.length > 9) {
         formattedValue = formattedValue.replace(/^(\d{3}\.\d{3}\.)(\d{3})/, '$1$2-');
       }
-      
+
       setCpf(formattedValue);
     }
   };
@@ -53,9 +53,9 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           cpf: cpf.replace(/\D/g, ''), // Remove formatting before sending
-          password 
+          password
         }),
       });
 
@@ -64,7 +64,7 @@ export default function LoginPage() {
       if (response.ok) {
         // Store user data in localStorage
         localStorage.setItem('user', JSON.stringify(data.user));
-        
+
         // Successful login
         router.push('/');
       } else {
@@ -74,11 +74,11 @@ export default function LoginPage() {
           403: 'Acesso restrito. Apenas gerentes podem acessar o sistema.',
           500: 'Erro no servidor. Tente novamente mais tarde.',
         };
-        
+
         // Use the API message or fallback to status-specific message or general error
         setError(
-          data.message || 
-          errorMessages[response.status as keyof typeof errorMessages] || 
+          data.message ||
+          errorMessages[response.status as keyof typeof errorMessages] ||
           'Falha na autenticação. Verifique suas credenciais.'
         );
       }
@@ -96,9 +96,9 @@ export default function LoginPage() {
         <div className="p-8">
           <div className="text-center mb-8">
             <div className="flex justify-center mb-6">
-              <img 
+              <img
                 src={logoSrc}
-                alt="DMS Logo" 
+                alt="DMS Logo"
                 width={128}
                 height={128}
                 className="h-32 w-32 object-contain"
@@ -160,9 +160,8 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full bg-[#7a1c44] text-white font-medium py-3 px-4 rounded-lg hover:bg-[#c15079] transition-colors duration-200 flex justify-center items-center ${
-                loading ? 'opacity-70 cursor-not-allowed' : ''
-              }`}
+              className={`w-full bg-[#7a1c44] text-white font-medium py-3 px-4 rounded-lg hover:bg-[#c15079] transition-colors duration-200 flex justify-center items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
             >
               {loading ? (
                 <>
@@ -179,7 +178,7 @@ export default function LoginPage() {
           </form>
         </div>
       </div>
-      
+
       <p className="mt-8 text-center text-sm text-gray-500">
         © {new Date().getFullYear()} DMS - Todos os direitos reservados
       </p>

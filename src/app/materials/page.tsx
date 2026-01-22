@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import { 
-  FaPlus, 
-  FaEdit, 
-  FaTrash, 
-  FaSearch, 
+import {
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaSearch,
   FaFilter,
   FaSave,
   FaTimes,
@@ -30,22 +30,22 @@ interface MaterialFormData {
 export default function MaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
-  
+
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [newGroup, setNewGroup] = useState('');
-  
+
   const [formData, setFormData] = useState<MaterialFormData>({
     material: '',
     group: ''
   });
-  
+
   const [filters, setFilters] = useState({
     group: '',
     search: ''
   });
-  
+
   const [loading, setLoading] = useState({
     materials: true,
     saving: false
@@ -60,13 +60,13 @@ export default function MaterialsPage() {
       const response = await fetch('/api/materials');
       if (!response.ok) throw new Error('Failed to fetch materials');
       const data = await response.json();
-      
+
       // Filter out groups and get only materials
-      const materialsOnly = data.filter((item: any) => item.material_id && !item.isGroup);
-      const uniqueGroups = [...new Set(materialsOnly.map((m: Material) => m.group))].sort();
-      
+      const materialsOnly = data.filter((item: { material_id?: number; isGroup?: boolean }) => item.material_id && !item.isGroup);
+      const uniqueGroups = Array.from(new Set(materialsOnly.map((m: Material) => m.group))) as string[];
+
       setMaterials(materialsOnly);
-      setGroups(uniqueGroups);
+      setGroups(uniqueGroups.sort());
     } catch (error) {
       console.error('Error fetching materials:', error);
     } finally {
@@ -76,38 +76,38 @@ export default function MaterialsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.material.trim() || !formData.group.trim()) {
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
-    
+
     setLoading(prev => ({ ...prev, saving: true }));
-    
+
     try {
       const materialData = {
         material: formData.material.trim(),
         group: formData.group.trim()
       };
-      
+
       const url = editingMaterial ? `/api/materials/${editingMaterial._id}` : '/api/materials';
       const method = editingMaterial ? 'PUT' : 'POST';
-      
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(materialData)
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to save material');
       }
-      
+
       await fetchMaterials();
       resetForm();
-      
+
     } catch (error) {
       console.error('Error saving material:', error);
       alert(error instanceof Error ? error.message : 'Erro ao salvar material');
@@ -121,12 +121,12 @@ export default function MaterialsPage() {
       alert('Por favor, digite o nome do grupo');
       return;
     }
-    
+
     if (groups.includes(newGroup.trim().toLowerCase())) {
       alert('Este grupo já existe');
       return;
     }
-    
+
     // Just add to local state - groups are created when materials are saved
     setGroups(prev => [...prev, newGroup.trim()].sort());
     setFormData(prev => ({ ...prev, group: newGroup.trim() }));
@@ -145,16 +145,16 @@ export default function MaterialsPage() {
 
   const handleDelete = async (materialId: string) => {
     if (!confirm('Tem certeza que deseja excluir este material?')) return;
-    
+
     try {
       const response = await fetch(`/api/materials/${materialId}`, {
         method: 'DELETE'
       });
-      
+
       if (!response.ok) throw new Error('Failed to delete material');
-      
+
       await fetchMaterials();
-      
+
     } catch (error) {
       console.error('Error deleting material:', error);
       alert('Erro ao excluir material');
@@ -172,10 +172,10 @@ export default function MaterialsPage() {
 
   const filteredMaterials = materials.filter(material => {
     const matchesGroup = filters.group === '' || material.group === filters.group;
-    const matchesSearch = filters.search === '' || 
+    const matchesSearch = filters.search === '' ||
       material.material.toLowerCase().includes(filters.search.toLowerCase()) ||
       material.group.toLowerCase().includes(filters.search.toLowerCase());
-    
+
     return matchesGroup && matchesSearch;
   });
 
@@ -233,7 +233,7 @@ export default function MaterialsPage() {
                 />
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-[#7a1c44] mb-2">
                 Grupo
@@ -264,7 +264,7 @@ export default function MaterialsPage() {
                   {group} ({materialsByGroup[group].length})
                 </h3>
               </div>
-              
+
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
@@ -312,7 +312,7 @@ export default function MaterialsPage() {
               </div>
             </div>
           ))}
-          
+
           {Object.keys(materialsByGroup).length === 0 && !loading.materials && (
             <div className="bg-white rounded-xl shadow-lg p-12 text-center">
               <FaBoxes className="mx-auto h-12 w-12 text-gray-400 mb-4" />

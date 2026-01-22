@@ -26,10 +26,11 @@ function formatMaterial(material: MaterialWithGroup) {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = parseMaterialId(params.id);
+    const { id: idParam } = await params;
+    const id = parseMaterialId(idParam);
     if (id === null) {
       return NextResponse.json(
         { error: 'ID de material inválido' },
@@ -120,10 +121,11 @@ export async function PUT(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const id = parseMaterialId(params.id);
+    const { id: idParam } = await params;
+    const id = parseMaterialId(idParam);
     if (id === null) {
       return NextResponse.json(
         { error: 'ID de material inválido' },

@@ -8,8 +8,8 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2';
 
 // Register ChartJS components
 ChartJS.register(
-  CategoryScale, 
-  LinearScale, 
+  CategoryScale,
+  LinearScale,
   BarElement,
   PointElement,
   LineElement,
@@ -53,14 +53,20 @@ export default function HomePage() {
   const [workerFilter, setWorkerFilter] = useState<string>('');
   const [periodFilter, setPeriodFilter] = useState<string>('monthly');
   const [user, setUser] = useState<User | null>(null);
-  
+
   // State for data
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [materials, setMaterials] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [workers, setWorkers] = useState<any[]>([]);
   const [stockData, setStockData] = useState<StockDataItem>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [earningsData, setEarningsData] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [workerCollections, setWorkerCollections] = useState<any>({ grouped: false, data: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [priceFluctuationData, setPriceFluctuationData] = useState<any>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [birthdays, setBirthdays] = useState<any[]>([]);
   const [noDataMessages, setNoDataMessages] = useState<Record<string, string | null>>({
     stock: null,
@@ -68,7 +74,7 @@ export default function HomePage() {
     workerCollections: null,
     priceFluctuation: null
   });
-  
+
   // Loading states
   const [loading, setLoading] = useState({
     materials: true,
@@ -94,7 +100,7 @@ export default function HomePage() {
       try {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
-        
+
         // Fetch real user data from the database
         const fetchRealUserData = async () => {
           try {
@@ -102,17 +108,17 @@ export default function HomePage() {
             if (response.ok) {
               const realUserData = await response.json();
               console.log('Real user data fetched:', realUserData);
-              
+
               // Create updated user object
               const updatedUser = {
                 ...parsedUser,
                 full_name: realUserData.full_name,
                 name: realUserData.name || realUserData.full_name
               };
-              
+
               // Update the user state with real data
               setUser(updatedUser);
-              
+
               // Store the enhanced user data in localStorage
               localStorage.setItem('user', JSON.stringify(updatedUser));
             }
@@ -120,7 +126,7 @@ export default function HomePage() {
             console.error('Error fetching real user data:', error);
           }
         };
-        
+
         fetchRealUserData();
       } catch (error) {
         console.error('Failed to parse user data:', error);
@@ -132,22 +138,22 @@ export default function HomePage() {
   const totalMaterials = materials.length;
   const totalWorkers = workers.length;
   const totalStock = Object.entries(stockData)
-    .filter(([key, value]) => typeof value === 'number')
-    .reduce((sum: number, [_, value]) => sum + (value as number), 0);
-  
+    .filter(([, value]) => typeof value === 'number')
+    .reduce((sum: number, [, value]) => sum + (value as number), 0);
+
   // Calculate total earnings for the current month
-  const currentMonthEarnings = earningsData.length > 0 
-    ? earningsData[earningsData.length - 1].earnings 
+  const currentMonthEarnings = earningsData.length > 0
+    ? earningsData[earningsData.length - 1].earnings
     : 0;
 
   // Format current date for welcome message
   const currentDate = useMemo(() => {
     const now = new Date();
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     };
     return now.toLocaleDateString('pt-BR', options);
   }, []);
@@ -159,15 +165,15 @@ export default function HomePage() {
         console.log('Fetching materials...');
         const response = await fetch('/api/materials');
         console.log('Materials API response status:', response.status, response.statusText);
-        
+
         if (!response.ok) throw new Error(`Failed to fetch materials: ${response.status} ${response.statusText}`);
-        
+
         const data = await response.json();
         console.log('Materials data received:', data);
         console.log('Materials data type:', typeof data);
         console.log('Is materials data an array?', Array.isArray(data));
         console.log('Materials data length:', data.length);
-        
+
         if (Array.isArray(data)) {
           setMaterials(data);
           console.log('Materials state updated with data');
@@ -181,7 +187,7 @@ export default function HomePage() {
         console.log('Materials loading state set to false');
       }
     }
-    
+
     fetchMaterials();
   }, []);
 
@@ -200,7 +206,7 @@ export default function HomePage() {
         setLoading(prev => ({ ...prev, workers: false }));
       }
     }
-    
+
     fetchWorkers();
   }, []);
 
@@ -211,72 +217,72 @@ export default function HomePage() {
       console.log('Waiting for materials to load before fetching stock data...');
       return;
     }
-    
+
     async function fetchStock() {
       try {
         setLoading(prev => ({ ...prev, stock: true }));
         console.log('Fetching stock data...');
-        
-        const url = materialFilter 
-          ? `/api/stock?material_id=${materialFilter}` 
+
+        const url = materialFilter
+          ? `/api/stock?material_id=${materialFilter}`
           : '/api/stock';
-        
+
         console.log('Stock API URL:', url);
         const response = await fetch(url);
         console.log('Stock API response status:', response.status, response.statusText);
-        
+
         if (!response.ok) throw new Error(`Failed to fetch stock data: ${response.status} ${response.statusText}`);
-        
+
         const data = await response.json();
         console.log('Stock data received:', data);
         console.log('Stock data type:', typeof data);
         console.log('Stock data keys:', Object.keys(data));
-        
+
         // Check if we got a no-data response
         if (data.noData) {
           console.log('No stock data available for this material');
           setStockData({ noData: true, message: data.message });
           // Clear any previous no-data message
           setNoDataMessages(prev => ({ ...prev, stock: data.message }));
-        } 
+        }
         // Ensure we have a valid object
         else if (data && typeof data === 'object') {
           // Transform stock data to use proper material names
           const transformedStockData: Record<string, number> = {};
-          
+
           // Debug materials array
           console.log('Materials available for mapping:', materials.map(m => ({
             id: m._id,
             material_id: m.material_id,
             name: m.name || m.material
           })));
-          
+
           // Process each material in the stock data
           Object.entries(data).forEach(([key, value]) => {
             console.log(`Processing stock item: ${key} = ${value}`);
-            
+
             // If the key starts with "Material ", try to replace it with a proper name
             if (key.startsWith("Material ")) {
               const materialId = key.replace("Material ", "");
               console.log(`Looking for material with ID: ${materialId}`);
-              
+
               // Debug: try different matching methods
               const exactMatch = materials.find(m => m._id === materialId);
               const stringMatch = materials.find(m => m._id.toString() === materialId);
               const materialIdMatch = materials.find(m => m.material_id === materialId);
-              const stringMaterialIdMatch = materials.find(m => 
+              const stringMaterialIdMatch = materials.find(m =>
                 m.material_id && m.material_id.toString() === materialId
               );
-              
+
               console.log('Match results:', {
                 exactMatch: !!exactMatch,
                 stringMatch: !!stringMatch,
                 materialIdMatch: !!materialIdMatch,
                 stringMaterialIdMatch: !!stringMaterialIdMatch
               });
-              
+
               const material = exactMatch || stringMatch || materialIdMatch || stringMaterialIdMatch;
-              
+
               if (material) {
                 const materialName = material.name || material.material;
                 console.log(`✅ Found material match: ${materialId} -> ${materialName}`);
@@ -292,10 +298,10 @@ export default function HomePage() {
               transformedStockData[key] = value as number;
             }
           });
-          
+
           console.log('Transformed stock data:', transformedStockData);
           setStockData(transformedStockData);
-          
+
           // Clear any previous no-data message
           setNoDataMessages(prev => ({ ...prev, stock: null }));
         } else {
@@ -310,7 +316,7 @@ export default function HomePage() {
         console.log('Stock loading set to false');
       }
     }
-    
+
     fetchStock();
   }, [materialFilter, materials, loading.materials]);
 
@@ -320,16 +326,16 @@ export default function HomePage() {
       try {
         setLoading(prev => ({ ...prev, earnings: true }));
         let url = `/api/earnings-comparison?period_type=${periodFilter}`;
-        
+
         if (materialFilter) {
           url += `&material_id=${materialFilter}`;
         }
-        
+
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch earnings data');
         const data = await response.json();
         console.log('Earnings data:', data);
-        
+
         // Check if we got a no-data response
         if (data.noData) {
           setEarningsData([]);
@@ -346,7 +352,7 @@ export default function HomePage() {
         setLoading(prev => ({ ...prev, earnings: false }));
       }
     }
-    
+
     fetchEarnings();
   }, [materialFilter, periodFilter]);
 
@@ -356,20 +362,20 @@ export default function HomePage() {
       try {
         setLoading(prev => ({ ...prev, workerCollections: true }));
         let url = `/api/worker-collections?period_type=${periodFilter}`;
-        
+
         if (workerFilter) {
           url += `&worker_id=${workerFilter}`;
         }
-        
+
         if (materialFilter) {
           url += `&material_id=${materialFilter}`;
         }
-        
+
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch worker collections');
         const data = await response.json();
         console.log('Worker collections data:', data);
-        
+
         // Check if we got a no-data response
         if (data.noData) {
           setWorkerCollections({ grouped: false, data: [] });
@@ -386,7 +392,7 @@ export default function HomePage() {
         setLoading(prev => ({ ...prev, workerCollections: false }));
       }
     }
-    
+
     fetchWorkerCollections();
   }, [workerFilter, materialFilter, periodFilter]);
 
@@ -395,15 +401,15 @@ export default function HomePage() {
     async function fetchPriceFluctuation() {
       try {
         setLoading(prev => ({ ...prev, priceFluctuation: true }));
-        const url = materialFilter 
-          ? `/api/price-fluctuation?material_id=${materialFilter}` 
+        const url = materialFilter
+          ? `/api/price-fluctuation?material_id=${materialFilter}`
           : '/api/price-fluctuation';
-        
+
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch price fluctuation');
         const data = await response.json();
         console.log('Price fluctuation data:', data);
-        
+
         // Check if we got a no-data response
         if (data.noData) {
           setPriceFluctuationData({});
@@ -420,7 +426,7 @@ export default function HomePage() {
         setLoading(prev => ({ ...prev, priceFluctuation: false }));
       }
     }
-    
+
     fetchPriceFluctuation();
   }, [materialFilter]);
 
@@ -439,7 +445,7 @@ export default function HomePage() {
         setLoading(prev => ({ ...prev, birthdays: false }));
       }
     }
-    
+
     fetchBirthdays();
   }, []);
 
@@ -457,12 +463,13 @@ export default function HomePage() {
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL' 
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
     }).format(value);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatWeight = (value: number | any): string => {
     // Handle non-number values to prevent "toFixed is not a function" error
     if (value === null || value === undefined || typeof value !== 'number') {
@@ -480,14 +487,14 @@ export default function HomePage() {
         datasets: [{ data: [], backgroundColor: [], borderColor: '#fff', borderWidth: 1 }]
       };
     }
-    
+
     if (stockData.noData) {
       return {
         labels: [],
         datasets: [{ data: [], backgroundColor: [], borderColor: '#fff', borderWidth: 1 }]
       };
     }
-    
+
     try {
       // Direct fix: Map Material IDs to proper names from our materials array
       const materialNameMap: MaterialNameMap = {};
@@ -495,7 +502,7 @@ export default function HomePage() {
         const id = material._id?.toString() || '';
         materialNameMap[`Material ${id}`] = material.name || material.material || `Material ${id}`;
       });
-      
+
       // Transform labels to use proper material names
       const labels = Object.keys(stockData).map(key => {
         // If this is a "Material X" format key, try to substitute with actual name
@@ -504,7 +511,7 @@ export default function HomePage() {
         }
         return key;
       });
-      
+
       // Values should be in the same order as the transformed labels
       const values = labels.map(label => {
         // Find the original key that maps to this label
@@ -513,17 +520,17 @@ export default function HomePage() {
           if (key.startsWith('Material ') && materialNameMap[key] === label) return true;
           return false;
         });
-        
+
         return originalKey && typeof stockData[originalKey] === 'number' ? stockData[originalKey] : 0;
       });
-      
+
       // Log the chart data
-      console.log('Prepared stock chart data:', { 
+      console.log('Prepared stock chart data:', {
         originalLabels: Object.keys(stockData),
-        transformedLabels: labels, 
-        values 
+        transformedLabels: labels,
+        values
       });
-      
+
       return {
         labels,
         datasets: [
@@ -599,7 +606,7 @@ export default function HomePage() {
     try {
       setRecalculating(true);
       setRecalculationMessage(null);
-      
+
       const response = await fetch('/api/recalculate-contributions', {
         method: 'POST',
         headers: {
@@ -611,7 +618,7 @@ export default function HomePage() {
 
       if (response.ok) {
         setRecalculationMessage(`✅ Recálculo concluído! Processados ${data.processed} registros. Total: ${data.statistics.totalWeight} kg e R$ ${data.statistics.totalEarnings.toFixed(2)}`);
-        
+
         // Refresh the data on the dashboard
         window.location.reload();
       } else {
@@ -639,7 +646,7 @@ export default function HomePage() {
     try {
       setAssigningIds(true);
       setAssignmentMessage(null);
-      
+
       const response = await fetch('/api/users/assign-wastepicker-ids', {
         method: 'POST',
         headers: {
@@ -652,7 +659,7 @@ export default function HomePage() {
       if (response.ok) {
         if (data.updated > 0) {
           setAssignmentMessage(`✅ IDs atribuídos com sucesso! ${data.updated} catadores atualizados.`);
-          
+
           // Refresh the workers data
           const fetchWorkers = async () => {
             try {
@@ -689,7 +696,7 @@ export default function HomePage() {
     try {
       setDebugging(true);
       setDebugMessage(null);
-      
+
       const response = await fetch('/api/debug/check-data');
       const data = await response.json();
 
@@ -738,11 +745,11 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
           </div>
         </div>
       )}
-      
+
       <h2 className="text-3xl font-bold text-dms-primary mb-6">
         Dashboard de Coleta de Materiais
       </h2>
-      
+
       {/* Filters Section */}
       <div className="bg-white p-5 rounded-xl shadow-md mb-8">
         <h3 className="text-xl font-semibold text-dms-primary mb-4 flex items-center">
@@ -751,8 +758,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
         <div className="grid md:grid-cols-3 gap-x-6 gap-y-4">
           <div>
             <label htmlFor="materialFilterNext" className="block text-sm font-semibold text-dms-primary mb-1.5">Material</label>
-            <select 
-              id="materialFilterNext" 
+            <select
+              id="materialFilterNext"
               className="w-full py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-dms-secondary focus:ring-2 focus:ring-dms-secondary focus:ring-opacity-25 transition-colors duration-150"
               value={materialFilter}
               onChange={handleMaterialFilterChange}
@@ -760,8 +767,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               <option value="">Todos os Materiais</option>
               {/* Groups first */}
               {materials.filter(material => material.isGroup).map((material) => (
-                <option 
-                  key={material.material_id || material._id} 
+                <option
+                  key={material.material_id || material._id}
                   value={material.material_id || material._id}
                   style={{ fontWeight: 'bold', color: '#8A2736' }}
                 >
@@ -776,8 +783,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               )}
               {/* Individual materials */}
               {materials.filter(material => !material.isGroup).map((material) => (
-                <option 
-                  key={material.material_id || material._id} 
+                <option
+                  key={material.material_id || material._id}
                   value={material.material_id || material._id}
                 >
                   {material.name || material.material || `Material ${material.material_id || material._id}`}
@@ -787,16 +794,16 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
           </div>
           <div>
             <label htmlFor="workerFilterNext" className="block text-sm font-semibold text-dms-primary mb-1.5">Trabalhador</label>
-            <select 
-              id="workerFilterNext" 
+            <select
+              id="workerFilterNext"
               className="w-full py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-dms-secondary focus:ring-2 focus:ring-dms-secondary focus:ring-opacity-25 transition-colors duration-150"
               value={workerFilter}
               onChange={handleWorkerFilterChange}
             >
               <option value="">Todos os Trabalhadores</option>
               {workers.map((worker, index) => (
-                <option 
-                  key={worker.wastepicker_id || worker._id || worker.id || `worker-${index}`} 
+                <option
+                  key={worker.wastepicker_id || worker._id || worker.id || `worker-${index}`}
                   value={worker.wastepicker_id || worker._id || worker.id}
                   disabled={!worker.wastepicker_id}
                 >
@@ -807,8 +814,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
           </div>
           <div>
             <label htmlFor="periodFilterNext" className="block text-sm font-semibold text-dms-primary mb-1.5">Período</label>
-            <select 
-              id="periodFilterNext" 
+            <select
+              id="periodFilterNext"
               className="w-full py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-dms-secondary focus:ring-2 focus:ring-dms-secondary focus:ring-opacity-25 transition-colors duration-150"
               value={periodFilter}
               onChange={handlePeriodFilterChange}
@@ -823,7 +830,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
 
       {/* Stats Cards Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {[ 
+        {[
           { title: 'Materiais', value: loading.materials ? '-' : totalMaterials, iconName: 'FaBoxes', labelKey: 'totalMaterials' },
           { title: 'Trabalhadores', value: loading.workers ? '-' : totalWorkers, iconName: 'FaUsers', labelKey: 'totalWorkers' },
           { title: 'Estoque Total (kg)', value: loading.stock ? '-' : formatWeight(totalStock), iconName: 'FaWeightHanging', labelKey: 'totalStock' },
@@ -834,14 +841,14 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             <div key={stat.title} className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col items-center">
               <div className="text-dms-secondary text-4xl mb-4">
                 {IconComponent && <IconComponent />}
-              </div> 
+              </div>
               <p id={stat.labelKey} className="text-3xl font-bold text-dms-primary mb-1">{stat.value}</p>
               <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{stat.title}</p>
             </div>
           );
         })}
       </div>
-      
+
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Estoque Atual Chart */}
@@ -858,7 +865,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             ) : noDataMessages.stock ? (
               <p className="text-gray-400 italic">{noDataMessages.stock}</p>
             ) : Object.keys(stockData).length > 0 ? (
-              <Doughnut 
+              <Doughnut
                 data={stockChartData}
                 options={{
                   responsive: true,
@@ -875,9 +882,9 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           let label = context.label || '';
-                          
+
                           if (label) {
                             label += ': ';
                           }
@@ -938,7 +945,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     y: {
                       beginAtZero: true,
                       ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                           return formatCurrency(Number(value));
                         }
                       }
@@ -950,7 +957,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           return formatCurrency(context.parsed.y);
                         }
                       }
@@ -983,11 +990,14 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               // Display stacked bar chart for yearly data
               <Bar
                 data={{
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   labels: workerCollections.workers.map((worker: any) => worker.worker_name),
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   datasets: workerCollections.materials.map((material: any, index: number) => {
                     console.log(`Material ${index}:`, material);
                     return {
                       label: material.name,
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       data: workerCollections.workers.map((worker: any) => worker[material.id] || 0),
                       backgroundColor: getMaterialColors()[index % getMaterialColors().length],
                       borderColor: 'rgba(255, 255, 255, 0.5)',
@@ -1005,7 +1015,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                       stacked: true,
                       beginAtZero: true,
                       ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                           return value + ' kg';
                         }
                       }
@@ -1026,7 +1036,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           const materialName = context.dataset.label;
                           const weight = formatWeight(context.raw as number);
                           return `${materialName}: ${weight} kg`;
@@ -1040,10 +1050,12 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               // Display regular bar chart for other data
               <Bar
                 data={{
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   labels: workerCollections.data.map((worker: any) => worker.worker_name),
                   datasets: [
                     {
                       label: 'Peso Coletado (kg)',
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       data: workerCollections.data.map((worker: any) => worker.totalWeight),
                       backgroundColor: '#8A2736',
                       borderColor: 'rgba(138, 39, 54, 0.7)',
@@ -1059,7 +1071,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     x: {
                       beginAtZero: true,
                       ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                           return value + ' kg';
                         }
                       }
@@ -1071,7 +1083,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           return formatWeight(context.raw as number) + ' kg';
                         }
                       }
@@ -1103,7 +1115,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 <p className="text-gray-500 mb-3">Selecione um material específico para visualizar a flutuação de preços.</p>
                 <div className="flex flex-wrap justify-center gap-2 mt-4">
                   {materials.slice(0, 5).map((material) => (
-                    <button 
+                    <button
                       key={material.material_id || material._id}
                       onClick={() => setMaterialFilter(material.material_id?.toString() || material._id?.toString() || '')}
                       className="px-3 py-2 bg-dms-secondary text-white rounded-md hover:bg-dms-primary transition-colors duration-200"
@@ -1117,9 +1129,11 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               <Line
                 data={{
                   // Use the properly formatted weekLabel from the API
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   labels: priceFluctuationData.priceData.map((week: any) => week.weekLabel),
                   datasets: priceFluctuationData.materials.map((material: string, index: number) => ({
                     label: material,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     data: priceFluctuationData.priceData.map((week: any) => week.materials[material] || null),
                     borderColor: [
                       '#C74B6F', '#8A2736', '#5C1D2E', '#2D0D17', '#F7E4E4',
@@ -1141,7 +1155,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     y: {
                       beginAtZero: false,
                       ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                           return formatCurrency(Number(value));
                         }
                       }
@@ -1169,7 +1183,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           let label = context.dataset.label || '';
                           if (label) {
                             label += ': ';
@@ -1188,11 +1202,13 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               <Line
                 data={{
                   // Use the properly formatted dateLabel from the API
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   labels: priceFluctuationData.map((item: any) => item.dateLabel || `S${item.week}`),
                   datasets: [
                     {
                       // Use the material name directly from the API response
                       label: priceFluctuationData[0].material || 'Preço do Material',
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       data: priceFluctuationData.map((item: any) => item.price),
                       borderColor: '#C74B6F',
                       backgroundColor: 'transparent',
@@ -1211,7 +1227,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     y: {
                       beginAtZero: false,
                       ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                           return formatCurrency(Number(value));
                         }
                       }
@@ -1233,7 +1249,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           let label = context.dataset.label || '';
                           if (label) {
                             label += ': ';
@@ -1255,8 +1271,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
         </div>
       </div>
 
-       {/* Birthdays Section */}
-       <div className="bg-white p-6 rounded-xl shadow-lg">
+      {/* Birthdays Section */}
+      <div className="bg-white p-6 rounded-xl shadow-lg">
         <h3 className="text-xl font-semibold text-dms-primary mb-4 flex items-center">
           <FaBirthdayCake className="mr-2 text-dms-secondary" />Aniversários do Mês
         </h3>
@@ -1272,8 +1288,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             </div>
           ) : birthdays && birthdays.length > 0 ? (
             birthdays.map((birthday, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="bg-dms-light-gray p-4 rounded-lg border-l-4 border-dms-accent shadow-sm hover:translate-x-1.5 transition-transform duration-200 ease-in-out cursor-pointer"
               >
                 <p className="font-semibold text-dms-primary text-md">{birthday.name}</p>
@@ -1297,17 +1313,16 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             {/* Recalculate Contributions */}
             <div>
               <p className="text-gray-600 mb-3">
-                Recalcular todas as contribuições dos trabalhadores baseado nas medições. 
+                Recalcular todas as contribuições dos trabalhadores baseado nas medições.
                 Isso corrige problemas de dupla contagem e atualiza os dados automaticamente.
               </p>
               <button
                 onClick={handleRecalculateContributions}
                 disabled={recalculating}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 mr-4 ${
-                  recalculating
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-orange-500 text-white hover:bg-orange-600'
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 mr-4 ${recalculating
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                  }`}
               >
                 {recalculating ? (
                   <span className="flex items-center">
@@ -1322,11 +1337,10 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 )}
               </button>
               {recalculationMessage && (
-                <div className={`p-4 rounded-lg mt-3 ${
-                  recalculationMessage.startsWith('✅') 
-                    ? 'bg-green-100 text-green-800 border border-green-200'
-                    : 'bg-red-100 text-red-800 border border-red-200'
-                }`}>
+                <div className={`p-4 rounded-lg mt-3 ${recalculationMessage.startsWith('✅')
+                  ? 'bg-green-100 text-green-800 border border-green-200'
+                  : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
                   {recalculationMessage}
                 </div>
               )}
@@ -1335,17 +1349,16 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             {/* Assign Wastepicker IDs */}
             <div className="border-t pt-6">
               <p className="text-gray-600 mb-3">
-                Atribuir IDs únicos (WP001, WP002, etc.) para catadores que ainda não possuem. 
+                Atribuir IDs únicos (WP001, WP002, etc.) para catadores que ainda não possuem.
                 Necessário para rastreamento de produtividade e contribuições.
               </p>
               <button
                 onClick={handleAssignWastepickerIds}
                 disabled={assigningIds}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${
-                  assigningIds
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${assigningIds
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}
               >
                 {assigningIds ? (
                   <span className="flex items-center">
@@ -1363,11 +1376,10 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 )}
               </button>
               {assignmentMessage && (
-                <div className={`p-4 rounded-lg mt-3 ${
-                  assignmentMessage.startsWith('✅') || assignmentMessage.startsWith('ℹ️')
-                    ? 'bg-green-100 text-green-800 border border-green-200'
-                    : 'bg-red-100 text-red-800 border border-red-200'
-                }`}>
+                <div className={`p-4 rounded-lg mt-3 ${assignmentMessage.startsWith('✅') || assignmentMessage.startsWith('ℹ️')
+                  ? 'bg-green-100 text-green-800 border border-green-200'
+                  : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
                   {assignmentMessage}
                 </div>
               )}
@@ -1381,11 +1393,10 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               <button
                 onClick={handleDebugData}
                 disabled={debugging}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${
-                  debugging
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-purple-500 text-white hover:bg-purple-600'
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${debugging
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'bg-purple-500 text-white hover:bg-purple-600'
+                  }`}
               >
                 {debugging ? (
                   <span className="flex items-center">
@@ -1400,11 +1411,10 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 )}
               </button>
               {debugMessage && (
-                <div className={`p-4 rounded-lg mt-3 ${
-                  debugMessage.startsWith('🔍')
-                    ? 'bg-green-100 text-green-800 border border-green-200'
-                    : 'bg-red-100 text-red-800 border border-red-200'
-                }`}>
+                <div className={`p-4 rounded-lg mt-3 ${debugMessage.startsWith('🔍')
+                  ? 'bg-green-100 text-green-800 border border-green-200'
+                  : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}>
                   {debugMessage}
                 </div>
               )}

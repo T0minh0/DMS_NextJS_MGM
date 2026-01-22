@@ -16,7 +16,8 @@ interface AuthTokenPayload {
 }
 
 async function getAuthenticatedManager() {
-  const token = cookies().get('auth_token')?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
   if (!token) {
     return null;
   }
@@ -34,7 +35,7 @@ async function getAuthenticatedManager() {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const manager = await getAuthenticatedManager();
@@ -42,9 +43,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    const { id: idParam } = await params;
     let saleId: bigint;
     try {
-      saleId = BigInt(params.id);
+      saleId = BigInt(idParam);
     } catch {
       return NextResponse.json({ error: 'ID de venda inválido' }, { status: 400 });
     }
@@ -176,7 +178,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const manager = await getAuthenticatedManager();
@@ -184,9 +186,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    const { id: idParam } = await params;
     let saleId: bigint;
     try {
-      saleId = BigInt(params.id);
+      saleId = BigInt(idParam);
     } catch {
       return NextResponse.json({ error: 'ID de venda inválido' }, { status: 400 });
     }

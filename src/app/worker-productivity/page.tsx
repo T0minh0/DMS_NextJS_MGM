@@ -8,8 +8,8 @@ import { Bar, Line } from 'react-chartjs-2';
 
 // Register ChartJS components
 ChartJS.register(
-  CategoryScale, 
-  LinearScale, 
+  CategoryScale,
+  LinearScale,
   BarElement,
   PointElement,
   LineElement,
@@ -24,12 +24,7 @@ interface Worker {
   user_id?: string;
 }
 
-interface Material {
-  _id: string;
-  material_id: string;
-  name: string;
-  material?: string;
-}
+
 
 interface WeeklyContribution {
   week: string;
@@ -66,7 +61,6 @@ interface ProductivityStats {
 
 export default function WorkerProductivityPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [materials, setMaterials] = useState<Material[]>([]);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string>('');
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [weeklyContributions, setWeeklyContributions] = useState<WeeklyContribution[]>([]);
@@ -80,19 +74,36 @@ export default function WorkerProductivityPage() {
 
   useEffect(() => {
     fetchWorkers();
-    fetchMaterials();
   }, []);
 
   useEffect(() => {
-    if (selectedWorkerId) {
-      const worker = workers.find(w => w.wastepicker_id === selectedWorkerId);
-      setSelectedWorker(worker || null);
-      fetchWorkerContributions(selectedWorkerId);
-    } else {
-      setSelectedWorker(null);
-      setWeeklyContributions([]);
-      setProductivityStats(null);
-    }
+    const loadContributions = async () => {
+      if (selectedWorkerId) {
+        const worker = workers.find(w => w.wastepicker_id === selectedWorkerId);
+        setSelectedWorker(worker || null);
+        try {
+          setLoading(prev => ({ ...prev, contributions: true }));
+          const response = await fetch(`/api/worker-productivity?worker_id=${selectedWorkerId}&weeks=${selectedPeriod}`);
+          if (!response.ok) throw new Error('Failed to fetch worker contributions');
+          const data = await response.json();
+
+          setWeeklyContributions(data.weeklyContributions || []);
+          setProductivityStats(data.stats || null);
+        } catch (error) {
+          console.error('Error fetching worker contributions:', error);
+          setWeeklyContributions([]);
+          setProductivityStats(null);
+        } finally {
+          setLoading(prev => ({ ...prev, contributions: false }));
+        }
+      } else {
+        setSelectedWorker(null);
+        setWeeklyContributions([]);
+        setProductivityStats(null);
+      }
+    };
+
+    loadContributions();
   }, [selectedWorkerId, selectedPeriod, workers]);
 
   const fetchWorkers = async () => {
@@ -108,45 +119,20 @@ export default function WorkerProductivityPage() {
     }
   };
 
-  const fetchMaterials = async () => {
-    try {
-      const response = await fetch('/api/materials');
-      if (!response.ok) throw new Error('Failed to fetch materials');
-      const data = await response.json();
-      setMaterials(data);
-    } catch (error) {
-      console.error('Error fetching materials:', error);
-    } finally {
-      setLoading(prev => ({ ...prev, materials: false }));
-    }
-  };
 
-  const fetchWorkerContributions = async (workerId: string) => {
-    try {
-      setLoading(prev => ({ ...prev, contributions: true }));
-      const response = await fetch(`/api/worker-productivity?worker_id=${workerId}&weeks=${selectedPeriod}`);
-      if (!response.ok) throw new Error('Failed to fetch worker contributions');
-      const data = await response.json();
-      
-      setWeeklyContributions(data.weeklyContributions || []);
-      setProductivityStats(data.stats || null);
-    } catch (error) {
-      console.error('Error fetching worker contributions:', error);
-      setWeeklyContributions([]);
-      setProductivityStats(null);
-    } finally {
-      setLoading(prev => ({ ...prev, contributions: false }));
-    }
-  };
+
+
 
   const formatWeight = (weight: number): string => {
     return weight.toFixed(2);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL' 
+  // Format currency - kept for future use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
     }).format(value);
   };
 
@@ -169,7 +155,7 @@ export default function WorkerProductivityPage() {
     datasets: Object.keys(weeklyContributions[0]?.materials || {}).map((materialId, index) => {
       const materialName = weeklyContributions[0]?.materials[materialId]?.materialName || materialId;
       const colors = ['#C74B6F', '#8A2736', '#5C1D2E', '#2D0D17', '#F7E4E4'];
-      
+
       return {
         label: materialName,
         data: weeklyContributions.map(w => w.materials[materialId]?.weight || 0),
@@ -330,7 +316,7 @@ export default function WorkerProductivityPage() {
                           y: {
                             beginAtZero: true,
                             ticks: {
-                              callback: function(value) {
+                              callback: function (value) {
                                 return value + ' kg';
                               }
                             }
@@ -342,7 +328,7 @@ export default function WorkerProductivityPage() {
                           },
                           tooltip: {
                             callbacks: {
-                              label: function(context) {
+                              label: function (context) {
                                 return formatWeight(context.raw as number) + ' kg';
                               }
                             }
@@ -369,7 +355,7 @@ export default function WorkerProductivityPage() {
                           y: {
                             beginAtZero: true,
                             ticks: {
-                              callback: function(value) {
+                              callback: function (value) {
                                 return value + ' kg';
                               }
                             }
@@ -387,7 +373,7 @@ export default function WorkerProductivityPage() {
                           },
                           tooltip: {
                             callbacks: {
-                              label: function(context) {
+                              label: function (context) {
                                 return `${context.dataset.label}: ${formatWeight(context.raw as number)} kg`;
                               }
                             }

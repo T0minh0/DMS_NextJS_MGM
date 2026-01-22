@@ -85,7 +85,11 @@ export async function POST(request: Request) {
       enterDate: enterDateObj,
       exitDate: exitDateObj,
       gender: gender?.trim() || null,
-      cooperative: cooperativeBigInt,
+      cooperativeRef: {
+        connect: {
+          cooperativeId: cooperativeBigInt,
+        },
+      },
       lastUpdate: new Date(),
     };
 

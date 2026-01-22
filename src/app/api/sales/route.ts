@@ -17,7 +17,8 @@ interface AuthTokenPayload {
 }
 
 async function getAuthenticatedManager() {
-  const token = cookies().get('auth_token')?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth_token')?.value;
   if (!token) {
     return null;
   }
@@ -267,86 +268,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-export async function PUT(request: NextRequest) {
-  try {
-    await client.connect();
-    const db = client.db('DMS');
-    
-    const { searchParams } = new URL(request.url);
-    const saleId = searchParams.get('id');
-    
-    if (!saleId) {
-      return NextResponse.json({ error: 'Sale ID is required' }, { status: 400 });
-    }
-    
-    const updateData = await request.json();
-    
-    // Recalculate total value if weight or price changed
-    if (updateData.weight_sold || updateData.price_per_kg) {
-      const existingSale = await db.collection('sales').findOne({ _id: new ObjectId(saleId) });
-      if (existingSale) {
-        const weight = updateData.weight_sold || existingSale.weight_sold;
-        const price = updateData.price_per_kg || existingSale.price_per_kg;
-        updateData.total_value = parseFloat((weight * price).toFixed(2));
-      }
-    }
-    
-    const result = await db.collection('sales').updateOne(
-      { _id: new ObjectId(saleId) },
-      { $set: { ...updateData, updated_at: new Date() } }
-    );
-    
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
-    }
-    
-    return NextResponse.json({
-      message: 'Sale updated successfully',
-      modifiedCount: result.modifiedCount
-    });
-    
-  } catch (error) {
-    console.error('Error updating sale:', error);
-    return NextResponse.json({ 
-      error: 'Failed to update sale',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  } finally {
-    await client.close();
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    await client.connect();
-    const db = client.db('DMS');
-    
-    const { searchParams } = new URL(request.url);
-    const saleId = searchParams.get('id');
-    
-    if (!saleId) {
-      return NextResponse.json({ error: 'Sale ID is required' }, { status: 400 });
-    }
-    
-    const result = await db.collection('sales').deleteOne({ _id: new ObjectId(saleId) });
-    
-    if (result.deletedCount === 0) {
-      return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
-    }
-    
-    return NextResponse.json({
-      message: 'Sale deleted successfully',
-      deletedCount: result.deletedCount
-    });
-    
-  } catch (error) {
-    console.error('Error deleting sale:', error);
-    return NextResponse.json({ 
-      error: 'Failed to delete sale',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
-  } finally {
-    await client.close();
-  }
-} 

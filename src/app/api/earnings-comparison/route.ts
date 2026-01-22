@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     const periodType = (searchParams.get('period_type') as PeriodType) || 'monthly';
 
     const materialIds = materialParam ? await resolveMaterialIds(materialParam) : { ids: null };
-    if (materialIds.error) {
+    if ('error' in materialIds && materialIds.error) {
       return materialIds.error;
     }
 
@@ -85,10 +85,10 @@ export async function GET(request: Request) {
           },
           ...(materialIds.ids
             ? {
-                material: {
-                  in: materialIds.ids,
-                },
-              }
+              material: {
+                in: materialIds.ids,
+              },
+            }
             : {}),
         },
         select: {

@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import { 
-  FaPlus, 
-  FaEdit, 
-  FaTrash, 
-  FaSearch, 
+import {
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaSearch,
   FaFilter,
   FaSave,
   FaTimes,
@@ -66,12 +66,12 @@ export default function SalesPage() {
   const [buyers, setBuyers] = useState<string[]>([]);
   const [managerCooperativeId, setManagerCooperativeId] = useState<string>('');
   const [managerCooperativeName, setManagerCooperativeName] = useState<string>('');
-  
+
   const [showSaleForm, setShowSaleForm] = useState(false);
   const [showBuyerForm, setShowBuyerForm] = useState(false);
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [newBuyer, setNewBuyer] = useState('');
-  
+
   const [formData, setFormData] = useState<SaleFormData>({
     material_id: '',
     cooperative_id: '',
@@ -80,7 +80,7 @@ export default function SalesPage() {
     date: new Date().toISOString().split('T')[0],
     buyer: ''
   });
-  
+
   const [filters, setFilters] = useState({
     material_id: '',
     cooperative_id: '',
@@ -88,7 +88,7 @@ export default function SalesPage() {
     start_date: '',
     end_date: ''
   });
-  
+
   const [loading, setLoading] = useState({
     sales: true,
     materials: true,
@@ -96,7 +96,7 @@ export default function SalesPage() {
     stock: true,
     saving: false
   });
-  
+
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -218,35 +218,35 @@ export default function SalesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.material_id || !formData.buyer) {
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
-    
+
     if (!managerCooperativeId) {
       alert('Não foi possível identificar a cooperativa do gestor. Refaça o login.');
       return;
     }
-    
+
     if (formData.weight_sold <= 0 || formData.price_per_kg <= 0) {
       alert('Peso e preço devem ser maiores que zero');
       return;
     }
-    
+
     // Check stock availability
     const selectedMaterial = materials.find(m => m.material_id === formData.material_id);
     const materialName = selectedMaterial?.material || selectedMaterial?.name || `Material ${formData.material_id}`;
     const availableStock = stock[materialName] || 0;
-    
+
     if (formData.weight_sold > availableStock) {
       alert(`Estoque insuficiente! Disponível: ${availableStock.toFixed(2)} kg`);
       return;
     }
-    
+
     setLoading(prev => ({ ...prev, saving: true }));
-    
+
     try {
       const saleData = {
         material_id: formData.material_id,
@@ -256,25 +256,25 @@ export default function SalesPage() {
         date: new Date(formData.date).toISOString(),
         Buyer: formData.buyer
       };
-      
+
       const url = editingSale ? `/api/sales/${editingSale._id}` : '/api/sales';
       const method = editingSale ? 'PUT' : 'POST';
-      
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(saleData)
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to save sale');
       }
-      
+
       await fetchSales();
       await fetchStock(); // Refresh stock after sale
       resetForm();
-      
+
     } catch (error) {
       console.error('Error saving sale:', error);
       alert(error instanceof Error ? error.message : 'Erro ao salvar venda');
@@ -288,26 +288,26 @@ export default function SalesPage() {
       alert('Por favor, digite o nome do comprador');
       return;
     }
-    
+
     if (buyers.includes(newBuyer.trim())) {
       alert('Este comprador já existe na lista');
       return;
     }
-    
+
     try {
       const response = await fetch('/api/sales/buyers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buyer: newBuyer.trim() })
       });
-      
+
       if (!response.ok) throw new Error('Failed to add buyer');
-      
+
       await fetchBuyers();
       setFormData(prev => ({ ...prev, buyer: newBuyer.trim() }));
       setNewBuyer('');
       setShowBuyerForm(false);
-      
+
     } catch (error) {
       console.error('Error adding buyer:', error);
       alert('Erro ao adicionar comprador');
@@ -330,17 +330,17 @@ export default function SalesPage() {
 
   const handleDelete = async (saleId: string) => {
     if (!confirm('Tem certeza que deseja excluir esta venda?')) return;
-    
+
     try {
       const response = await fetch(`/api/sales/${saleId}`, {
         method: 'DELETE'
       });
-      
+
       if (!response.ok) throw new Error('Failed to delete sale');
-      
+
       await fetchSales();
       await fetchStock(); // Refresh stock after deletion
-      
+
     } catch (error) {
       console.error('Error deleting sale:', error);
       alert('Erro ao excluir venda');
@@ -362,9 +362,8 @@ export default function SalesPage() {
 
   const getMaterialName = (materialId: string) => {
     // Handle both string and number comparisons since materials might have numeric IDs
-    const material = materials.find(m => 
-      m.material_id === materialId || 
-      m.material_id === parseInt(materialId, 10) ||
+    const material = materials.find(m =>
+      m.material_id === materialId ||
       m.material_id?.toString() === materialId
     );
     return material?.material || material?.name || `Material ${materialId}`;
@@ -372,9 +371,8 @@ export default function SalesPage() {
 
   const getCooperativeName = (cooperativeId: string) => {
     // Handle both string and number comparisons since cooperatives might have numeric IDs
-    const cooperative = cooperatives.find(c => 
-      c.cooperative_id === cooperativeId || 
-      c.cooperative_id === parseInt(cooperativeId, 10) ||
+    const cooperative = cooperatives.find(c =>
+      c.cooperative_id === cooperativeId ||
       c.cooperative_id?.toString() === cooperativeId
     );
     return cooperative?.name || `Cooperativa ${cooperativeId}`;
@@ -386,26 +384,26 @@ export default function SalesPage() {
   };
 
   const filteredSales = sales.filter(sale => {
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       getMaterialName(sale.material_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.Buyer.toLowerCase().includes(searchTerm.toLowerCase()) ||
       getCooperativeName(sale.cooperative_id).toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesMaterial = filters.material_id === '' || sale.material_id === filters.material_id;
     const matchesCooperative = filters.cooperative_id === '' || sale.cooperative_id === filters.cooperative_id;
     const matchesBuyer = filters.buyer === '' || sale.Buyer.toLowerCase().includes(filters.buyer.toLowerCase());
-    
+
     const saleDate = new Date(sale.date);
     const matchesStartDate = filters.start_date === '' || saleDate >= new Date(filters.start_date);
     const matchesEndDate = filters.end_date === '' || saleDate <= new Date(filters.end_date);
-    
+
     return matchesSearch && matchesMaterial && matchesCooperative && matchesBuyer && matchesStartDate && matchesEndDate;
   });
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL' 
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
     }).format(value);
   };
 
@@ -459,7 +457,7 @@ export default function SalesPage() {
                 />
               </div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-[#7a1c44] mb-2">
                 Material
@@ -477,7 +475,7 @@ export default function SalesPage() {
                 ))}
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-[#7a1c44] mb-2">
                 Data Inicial
@@ -500,7 +498,7 @@ export default function SalesPage() {
               Histórico de Vendas ({filteredSales.length})
             </h3>
           </div>
-          
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
@@ -626,7 +624,7 @@ export default function SalesPage() {
                       <option value="">Selecione um material</option>
                       {materials.map((material) => (
                         <option key={material._id} value={material.material_id}>
-                          {material.material || material.name} 
+                          {material.material || material.name}
                           {formData.material_id === material.material_id && (
                             ` (Estoque: ${getAvailableStock(material.material_id).toFixed(2)} kg)`
                           )}

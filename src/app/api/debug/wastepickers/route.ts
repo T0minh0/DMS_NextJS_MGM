@@ -19,7 +19,7 @@ export async function GET() {
   try {
     const [byId, byCpf] = await Promise.all([
       prisma.workers.findFirst({
-        where: { workerId: 5n },
+        where: { workerId: BigInt(5) },
         select: {
           workerId: true,
           workerName: true,
@@ -43,23 +43,23 @@ export async function GET() {
     const response = {
       byWastepickerId: byId
         ? {
-            workerId: byId.workerId.toString(),
-            wastepicker_id: formatWorkerId(byId.workerId),
-            workerName: byId.workerName,
-            cpf: decodeBytes(byId.cpf),
-            cooperative: byId.cooperative.toString(),
-            userType: byId.userType,
-          }
+          workerId: byId.workerId.toString(),
+          wastepicker_id: formatWorkerId(byId.workerId),
+          workerName: byId.workerName,
+          cpf: decodeBytes(byId.cpf),
+          cooperative: byId.cooperative.toString(),
+          userType: byId.userType,
+        }
         : null,
       byCpf: byCpf
         ? {
-            workerId: byCpf.workerId.toString(),
-            wastepicker_id: formatWorkerId(byCpf.workerId),
-            workerName: byCpf.workerName,
-            cpf: decodeBytes(byCpf.cpf),
-            cooperative: byCpf.cooperative.toString(),
-            userType: byCpf.userType,
-          }
+          workerId: byCpf.workerId.toString(),
+          wastepicker_id: formatWorkerId(byCpf.workerId),
+          workerName: byCpf.workerName,
+          cpf: decodeBytes(byCpf.cpf),
+          cooperative: byCpf.cooperative.toString(),
+          userType: byCpf.userType,
+        }
         : null,
       models: MODEL_LIST,
       notes:

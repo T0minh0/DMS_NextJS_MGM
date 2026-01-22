@@ -36,7 +36,6 @@ export async function GET() {
           wastepicker: true,
           material: true,
           weightKg: true,
-          period: true,
         },
       }),
       prisma.materials.findMany({
@@ -87,7 +86,6 @@ export async function GET() {
           wastepicker: contribution.wastepicker.toString(),
           material: contribution.material.toString(),
           weightKg: decimalToNumber(contribution.weightKg) ?? 0,
-          period: contribution.period ? String(contribution.period) : null,
         })),
       },
       materials: {

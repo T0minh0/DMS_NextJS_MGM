@@ -114,7 +114,8 @@ export async function POST(request: Request) {
       { expiresIn: '8h' },
     );
 
-    cookies().set({
+    const cookieStore = await cookies();
+    cookieStore.set({
       name: 'auth_token',
       value: token,
       httpOnly: true,

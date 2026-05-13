@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import { SOLD_SALE_WHERE } from '@/lib/sales/lifecycle';
 
 type PeriodType = 'weekly' | 'monthly' | 'yearly';
 
@@ -92,6 +93,7 @@ export async function GET(request: Request) {
 
       const sales = await prisma.sales.findMany({
         where: {
+          ...SOLD_SALE_WHERE,
           date: {
             gte: start,
             lte: end,
@@ -105,9 +107,7 @@ export async function GET(request: Request) {
             : {}),
           ...(targetCooperativeId
             ? {
-              responsibleRef: {
-                cooperative: BigInt(targetCooperativeId),
-              },
+              cooperativeId: BigInt(targetCooperativeId),
             }
             : {}),
         },

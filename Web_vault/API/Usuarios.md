@@ -123,6 +123,7 @@ Atualiza usuario administrativo.
 - Senha e opcional; se enviada, atualiza com bcrypt custo `10`.
 - `manager` so pode atualizar usuario da propria cooperativa e manter cooperativa dentro desse escopo.
 - Conecta nova cooperativa via relation `cooperativeRef.connect`.
+- Bloqueia troca de cooperativa quando o usuario ja possui vendas, medicoes ou contribuicoes associadas; isso preserva a invariavel entre `Workers.Cooperative` e `Sales.cooperative_id`.
 - Nao atualiza CPF.
 
 ## `POST /api/users/delete`

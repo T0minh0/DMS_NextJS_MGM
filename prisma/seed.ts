@@ -86,7 +86,7 @@ async function main() {
   assertSafeSeedTarget();
 
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Worker_contributions", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "Worker_contributions", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
   );
 
   const [cooperativeHorizonte, cooperativeLeste] = await Promise.all([
@@ -325,35 +325,55 @@ async function main() {
     data: [
       {
         date: new Date('2026-05-05'),
+        createdAt: new Date('2026-05-05T09:00:00Z'),
+        soldAt: new Date('2026-05-05T15:00:00Z'),
+        cancelledAt: null,
         material: materialCardboard.materialId,
         weight: '120.00',
         priceKg: '1.35',
         buyer: buyerCity.buyerId,
         responsible: managerHorizonte.workerId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        expectedSaleDate: new Date('2026-05-05T15:00:00Z'),
       },
       {
         date: new Date('2026-05-07'),
+        createdAt: new Date('2026-05-07T09:00:00Z'),
+        soldAt: null,
+        cancelledAt: null,
         material: materialPet.materialId,
         weight: '85.00',
         priceKg: '2.40',
         buyer: buyerEco.buyerId,
         responsible: operatorHorizonte.workerId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        expectedSaleDate: new Date('2026-05-15T15:00:00Z'),
       },
       {
         date: new Date('2026-05-08'),
+        createdAt: new Date('2026-05-08T09:00:00Z'),
+        soldAt: null,
+        cancelledAt: new Date('2026-05-08T16:00:00Z'),
         material: materialAluminum.materialId,
         weight: '35.00',
         priceKg: '4.10',
         buyer: buyerCollective.buyerId,
         responsible: admin.workerId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        expectedSaleDate: new Date('2026-05-12T15:00:00Z'),
       },
       {
         date: new Date('2026-05-09'),
+        createdAt: new Date('2026-05-09T09:00:00Z'),
+        soldAt: new Date('2026-05-09T15:00:00Z'),
+        cancelledAt: null,
         material: materialCardboard.materialId,
         weight: '40.00',
         priceKg: '1.28',
         buyer: buyerCity.buyerId,
         responsible: managerLeste.workerId,
+        cooperativeId: cooperativeLeste.cooperativeId,
+        expectedSaleDate: new Date('2026-05-09T15:00:00Z'),
       },
     ],
   });
@@ -371,14 +391,14 @@ async function main() {
         cooperative: cooperativeHorizonte.cooperativeId,
         material: materialPet.materialId,
         totalCollectedKg: '260.00',
-        totalSoldKg: '85.00',
-        currentStockKg: '175.00',
+        totalSoldKg: '0.00',
+        currentStockKg: '260.00',
       },
       {
         cooperative: cooperativeHorizonte.cooperativeId,
         material: materialAluminum.materialId,
-        totalCollectedKg: '45.00',
-        totalSoldKg: '35.00',
+        totalCollectedKg: '10.00',
+        totalSoldKg: '0.00',
         currentStockKg: '10.00',
       },
       {
@@ -394,6 +414,25 @@ async function main() {
         totalCollectedKg: '120.00',
         totalSoldKg: '40.00',
         currentStockKg: '80.00',
+      },
+    ],
+  });
+
+  await prisma.materialBagState.createMany({
+    data: [
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        materialId: materialAluminum.materialId,
+        isBegun: true,
+        currentKg: '10.00',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        materialId: materialGlassNoStock.materialId,
+        isBegun: false,
+        currentKg: '0.00',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
       },
     ],
   });

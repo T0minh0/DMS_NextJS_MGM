@@ -225,9 +225,7 @@ test('scoped query helpers hide out-of-scope sales and workers from managers', (
   assert.deepEqual(scopedSaleWhere(adminSession, BigInt(77)), { saleId: BigInt(77) });
   assert.deepEqual(scopedSaleWhere(managerSession, BigInt(77)), {
     saleId: BigInt(77),
-    responsibleRef: {
-      cooperative: BigInt(100),
-    },
+    cooperativeId: BigInt(100),
   });
 });
 

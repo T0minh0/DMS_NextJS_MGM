@@ -104,7 +104,7 @@ npm test
 
 Resultado observado:
 
-- 39 testes passaram.
+- 53 testes passaram.
 - Cobre assinatura/verificacao JWT server-side.
 - Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo proxy.
 - Cobre que rotas `/api/*.json` continuam protegidas e nao sao tratadas como assets publicos.
@@ -115,6 +115,9 @@ Resultado observado:
 - Cobre checker de whitespace em CRLF e arquivos limpos.
 - Cobre feature flags, segredo de job, bearer token interno e idempotencia de reexecucao.
 - Cobre POC PDF com bytes `%PDF-`, headers de download, sanitizacao de filename e sanitizacao de notices contra XSS, incluindo `svg onload` e atributos perigosos em tag permitida.
+- Cobre contratos S1-01 de schema/migration: lifecycle de `Sales`, unique/checks de `Stock`, `material_bag_state`, preflights de backfill e FKs para tabelas fisicas atuais.
+- Cobre helpers de lifecycle para bloquear mutacoes legadas de estoque em vendas `ACTIVE`/`CANCELLED`, analytics apenas sobre vendas `SOLD` e escopo direto por `Sales.cooperative_id`.
+- Cobre bloqueio de transferencia de cooperativa para usuarios com vendas, medicoes ou contribuicoes associadas.
 - Cobre matriz de fixtures UAT gerenciais, documentos sinteticos, jornadas -> dados, estados de venda, venda coletiva declarada e guard contra seed em banco de producao/remoto por padrao.
 
 ## Prisma migrations
@@ -175,6 +178,10 @@ Smoke minimo apos migration:
 npm run db:seed:uat
 node -e 'const {PrismaClient}=require("@prisma/client"); const p=new PrismaClient(); Promise.all([p.cooperative.count(), p.materials.count(), p.sales.count(), p.stock.count()]).then(console.log).finally(()=>p.$disconnect())'
 ```
+
+Migration S1-01 (`20260513224000_s1_01_core_sales_stock_bag_state`) e aditiva com backfill guardado. Antes de alterar o schema ela roda em transacao explicita, bloqueia writes em `Sales`, `Stock` e `Workers`, e aborta se encontrar duplicidade em `Stock` por cooperativa/material, totais negativos, vendas com peso/preco nao positivos, responsavel invalido ou vendas legadas sem representacao em `Stock.total_sold_kg`.
+
+Runbook operacional S1-01: pausar writes da aplicacao durante `npx prisma migrate deploy`, aplicar a migration, rodar `npx prisma migrate status`, `npm run prisma:validate`, smoke de contagem e entao reabrir writes. Se a migration falhar depois de adquirir lock, manter writes pausados e usar restore completo ou forward rollback conforme [[ADR/ADR-0001-schema-prisma-baseline-rollback]].
 
 ## Audit
 

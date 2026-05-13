@@ -6,6 +6,7 @@ import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } 
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { sanitizeDigits } from '@/lib/db-utils';
+import { shouldBlockWorkerCooperativeTransfer } from '@/lib/users/dependencies';
 
 export async function POST(request: Request) {
   try {
@@ -75,6 +76,29 @@ export async function POST(request: Request) {
         code: 'INVALID_COOPERATIVE',
         status: 400,
       });
+    }
+
+    if (cooperativeBigInt !== existing.cooperative) {
+      const [salesUsage, measurementUsage, contributionsUsage] = await Promise.all([
+        prisma.sales.count({ where: { responsible: workerId } }),
+        prisma.measurments.count({ where: { wastepicker: workerId } }),
+        prisma.workerContributions.count({ where: { wastepicker: workerId } }),
+      ]);
+
+      if (
+        shouldBlockWorkerCooperativeTransfer(existing.cooperative, cooperativeBigInt, {
+          salesUsage,
+          measurementUsage,
+          contributionsUsage,
+        })
+      ) {
+        return apiErrorResponse({
+          message:
+            'Não é possível alterar a cooperativa deste usuário. Existem registros de vendas, medições ou contribuições associados.',
+          code: 'USER_TRANSFER_HAS_DEPENDENCIES',
+          status: 409,
+        });
+      }
     }
 
     const pisDigits = sanitizeDigits(PIS);

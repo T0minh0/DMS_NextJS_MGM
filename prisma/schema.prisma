@@ -8,12 +8,14 @@ datasource db {
 }
 
 model Cooperative {
-  cooperativeId   BigInt                @id @default(autoincrement()) @map("cooperative_id")
-  cooperativeName String                @map("cooperative_name")
-  devices         Devices[]
-  workers         Workers[]
-  stock           Stock[]
-  contributions   WorkerContributions[]
+  cooperativeId     BigInt                @id @default(autoincrement()) @map("cooperative_id")
+  cooperativeName   String                @map("cooperative_name")
+  devices           Devices[]
+  workers           Workers[]
+  stock             Stock[]
+  contributions     WorkerContributions[]
+  sales             Sales[]
+  materialBagStates MaterialBagState[]
 
   @@map("Cooperative")
 }
@@ -44,96 +46,120 @@ model Materials {
   measurements        Measurments[]
   stock               Stock[]
   workerContributions WorkerContributions[]
+  materialBagStates   MaterialBagState[]
 
   @@map("Materials")
 }
 
 model Buyers {
-  buyerId   BigInt @id @default(autoincrement()) @map("Buyer_id")
-  buyerName String @map("Buyer_name")
+  buyerId   BigInt  @id @default(autoincrement()) @map("Buyer_id")
+  buyerName String  @map("Buyer_name")
   sales     Sales[]
 
   @@map("Buyers")
 }
 
 model Sales {
-  saleId       BigInt    @id @default(autoincrement()) @map("Sale_id")
-  date         DateTime  @map("Date") @db.Date
-  material     BigInt    @map("Material")
-  weight       Decimal   @map("Weight") @db.Decimal(10, 2)
-  priceKg      Decimal   @map("Price_Kg") @db.Decimal(10, 2)
-  buyer        BigInt    @map("Buyer")
-  responsible  BigInt    @map("Responsible")
-  materialRef  Materials @relation(fields: [material], references: [materialId], map: "Material")
-  buyerRef     Buyers    @relation(fields: [buyer], references: [buyerId], map: "Buyer")
-  responsibleRef Workers @relation("WorkersAsResponsible", fields: [responsible], references: [workerId], map: "Responsible")
+  saleId           BigInt      @id @default(autoincrement()) @map("Sale_id")
+  date             DateTime    @map("Date") @db.Date
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  soldAt           DateTime?   @map("sold_at") @db.Timestamp(6)
+  cancelledAt      DateTime?   @map("cancelled_at") @db.Timestamp(6)
+  material         BigInt      @map("Material")
+  weight           Decimal     @map("Weight") @db.Decimal(10, 2)
+  priceKg          Decimal     @map("Price_Kg") @db.Decimal(10, 2)
+  buyer            BigInt      @map("Buyer")
+  responsible      BigInt      @map("Responsible")
+  cooperativeId    BigInt      @map("cooperative_id")
+  expectedSaleDate DateTime    @default(now()) @map("expected_sale_date") @db.Timestamp(6)
+  materialRef      Materials   @relation(fields: [material], references: [materialId], map: "Material")
+  buyerRef         Buyers      @relation(fields: [buyer], references: [buyerId], map: "Buyer")
+  responsibleRef   Workers     @relation("WorkersAsResponsible", fields: [responsible], references: [workerId], map: "Responsible")
+  cooperativeRef   Cooperative @relation(fields: [cooperativeId], references: [cooperativeId], map: "Sales_cooperative_id_fkey")
 
+  @@index([cooperativeId], map: "Sales_cooperative_id_idx")
+  @@index([soldAt], map: "Sales_sold_at_idx")
+  @@index([cancelledAt], map: "Sales_cancelled_at_idx")
   @@map("Sales")
 }
 
 model Workers {
-  workerId             BigInt                @id @default(autoincrement()) @map("Worker_id")
-  workerName           String                @map("Worker_name")
-  cooperative          BigInt                @map("Cooperative")
-  cpf                  Bytes                 @map("CPF")
-  userType             String                @map("User_type") @db.Char(1)
-  birthDate            DateTime              @map("Birth_date") @db.Date
-  enterDate            DateTime              @map("Enter_date") @db.Date
-  exitDate             DateTime?             @map("Exit_date") @db.Date
-  pis                  Bytes                 @map("PIS")
-  rg                   Bytes                 @map("RG")
-  gender               String?               @map("Gender")
-  password             Bytes                 @map("Password")
-  email                String                @map("Email")
-  lastUpdate           DateTime?             @map("Last_update") @db.Date
-  cooperativeRef       Cooperative           @relation(fields: [cooperative], references: [cooperativeId], map: "cooperative")
-  measurements         Measurments[]
-  responsibleSales     Sales[]               @relation("WorkersAsResponsible")
-  workerContributions  WorkerContributions[]
+  workerId            BigInt                @id @default(autoincrement()) @map("Worker_id")
+  workerName          String                @map("Worker_name")
+  cooperative         BigInt                @map("Cooperative")
+  cpf                 Bytes                 @map("CPF")
+  userType            String                @map("User_type") @db.Char(1)
+  birthDate           DateTime              @map("Birth_date") @db.Date
+  enterDate           DateTime              @map("Enter_date") @db.Date
+  exitDate            DateTime?             @map("Exit_date") @db.Date
+  pis                 Bytes                 @map("PIS")
+  rg                  Bytes                 @map("RG")
+  gender              String?               @map("Gender")
+  password            Bytes                 @map("Password")
+  email               String                @map("Email")
+  lastUpdate          DateTime?             @map("Last_update") @db.Date
+  cooperativeRef      Cooperative           @relation(fields: [cooperative], references: [cooperativeId], map: "cooperative")
+  measurements        Measurments[]
+  responsibleSales    Sales[]               @relation("WorkersAsResponsible")
+  workerContributions WorkerContributions[]
 
   @@map("Workers")
 }
 
 model Measurments {
-  weightingId BigInt     @id @default(autoincrement()) @map("Weighting_id")
-  weightKg    Decimal    @map("Weight_KG") @db.Decimal(10, 2)
-  timeStamp   DateTime   @map("Time_stamp") @db.Date
-  wastepicker BigInt     @map("Wastepicker")
-  material    BigInt     @map("Material")
-  device      BigInt     @map("Device")
-  bagFilled   Boolean    @map("Bag_filled")
-  wastepickerRef Workers @relation(fields: [wastepicker], references: [workerId], map: "wastepicker")
-  materialRef     Materials @relation(fields: [material], references: [materialId], map: "Material")
-  deviceRef       Devices   @relation(fields: [device], references: [deviceId], map: "Device")
+  weightingId    BigInt    @id @default(autoincrement()) @map("Weighting_id")
+  weightKg       Decimal   @map("Weight_KG") @db.Decimal(10, 2)
+  timeStamp      DateTime  @map("Time_stamp") @db.Date
+  wastepicker    BigInt    @map("Wastepicker")
+  material       BigInt    @map("Material")
+  device         BigInt    @map("Device")
+  bagFilled      Boolean   @map("Bag_filled")
+  wastepickerRef Workers   @relation(fields: [wastepicker], references: [workerId], map: "wastepicker")
+  materialRef    Materials @relation(fields: [material], references: [materialId], map: "Material")
+  deviceRef      Devices   @relation(fields: [device], references: [deviceId], map: "Device")
 
   @@map("Measurments")
 }
 
 model Stock {
-  stockId         BigInt     @id @default(autoincrement()) @map("Stock_id")
-  cooperative     BigInt     @map("Cooperative")
-  material        BigInt     @map("Material")
-  totalCollectedKg Decimal    @map("Total_collected_KG") @db.Decimal(65, 2)
-  totalSoldKg      Decimal    @map("Total_sold_KG") @db.Decimal(65, 2)
-  currentStockKg   Decimal    @map("Current_stock_KG") @db.Decimal(45, 2)
+  stockId          BigInt      @id @default(autoincrement()) @map("Stock_id")
+  cooperative      BigInt      @map("Cooperative")
+  material         BigInt      @map("Material")
+  totalCollectedKg Decimal     @map("Total_collected_KG") @db.Decimal(65, 2)
+  totalSoldKg      Decimal     @map("Total_sold_KG") @db.Decimal(65, 2)
+  currentStockKg   Decimal     @map("Current_stock_KG") @db.Decimal(45, 2)
   cooperativeRef   Cooperative @relation(fields: [cooperative], references: [cooperativeId], map: "Cooperative")
   materialRef      Materials   @relation(fields: [material], references: [materialId], map: "Material")
 
+  @@unique([cooperative, material], map: "Stock_cooperative_material_key")
   @@map("Stock")
 }
 
 model WorkerContributions {
-  contributionId BigInt     @id @default(autoincrement()) @map("Contribution_id")
-  wastepicker    BigInt     @map("Wastepicker")
-  material       BigInt     @map("Material")
-  cooperative    BigInt     @map("cooperative")
+  contributionId BigInt                   @id @default(autoincrement()) @map("Contribution_id")
+  wastepicker    BigInt                   @map("Wastepicker")
+  material       BigInt                   @map("Material")
+  cooperative    BigInt                   @map("cooperative")
   period         Unsupported("daterange") @map("Period")
-  weightKg       Decimal    @map("Weight_KG") @db.Decimal(15, 2)
-  lastUpdated    DateTime?  @map("Last_updated") @db.Date
-  wastepickerRef Workers    @relation(fields: [wastepicker], references: [workerId], map: "Wastepicker")
-  materialRef    Materials  @relation(fields: [material], references: [materialId], map: "Material")
-  cooperativeRef Cooperative @relation(fields: [cooperative], references: [cooperativeId], map: "Cooperative")
+  weightKg       Decimal                  @map("Weight_KG") @db.Decimal(15, 2)
+  lastUpdated    DateTime?                @map("Last_updated") @db.Date
+  wastepickerRef Workers                  @relation(fields: [wastepicker], references: [workerId], map: "Wastepicker")
+  materialRef    Materials                @relation(fields: [material], references: [materialId], map: "Material")
+  cooperativeRef Cooperative              @relation(fields: [cooperative], references: [cooperativeId], map: "Cooperative")
 
   @@map("Worker_contributions")
 }
 
+model MaterialBagState {
+  bagStateId    BigInt      @id @default(autoincrement()) @map("bag_state_id")
+  cooperativeId BigInt      @map("cooperative_id")
+  materialId    BigInt      @map("material_id")
+  isBegun       Boolean     @default(false) @map("is_begun")
+  currentKg     Decimal     @default(0) @map("current_kg") @db.Decimal(10, 2)
+  lastUpdated   DateTime    @default(now()) @map("last_updated") @db.Timestamp(6)
+  cooperative   Cooperative @relation(fields: [cooperativeId], references: [cooperativeId], map: "material_bag_state_cooperative_id_fkey")
+  material      Materials   @relation(fields: [materialId], references: [materialId], map: "material_bag_state_material_id_fkey")
+
+  @@unique([cooperativeId, materialId], map: "material_bag_state_cooperative_material_key")
+  @@map("material_bag_state")
+}

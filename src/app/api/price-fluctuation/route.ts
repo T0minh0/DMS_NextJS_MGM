@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import { SOLD_SALE_WHERE } from '@/lib/sales/lifecycle';
 
 type MaterialContext = {
   nameMap: Map<bigint, string>;
@@ -87,12 +88,11 @@ export async function GET(request: Request) {
 
       const sales = await prisma.sales.findMany({
         where: {
+          ...SOLD_SALE_WHERE,
           material: { in: materialIds },
           ...(targetCooperativeId
             ? {
-              responsibleRef: {
-                cooperative: BigInt(targetCooperativeId),
-              },
+              cooperativeId: BigInt(targetCooperativeId),
             }
             : {}),
         },
@@ -167,6 +167,14 @@ export async function GET(request: Request) {
 
     const recentMaterials = await prisma.sales.groupBy({
       by: ['material'],
+      where: {
+        ...SOLD_SALE_WHERE,
+        ...(targetCooperativeId
+          ? {
+            cooperativeId: BigInt(targetCooperativeId),
+          }
+          : {}),
+      },
       _max: { date: true },
       orderBy: { _max: { date: 'desc' } },
       take: 5,
@@ -184,12 +192,11 @@ export async function GET(request: Request) {
         const materialId = entry.material;
         const materialSales = await prisma.sales.findMany({
           where: {
+            ...SOLD_SALE_WHERE,
             material: materialId,
             ...(targetCooperativeId
               ? {
-                responsibleRef: {
-                  cooperative: BigInt(targetCooperativeId),
-                },
+                cooperativeId: BigInt(targetCooperativeId),
               }
               : {}),
           },

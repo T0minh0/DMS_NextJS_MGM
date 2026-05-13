@@ -47,9 +47,9 @@ Fornecer dados sinteticos e repetiveis para provar fluxos web de gestores sem de
 
 | Fixture | Estado alvo | Persistido no schema atual | Proxima task |
 | --- | --- | --- | --- |
-| `normal-active-horizonte` | ativa | Sim, como venda recente | S2-01 deve adicionar lifecycle real |
+| `normal-active-horizonte` | ativa | Sim, com `sold_at`/`cancelled_at` nulos | S2-01 deve portar complete/cancel |
 | `normal-completed-horizonte` | concluida | Sim, como venda historica | S2-01/S3-04 refinam relatorios |
-| `normal-cancelled-horizonte` | cancelada | Nao | S2-01 |
+| `normal-cancelled-horizonte` | cancelada | Sim, como `cancelled_at` | S2-01 deve portar endpoint/UX de cancelamento |
 | `leste-cardboard-sale` | concluida cross-coop | Sim, como venda da Leste | Negativo para gerente Horizonte |
 | `collective-open-two-coops` | convite aberto | Nao | S1-02/S3-01 |
 | `collective-contribution-pending` | contribuicao pendente | Nao | S3-02 |
@@ -60,7 +60,7 @@ Fornecer dados sinteticos e repetiveis para provar fluxos web de gestores sem de
 | --- | --- | --- | --- | --- |
 | Abrir painel do dia | `/login`, `/` | `manager-horizonte`, `cardboard-stocked`, `aluminum-low-stock`, `normal-active-horizonte` | Nenhuma para telas atuais | `worker-web-login-denied` |
 | Revisar estoque critico | `/materials` | `aluminum-low-stock`, `glass-empty-stock`, `leste-cardboard-stocked` | Nenhuma para telas atuais | `manager-horizonte-worker-leste-denied` |
-| Criar e acompanhar venda normal | `/sales` | `normal-active-horizonte`, `normal-completed-horizonte`, `normal-cancelled-horizonte` | Estado cancelado depende de S2-01 | `manager-horizonte-sale-leste-denied` |
+| Criar e acompanhar venda normal | `/sales` | `normal-active-horizonte`, `normal-completed-horizonte`, `normal-cancelled-horizonte` | S1-01 persiste lifecycle; S2-01 porta complete/cancel e UX | `manager-horizonte-sale-leste-denied` |
 | Criar ou participar de venda coletiva | futura area de vendas coletivas | `collective-open-two-coops`, `collective-contribution-pending` | Schema/API dependem de S1-02/S3-01/S3-02 | `manager-horizonte-sale-leste-denied` |
 | Gerenciar equipe | `/manage-workers`, `/worker-productivity` | `manager-horizonte`, `worker-horizonte-active`, `worker-horizonte-empty`, `worker-horizonte-inactive`, `worker-leste` | UX final em S5-05 | `manager-horizonte-worker-leste-denied` |
 | Publicar aviso | futura `/notices` | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | Persistencia depende de S4-01/S4-02 | Manager nao publica global |

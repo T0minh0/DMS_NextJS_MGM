@@ -11,6 +11,7 @@ import {
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
+import { getSaleLifecycleStatus, summarizeSoldSales } from '@/lib/sales/lifecycle';
 import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
 
 export async function GET(request: NextRequest) {
@@ -48,9 +49,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (targetCooperativeId) {
-      where.responsibleRef = {
-        cooperative: BigInt(targetCooperativeId),
-      };
+      where.cooperativeId = BigInt(targetCooperativeId);
     }
 
     if (startDate || endDate) {
@@ -98,34 +97,37 @@ export async function GET(request: NextRequest) {
       return {
         _id: sale.saleId.toString(),
         material_id: sale.material.toString(),
-        cooperative_id: sale.responsibleRef.cooperative.toString(),
+        cooperative_id: sale.cooperativeId.toString(),
+        status: getSaleLifecycleStatus(sale),
         'price/kg': Number(price.toFixed(2)),
         weight_sold: Number(weight.toFixed(2)),
         date: sale.date.toISOString(),
+        created_at: sale.createdAt.toISOString(),
+        sold_at: sale.soldAt?.toISOString() ?? null,
+        cancelled_at: sale.cancelledAt?.toISOString() ?? null,
+        expected_sale_date: sale.expectedSaleDate.toISOString(),
         Buyer: sale.buyerRef.buyerName,
       };
     });
 
     const totalSales = formattedSales.length;
-    const totalWeight = formattedSales.reduce((sum, sale) => sum + sale.weight_sold, 0);
-    const totalValue = formattedSales.reduce(
-      (sum, sale) => sum + sale.weight_sold * sale['price/kg'],
-      0,
-    );
+    const soldSummary = summarizeSoldSales(formattedSales);
 
     logInfo('sales.read.succeeded', context, {
       role: session.role,
       cooperativeId: targetCooperativeId,
       totalSales,
-      totalWeight: Number(totalWeight.toFixed(2)),
+      totalSoldSales: soldSummary.totalSoldSales,
+      totalWeight: soldSummary.totalWeight,
     });
 
     return NextResponse.json({
       sales: formattedSales,
       summary: {
         totalSales,
-        totalWeight: Number(totalWeight.toFixed(2)),
-        totalValue: Number(totalValue.toFixed(2)),
+        totalSoldSales: soldSummary.totalSoldSales,
+        totalWeight: soldSummary.totalWeight,
+        totalValue: soldSummary.totalValue,
       },
     });
   } catch (error) {
@@ -300,6 +302,9 @@ export async function POST(request: NextRequest) {
           date: saleDate,
           buyer: buyer.buyerId,
           responsible: responsibleWorker.workerId,
+          cooperativeId: targetCooperativeBigInt,
+          expectedSaleDate: saleDate,
+          soldAt: saleDate,
         },
       });
 
@@ -366,9 +371,14 @@ export async function POST(request: NextRequest) {
           _id: transactionResult.sale.saleId.toString(),
           material_id: transactionResult.sale.material.toString(),
           cooperative_id: targetCooperativeId,
+          status: getSaleLifecycleStatus(transactionResult.sale),
           'price/kg': pricePerKg,
           weight_sold: weightSold,
           date: transactionResult.sale.date.toISOString(),
+          created_at: transactionResult.sale.createdAt.toISOString(),
+          sold_at: transactionResult.sale.soldAt?.toISOString() ?? null,
+          cancelled_at: transactionResult.sale.cancelledAt?.toISOString() ?? null,
+          expected_sale_date: transactionResult.sale.expectedSaleDate.toISOString(),
           Buyer: transactionResult.buyerName,
         },
       },

@@ -66,15 +66,15 @@ Modelos Prisma atuais:
 | `Groups` | `Groups` | Nomes divergem (`Group_id` vs `group_id`). |
 | `Materials` | `Materials` | Nomes divergem. |
 | `Buyers` | `Buyers` | Nomes divergem. |
-| `Sales` | `Sales` | Falta lifecycle Java: `created_at`, `sold_at`, `cancelled_at`, `cooperative_id`, `expected_sale_date`. |
+| `Sales` | `Sales` | S1-01 adiciona lifecycle core; APIs `complete`/`cancel` ainda pendentes. |
 | `Workers` | `Workers` | Roles mapeadas hoje para numero; Java usa `A/M/W`. |
 | `Measurments` | `Measurments` | Grafia legada e nomes divergem de `measurements`. |
-| `Stock` | `Stock` | Falta unique formal por cooperativa/material no Prisma atual. |
+| `Stock` | `Stock` | S1-01 adiciona unique formal por cooperativa/material e checks de nao negativo. |
 | `WorkerContributions` | `Worker_contributions` | Usa `Unsupported("daterange")`; manter como ponto de atencao. |
 
 Modelos ausentes no Prisma atual:
 
-`notice_board`, `collective_sale`, `collective_sale_contribution`, `material_bag_state`, `cooperative_material_multiplier`, `cooperative_random_multiplier`, `achievement_definition`, `achievement_xp_override`, `worker_achievement`, `leaderboard_snapshot`, `leaderboard_entry`, `level_definition`, `worker_level`.
+`notice_board`, `collective_sale`, `collective_sale_contribution`, `cooperative_material_multiplier`, `cooperative_random_multiplier`, `achievement_definition`, `achievement_xp_override`, `worker_achievement`, `leaderboard_snapshot`, `leaderboard_entry`, `level_definition`, `worker_level`.
 
 ## Mapa de endpoints Java -> Next
 
@@ -500,9 +500,9 @@ Gaps:
 | `materials` | Existe como `Materials` capitalizado | Resolver em `ADR-SCHEMA`. |
 | `workers` | Existe como `Workers` capitalizado | Resolver role fields e nomes. |
 | `measurements` | Existe como `Measurments` capitalizado/grafia divergente | Resolver compatibilidade e migration. |
-| `sales` | Existe como `Sales`, mas sem lifecycle Java | Migration core. |
-| `stock` | Existe como `Stock`, constraint precisa revisao | Migration core. |
-| `material_bag_state` | Ausente | Criar apos revisar SQL. |
+| `sales` | Existe como `Sales`, lifecycle core em S1-01 | Portar APIs complete/cancel. |
+| `stock` | Existe como `Stock`, constraint formal em S1-01 | Usar helpers transacionais. |
+| `material_bag_state` | Criado em S1-01 | Portar APIs de pesagem/insertMaterial. |
 | `collective_sale` | Ausente | Criar. |
 | `collective_sale_contribution` | Ausente | Criar. |
 | `notice_board` | Ausente | Criar. |

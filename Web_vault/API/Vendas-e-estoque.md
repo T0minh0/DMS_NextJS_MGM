@@ -1,6 +1,6 @@
 # API - Vendas e estoque
 
-ADR vigente para a reforma: [[ADR/ADR-0002-lifecycle-vendas-estoque-decimal]]. As rotas atuais ainda refletem o legado em que a venda normal baixa estoque no create/update/delete; novas rotas devem usar `ACTIVE`, `SOLD`, `CANCELLED`, complete/cancel idempotentes e estoque transacional.
+ADR vigente para a reforma: [[ADR/ADR-0002-lifecycle-vendas-estoque-decimal]]. Desde S1-01, `Sales` persiste lifecycle (`ACTIVE`, `SOLD`, `CANCELLED`) e `cooperative_id` direto. As rotas atuais ainda preservam o legado em que a venda normal baixa estoque no create/update/delete; S2-01 deve portar `complete`/`cancel` idempotentes e separar create de baixa de estoque.
 
 ## `GET /api/stock`
 
@@ -47,7 +47,7 @@ Arquivo: `src/app/api/sales/route.ts`
 | Param | Tipo | Observacao |
 | --- | --- | --- |
 | `material_id` | BigInt | Opcional |
-| `cooperative_id` | BigInt | Filtra pela cooperativa do responsavel |
+| `cooperative_id` | BigInt | Filtra por `Sales.cooperative_id`; manager fica limitado a propria cooperativa |
 | `start_date` | Date | Opcional |
 | `end_date` | Date | Opcional |
 | `limit` | number | Padrao `100` |
@@ -61,14 +61,20 @@ Arquivo: `src/app/api/sales/route.ts`
       "_id": "1",
       "material_id": "1",
       "cooperative_id": "1",
+      "status": "SOLD",
       "price/kg": 1.35,
       "weight_sold": 120,
       "date": "2024-02-12T00:00:00.000Z",
+      "created_at": "2024-02-12T00:00:00.000Z",
+      "sold_at": "2024-02-12T00:00:00.000Z",
+      "cancelled_at": null,
+      "expected_sale_date": "2024-02-12T00:00:00.000Z",
       "Buyer": "Comprador"
     }
   ],
   "summary": {
     "totalSales": 1,
+    "totalSoldSales": 1,
     "totalWeight": 120,
     "totalValue": 162
   }
@@ -92,7 +98,7 @@ Cria venda. Requer JWT valido no cookie.
 ### Efeitos
 
 - Cria comprador se necessario.
-- Cria `Sales`.
+- Cria `Sales` com `cooperative_id`, `expected_sale_date` e, por compatibilidade legada, `sold_at` preenchido.
 - Atualiza `Stock.totalSoldKg`.
 - Atualiza `Stock.currentStockKg`.
 
@@ -162,5 +168,8 @@ Bloqueia duplicado por comparacao case-insensitive.
 
 - `POST /api/sales` ignora `cooperative_id` enviado pelo cliente e usa a cooperativa do gerente autenticado.
 - `admin` pode informar `cooperative_id` e `responsible_worker_id`; o responsavel precisa pertencer a cooperativa alvo.
+- Enquanto S2-01 nao portar `complete`/`cancel`, `POST /api/sales` continua criando venda ja `SOLD` e baixando estoque no mesmo fluxo.
+- Enquanto S2-01 nao portar `complete`/`cancel`, `PUT` e `DELETE` legados so operam vendas `SOLD`; vendas `ACTIVE` ou `CANCELLED` retornam `409 SALE_LIFECYCLE_LOCKED` para evitar corrupcao de estoque.
+- Resumos e analytics de receita/preco consideram apenas vendas `SOLD`; a listagem ainda pode exibir `ACTIVE` e `CANCELLED` com status explicito.
 - O frontend tambem valida estoque antes de enviar, mas a regra efetiva esta na API.
 - Os endpoints de venda usam os helpers compartilhados de JWT/RBAC e rejeitam token ausente, adulterado ou expirado.

@@ -14,7 +14,8 @@
 | Risco | Evidencia | Impacto |
 | --- | --- | --- |
 | Recalc sem transacao explicita | `deleteMany` seguido por inserts SQL raw | Falha no meio pode deixar contribuicoes vazias/parciais |
-| Estoque sem unique formal | `Stock` ainda nao tem unique `(Cooperative, Material)` | Transacoes normalizam duplicatas em linha canonica, mas migration futura deve adicionar constraint |
+| Dados legados podem bloquear S1-01 | Migration aborta se houver duplicidade em `Stock`, totais negativos ou vendas sem estoque correspondente | Produzir script/consulta de saneamento antes de aplicar em banco real |
+| Writes durante migration S1-01 | Migration usa transacao explicita e lock em `Sales`, `Stock`, `Workers`; runbook ainda exige pausar writes | Evita divergencia durante backfill e constraints |
 | `phone` no cliente nao existe no backend | profile/manage-workers | Usuario pode achar que telefone sera salvo |
 | `material_id` retorna number em `/api/materials` | algumas telas esperam string | Comparacoes podem falhar em casos especificos |
 
@@ -34,4 +35,4 @@
 3. Envolver recalc em transacao.
 4. Atualizar documentacao legada ou marcar como historica.
 5. Adicionar rate limit de login no ingress/proxy de producao.
-6. Planejar migration para unique `(Cooperative, Material)` em `Stock`.
+6. Preparar runbook de saneamento para bancos legados antes de aplicar S1-01 em producao.

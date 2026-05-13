@@ -10,12 +10,15 @@ ADR vigente: [[ADR/ADR-0001-schema-prisma-baseline-rollback]]. O schema fisico l
 erDiagram
   Cooperative ||--o{ Devices : possui
   Cooperative ||--o{ Workers : possui
+  Cooperative ||--o{ Sales : possui
   Cooperative ||--o{ Stock : possui
+  Cooperative ||--o{ MaterialBagState : possui
   Cooperative ||--o{ WorkerContributions : possui
   Groups ||--o{ Materials : agrupa
   Materials ||--o{ Sales : vendido_em
   Materials ||--o{ Measurments : medido_em
   Materials ||--o{ Stock : estocado_em
+  Materials ||--o{ MaterialBagState : estado_de_saco
   Materials ||--o{ WorkerContributions : contribui_em
   Buyers ||--o{ Sales : compra
   Workers ||--o{ Sales : responsavel
@@ -35,7 +38,7 @@ Tabela: `Cooperative`
 | `cooperativeId` | `cooperative_id` | `BigInt` | PK autoincremento |
 | `cooperativeName` | `cooperative_name` | `String` | Nome exibido no app |
 
-Relacionamentos: `devices`, `workers`, `stock`, `contributions`.
+Relacionamentos: `devices`, `workers`, `sales`, `stock`, `materialBagStates`, `contributions`.
 
 ### Devices
 
@@ -69,7 +72,7 @@ Tabela: `Materials`
 | `materialName` | `Material_name` | `String` | Nome do material |
 | `materialGroup` | `Material_group` | `BigInt?` | FK opcional para `Groups` |
 
-Relacionamentos: grupo, vendas, medicoes, estoque e contribuicoes.
+Relacionamentos: grupo, vendas, medicoes, estoque, estado fisico de saco e contribuicoes.
 
 ### Buyers
 
@@ -95,8 +98,15 @@ Tabela: `Sales`
 | `priceKg` | `Price_Kg` | `Decimal(10,2)` | Preco por kg |
 | `buyer` | `Buyer` | `BigInt` | FK para `Buyers` |
 | `responsible` | `Responsible` | `BigInt` | FK para `Workers` |
+| `createdAt` | `created_at` | `DateTime` | Criacao do registro |
+| `soldAt` | `sold_at` | `DateTime?` | Preenchido quando a venda esta concluida |
+| `cancelledAt` | `cancelled_at` | `DateTime?` | Preenchido quando a venda esta cancelada |
+| `cooperativeId` | `cooperative_id` | `BigInt` | FK direta para `Cooperative`, derivada do responsavel no backfill |
+| `expectedSaleDate` | `expected_sale_date` | `DateTime` | Data operacional esperada |
 
-Relacionamentos: `materialRef`, `buyerRef`, `responsibleRef`.
+Relacionamentos: `materialRef`, `buyerRef`, `responsibleRef`, `cooperativeRef`.
+
+Estado derivado: `ACTIVE` quando `soldAt` e `cancelledAt` estao nulos, `SOLD` quando `soldAt` esta preenchido e `CANCELLED` quando `cancelledAt` esta preenchido. A migration S1-01 bloqueia `sold_at` e `cancelled_at` preenchidos ao mesmo tempo.
 
 ### Workers
 
@@ -148,6 +158,23 @@ Tabela: `Stock`
 | `totalSoldKg` | `Total_sold_KG` | `Decimal(65,2)` | Total vendido |
 | `currentStockKg` | `Current_stock_KG` | `Decimal(45,2)` | Estoque atual |
 
+Contrato S1-01: par unico por `cooperative` + `material`; totais e estoque atual nao podem ser negativos.
+
+### MaterialBagState
+
+Tabela: `material_bag_state`
+
+| Campo Prisma | Coluna SQL | Tipo | Observacao |
+| --- | --- | --- | --- |
+| `bagStateId` | `bag_state_id` | `BigInt` | PK autoincremento |
+| `cooperativeId` | `cooperative_id` | `BigInt` | FK para `Cooperative` |
+| `materialId` | `material_id` | `BigInt` | FK para `Materials` |
+| `isBegun` | `is_begun` | `Boolean` | Indica se ha saco em andamento |
+| `currentKg` | `current_kg` | `Decimal(10,2)` | Peso atual do saco |
+| `lastUpdated` | `last_updated` | `DateTime` | Ultima alteracao |
+
+Contrato S1-01: par unico por cooperativa/material, `current_kg >= 0` e saco vazio deve ter `current_kg = 0`.
+
 ### WorkerContributions
 
 Tabela: `Worker_contributions`
@@ -166,6 +193,7 @@ Tabela: `Worker_contributions`
 
 - `prisma/schema.prisma`: schema Prisma atual.
 - `prisma/migrations/00000000000000_baseline/migration.sql`: baseline versionada do schema legado atual.
+- `prisma/migrations/20260513224000_s1_01_core_sales_stock_bag_state/migration.sql`: migration aditiva de lifecycle de vendas, constraints de estoque e `material_bag_state`.
 - `New_db_schema.sql`: SQL gerado por pgAdmin com tabelas e FKs. Diverge em algumas precisões numericas, mas expressa a estrutura SQL original.
 - `prisma/seed.ts`: apaga dados por `TRUNCATE ... CASCADE` e recria cooperativas, grupos, materiais, dispositivos, compradores, usuarios, medicoes, vendas, estoque e contribuicoes.
 - `src/lib/db-utils.ts`: conversao de `Bytes`, limpeza de digitos, `BigInt`, formatacao `WP###`, mapeamento de tipo de usuario e conversao de `Decimal`.

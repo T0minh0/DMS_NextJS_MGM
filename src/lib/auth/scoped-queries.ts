@@ -33,8 +33,6 @@ export function scopedSaleWhere(
 
   return {
     saleId,
-    responsibleRef: {
-      cooperative: BigInt(session.cooperativeId),
-    },
+    cooperativeId: BigInt(session.cooperativeId),
   };
 }

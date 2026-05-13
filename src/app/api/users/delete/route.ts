@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, requireManagerOrAdmin } from '@/lib/auth/server';
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
+import { hasWorkerOperationalDependencies } from '@/lib/users/dependencies';
 
 export async function POST(request: Request) {
   try {
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       prisma.workerContributions.count({ where: { wastepicker: workerId } }),
     ]);
 
-    if (salesUsage > 0 || measurementUsage > 0 || contributionsUsage > 0) {
+    if (hasWorkerOperationalDependencies({ salesUsage, measurementUsage, contributionsUsage })) {
       return apiErrorResponse({
         message:
           'Não é possível excluir este usuário. Existem registros de vendas, medições ou contribuições associados.',

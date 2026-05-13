@@ -10,7 +10,7 @@ Matriz de UAT: [[Planejamento/Matriz-fixtures-UAT]].
 O seed comeca truncando as tabelas operacionais abaixo:
 
 ```sql
-TRUNCATE TABLE "Worker_contributions", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE "Worker_contributions", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;
 ```
 
 Use apenas em banco descartavel de desenvolvimento, preview ou UAT.
@@ -88,14 +88,21 @@ Observacao: `operator` e `viewer` sao personas de produto para UAT. Como o RBAC 
 
 ### Vendas normais
 
-O schema atual ainda nao possui coluna de lifecycle. O seed cria vendas recentes/historicas que alimentam as telas atuais; a matriz declara os estados alvo:
+Desde S1-01, o schema possui `created_at`, `sold_at`, `cancelled_at`, `cooperative_id` e `expected_sale_date`. O seed persiste os estados de venda normal usados em UAT:
 
 | Fixture | Estado alvo | Persistido agora | Observacao |
 | --- | --- | --- | --- |
-| `normal-active-horizonte` | ativa | Sim | Venda recente para material com estoque suficiente |
-| `normal-completed-horizonte` | concluida | Sim | Venda historica/realizada |
-| `normal-cancelled-horizonte` | cancelada | Nao | Depende de S2-01 adicionar lifecycle |
+| `normal-active-horizonte` | ativa | Sim | `sold_at` e `cancelled_at` nulos; S2-01 porta complete/cancel |
+| `normal-completed-horizonte` | concluida | Sim | `sold_at` preenchido e estoque consolidado pelo legado |
+| `normal-cancelled-horizonte` | cancelada | Sim | `cancelled_at` preenchido e sem movimento de estoque |
 | `leste-cardboard-sale` | concluida cross-coop | Sim | Venda da Leste usada como alvo negativo para gerente Horizonte |
+
+### Estado fisico de sacos
+
+S1-01 adiciona a tabela `material_bag_state` para portar o fluxo Java de pesagem por delta. O seed cria:
+
+- `UAT Aluminio Prensado` em Horizonte com saco iniciado e `10.00 kg`.
+- `UAT Vidro Misto Sem Estoque` em Horizonte com saco vazio e `0.00 kg`.
 
 ### Vendas coletivas, avisos e jobs
 
@@ -130,4 +137,5 @@ Cobertura automatizada:
 
 - `tests/uat-fixtures.test.ts` valida papeis, duas cooperativas, documentos sinteticos, estados de venda, venda coletiva declarada, jornada -> fixture, alvos negativos, scan de documentos realistas e guard contra seed em producao/banco duravel/remoto.
 - `tests/auth-rbac.test.ts` valida escopo RBAC/cooperativa.
+- `tests/schema-migrations.test.ts` valida os contratos S1-01 de lifecycle, `Stock` unico por cooperativa/material, `material_bag_state`, preflights e checks da migration.
 - `tests/observability.test.ts` valida PII/logs, contrato de erro API e estabilidade de IDs nas listagens de usuarios.

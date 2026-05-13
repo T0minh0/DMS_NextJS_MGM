@@ -156,12 +156,12 @@ Regra: toda migration depois da baseline precisa declarar se e `additive-only`, 
 - Pesos e valores financeiros seguem `Decimal` no Prisma e `numeric` no PostgreSQL.
 - PII (`CPF`, `PIS`, `RG`, `Password`) continua como `bytea` ate ADR especifica de auth/RBAC.
 - `Measurments` mantem a grafia legada no schema fisico e no modelo Prisma para nao quebrar o app atual.
-- `Stock` deve ganhar unique `(Cooperative, Material)` em migration futura antes das APIs transacionais de estoque.
-- `Sales` deve ganhar lifecycle aditivo antes de mudar semantica de create/complete/cancel.
+- S1-01 adicionou unique `(Cooperative, Material)` em `Stock` antes das APIs transacionais de estoque.
+- S1-01 adicionou lifecycle aditivo em `Sales`; S2-01 deve mudar a semantica de create/complete/cancel.
 
 ## Validacao de `material_bag_state`
 
-O SQL Java assume FKs para `public.cooperative` e `public.materials`; no schema escolhido essas tabelas fisicas nao existem. A migration futura deve corrigir as FKs para os objetos atuais:
+O SQL Java assume FKs para `public.cooperative` e `public.materials`; no schema escolhido essas tabelas fisicas nao existem. A migration S1-01 corrige as FKs para os objetos atuais:
 
 ```sql
 CREATE TABLE public.material_bag_state (

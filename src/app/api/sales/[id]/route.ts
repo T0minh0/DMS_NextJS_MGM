@@ -9,6 +9,7 @@ import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { scopedSaleWhere } from '@/lib/auth/scoped-queries';
 import { decimalToNumber } from '@/lib/db-utils';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
+import { getLegacyStockMutationGuard } from '@/lib/sales/lifecycle';
 import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
 
 type SaleLockRow = {
@@ -34,9 +35,8 @@ async function lockScopedSaleForUpdate(
   const rows = await tx.$queryRaw<SaleLockRow[]>`
     SELECT s."Sale_id" AS "saleId"
     FROM "Sales" s
-    INNER JOIN "Workers" w ON w."Worker_id" = s."Responsible"
     WHERE s."Sale_id" = ${saleId}
-      AND w."Cooperative" = ${BigInt(session.cooperativeId)}
+      AND s."cooperative_id" = ${BigInt(session.cooperativeId)}
     FOR UPDATE
   `;
 
@@ -69,7 +69,6 @@ export async function PUT(
       where: scopedSaleWhere(session, saleId),
       include: {
         buyerRef: true,
-        responsibleRef: true,
       },
     });
 
@@ -169,7 +168,6 @@ export async function PUT(
         where: scopedSaleWhere(session, saleId),
         include: {
           buyerRef: true,
-          responsibleRef: true,
         },
       });
 
@@ -183,16 +181,24 @@ export async function PUT(
         return { status: 'material_immutable' as const };
       }
 
+      const lifecycleGuard = getLegacyStockMutationGuard(lockedSale);
+      if (!lifecycleGuard.allowed) {
+        return {
+          status: 'lifecycle_locked' as const,
+          lifecycleStatus: lifecycleGuard.status,
+        };
+      }
+
       const stockRecord = await lockStockAggregateForUpdate(
         tx,
-        lockedSale.responsibleRef.cooperative,
+        lockedSale.cooperativeId,
         lockedSale.material,
       );
 
       if (!stockRecord) {
         return {
           status: 'stock_missing' as const,
-          cooperativeId: lockedSale.responsibleRef.cooperative,
+          cooperativeId: lockedSale.cooperativeId,
           materialId: lockedSale.material,
         };
       }
@@ -204,7 +210,7 @@ export async function PUT(
       if (weightSold > availableStock) {
         return {
           status: 'insufficient_stock' as const,
-          cooperativeId: lockedSale.responsibleRef.cooperative,
+          cooperativeId: lockedSale.cooperativeId,
           availableStock,
         };
       }
@@ -226,6 +232,8 @@ export async function PUT(
           priceKg: pricePerKg.toFixed(2),
           weight: weightSold.toFixed(2),
           date: saleDate,
+          expectedSaleDate: saleDate,
+          soldAt: lockedSale.soldAt ? saleDate : lockedSale.soldAt,
           buyer: buyer.buyerId,
         },
       });
@@ -237,7 +245,7 @@ export async function PUT(
 
       return {
         status: 'updated' as const,
-        cooperativeId: lockedSale.responsibleRef.cooperative,
+        cooperativeId: lockedSale.cooperativeId,
         updatedCurrentStock,
         duplicateStockRows: stockRecord.duplicateStockIds.length,
       };
@@ -257,6 +265,15 @@ export async function PUT(
         message: 'Material da venda não pode ser alterado neste momento',
         code: 'SALE_MATERIAL_IMMUTABLE',
         status: 400,
+        requestId: context.requestId,
+      });
+    }
+
+    if (transactionResult.status === 'lifecycle_locked') {
+      return apiErrorResponse({
+        message: 'Venda ativa ou cancelada deve ser alterada pelos endpoints de lifecycle',
+        code: 'SALE_LIFECYCLE_LOCKED',
+        status: 409,
         requestId: context.requestId,
       });
     }
@@ -343,9 +360,6 @@ export async function DELETE(
 
     const existingSale = await prisma.sales.findFirst({
       where: scopedSaleWhere(session, saleId),
-      include: {
-        responsibleRef: true,
-      },
     });
 
     if (!existingSale) {
@@ -368,9 +382,6 @@ export async function DELETE(
 
       const lockedSale = await tx.sales.findFirst({
         where: scopedSaleWhere(session, saleId),
-        include: {
-          responsibleRef: true,
-        },
       });
 
       if (!lockedSale) {
@@ -379,16 +390,24 @@ export async function DELETE(
 
       requireScopedPermission(session, 'sales', 'delete', 'cooperative');
 
+      const lifecycleGuard = getLegacyStockMutationGuard(lockedSale);
+      if (!lifecycleGuard.allowed) {
+        return {
+          status: 'lifecycle_locked' as const,
+          lifecycleStatus: lifecycleGuard.status,
+        };
+      }
+
       const stockRecord = await lockStockAggregateForUpdate(
         tx,
-        lockedSale.responsibleRef.cooperative,
+        lockedSale.cooperativeId,
         lockedSale.material,
       );
 
       if (!stockRecord) {
         return {
           status: 'stock_missing' as const,
-          cooperativeId: lockedSale.responsibleRef.cooperative,
+          cooperativeId: lockedSale.cooperativeId,
           materialId: lockedSale.material,
         };
       }
@@ -408,7 +427,7 @@ export async function DELETE(
 
       return {
         status: 'deleted' as const,
-        cooperativeId: lockedSale.responsibleRef.cooperative,
+        cooperativeId: lockedSale.cooperativeId,
         restoredWeight: existingWeight,
         updatedCurrentStock,
         duplicateStockRows: stockRecord.duplicateStockIds.length,
@@ -420,6 +439,15 @@ export async function DELETE(
         message: 'Venda não encontrada',
         code: 'SALE_NOT_FOUND',
         status: 404,
+        requestId: context.requestId,
+      });
+    }
+
+    if (transactionResult.status === 'lifecycle_locked') {
+      return apiErrorResponse({
+        message: 'Venda ativa ou cancelada deve ser alterada pelos endpoints de lifecycle',
+        code: 'SALE_LIFECYCLE_LOCKED',
+        status: 409,
         requestId: context.requestId,
       });
     }

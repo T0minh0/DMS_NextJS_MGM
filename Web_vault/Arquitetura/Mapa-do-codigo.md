@@ -52,6 +52,11 @@ As 28 rotas observadas estao detalhadas em [[API/Rotas]].
 | --- | --- |
 | `src/lib/prisma.ts` | Singleton de `PrismaClient` reutilizado em desenvolvimento |
 | `src/lib/db-utils.ts` | `decodeBytes`, `sanitizeDigits`, `toBigIntId`, `formatWorkerId`, `mapUserType`, `decimalToNumber` |
+| `src/lib/api/errors.ts` | Respostas de erro API consistentes com `requestId` |
+| `src/lib/auth/login-guard.ts` | Comparacao dummy de senha, throttling local de login por IP/CPF e utilitarios anti-enumeracao |
+| `src/lib/observability/logger.ts` | Logs estruturados, correlation id e redacao de dados sensiveis |
+| `src/lib/privacy/pii.ts` | Mascaras de CPF/PIS/RG para respostas de listagem |
+| `src/lib/stock/ledger.ts` | Lock/agregacao transacional de estoque por cooperativa/material |
 
 ## Prisma
 
@@ -86,5 +91,5 @@ As 28 rotas observadas estao detalhadas em [[API/Rotas]].
 
 - Evitar usar `DOCUMENTATION.md` como fonte unica; conferir contra `prisma/schema.prisma` e `src/app/api`.
 - O nome `Measurments` esta grafado assim no schema e nas APIs; mudar isso exigiria migracao cuidadosa.
-- Logs de debug do dashboard e fallback falso de usuario foram removidos; `console.error` permanece para erros operacionais.
+- Logs de debug do dashboard e fallback falso de usuario foram removidos; erros operacionais passam pelo logger estruturado.
 - A UI atual mistura tokens verdes (`dms-*`) com paleta vinho inline.

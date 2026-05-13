@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
 
 export async function GET(request: Request) {
+  const context = createLogContext(request, { domain: 'stock' });
+
   try {
     const session = await requireManagerOrAdmin();
     const targetCooperativeId = determineTargetCooperative(session);
@@ -33,6 +37,11 @@ export async function GET(request: Request) {
         const groupName = materialIdParam.replace('group_', '');
         const ids = materialIdByGroup.get(groupName);
         if (!ids || ids.length === 0) {
+          logInfo('stock.read.no_data', context, {
+            role: session.role,
+            cooperativeId: targetCooperativeId,
+            filter: 'group',
+          });
           return NextResponse.json({
             noData: true,
             message: 'Não há materiais neste grupo',
@@ -43,7 +52,16 @@ export async function GET(request: Request) {
         try {
           materialFilter = [BigInt(materialIdParam)];
         } catch {
-          return NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 });
+          logWarn('stock.read.invalid_filter', context, {
+            role: session.role,
+            cooperativeId: targetCooperativeId,
+          });
+          return apiErrorResponse({
+            message: 'Material inválido',
+            code: 'INVALID_MATERIAL_FILTER',
+            status: 400,
+            requestId: context.requestId,
+          });
         }
       }
     }
@@ -60,6 +78,11 @@ export async function GET(request: Request) {
     });
 
     if (stocks.length === 0) {
+      logInfo('stock.read.no_data', context, {
+        role: session.role,
+        cooperativeId: targetCooperativeId,
+        materialFilterCount: materialFilter?.length ?? 0,
+      });
       return NextResponse.json({
         noData: true,
         message: materialIdParam
@@ -79,20 +102,26 @@ export async function GET(request: Request) {
       formattedStock[name] = (formattedStock[name] || 0) + current;
     });
 
+    logInfo('stock.read.succeeded', context, {
+      role: session.role,
+      cooperativeId: targetCooperativeId,
+      stockRows: stocks.length,
+      materialFilterCount: materialFilter?.length ?? 0,
+    });
+
     return NextResponse.json(formattedStock);
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, context);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching stock:', error);
-    return NextResponse.json(
-      {
-        noData: true,
-        message: 'Erro ao buscar dados de estoque. Por favor, tente novamente mais tarde.',
-      },
-      { status: 500 },
-    );
+    return apiInternalErrorResponse({
+      message: 'Erro ao buscar dados de estoque. Por favor, tente novamente mais tarde.',
+      code: 'STOCK_READ_FAILED',
+      context,
+      event: 'stock.read.failed',
+      error,
+    });
   }
 }

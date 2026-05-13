@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
@@ -23,15 +24,20 @@ export async function POST(request: Request) {
     } = await request.json();
 
     if (!full_name || !CPF || !password || !birth_date || !enter_date || !cooperative_id || !PIS || !RG) {
-      return NextResponse.json(
-        { message: 'Nome, CPF, senha, datas, cooperativa, PIS e RG são obrigatórios' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nome, CPF, senha, datas, cooperativa, PIS e RG são obrigatórios',
+        code: 'REQUIRED_USER_FIELDS',
+        status: 400,
+      });
     }
 
     const userTypeNumber = Number(user_type);
     if (!Number.isFinite(userTypeNumber) || (userTypeNumber !== 0 && userTypeNumber !== 1)) {
-      return NextResponse.json({ message: 'Tipo de usuário inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Tipo de usuário inválido',
+        code: 'INVALID_USER_TYPE',
+        status: 400,
+      });
     }
 
     const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
@@ -39,7 +45,11 @@ export async function POST(request: Request) {
     try {
       cooperativeBigInt = BigInt(targetCooperativeId);
     } catch {
-      return NextResponse.json({ message: 'Cooperativa inválida' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Cooperativa inválida',
+        code: 'INVALID_COOPERATIVE',
+        status: 400,
+      });
     }
 
     const cpfDigits = sanitizeDigits(CPF);
@@ -47,29 +57,46 @@ export async function POST(request: Request) {
     const rgDigits = sanitizeDigits(RG);
 
     if (!cpfDigits || !pisDigits || !rgDigits) {
-      return NextResponse.json({ message: 'CPF, PIS e RG devem conter apenas números' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'CPF, PIS e RG devem conter apenas números',
+        code: 'INVALID_DOCUMENTS',
+        status: 400,
+      });
     }
 
     const birthDateObj = new Date(birth_date);
     const enterDateObj = new Date(enter_date);
     if (Number.isNaN(birthDateObj.getTime()) || Number.isNaN(enterDateObj.getTime())) {
-      return NextResponse.json({ message: 'Datas inválidas' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Datas inválidas',
+        code: 'INVALID_DATES',
+        status: 400,
+      });
     }
 
     let exitDateObj: Date | null = null;
     if (exit_date) {
       exitDateObj = new Date(exit_date);
       if (Number.isNaN(exitDateObj.getTime())) {
-        return NextResponse.json({ message: 'Data de saída inválida' }, { status: 400 });
+        return apiErrorResponse({
+          message: 'Data de saída inválida',
+          code: 'INVALID_EXIT_DATE',
+          status: 400,
+        });
       }
     }
 
     const existing = await prisma.workers.findFirst({
       where: { cpf: Buffer.from(cpfDigits, 'utf8') },
+      select: { workerId: true, cooperative: true },
     });
 
     if (existing) {
-      return NextResponse.json({ message: 'Já existe um usuário com este CPF' }, { status: 409 });
+      return apiErrorResponse({
+        message: 'Não foi possível concluir o cadastro com os dados informados',
+        code: 'USER_CREATE_CONFLICT',
+        status: 409,
+      });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -99,7 +126,6 @@ export async function POST(request: Request) {
         user: {
           id: created.workerId.toString(),
           full_name: created.workerName,
-          cpf: cpfDigits,
           cooperative_id: created.cooperative.toString(),
           user_type: userTypeNumber,
         },
@@ -107,12 +133,18 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error creating user:', error);
-    return NextResponse.json({ message: 'Erro ao criar usuário' }, { status: 500 });
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao criar usuário',
+      code: 'USER_CREATE_FAILED',
+      route: '/api/users/create',
+      method: 'POST',
+      request,
+    });
   }
 }

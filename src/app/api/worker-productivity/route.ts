@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import {
   authErrorResponse,
-  determineTargetCooperative,
-  determineTargetWorker,
   requireAuth,
   requireScopedPermission,
 } from '@/lib/auth/server';
+import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type MaterialContribution = {
@@ -160,26 +160,35 @@ export async function GET(request: NextRequest) {
     const weeks = Number(searchParams.get('weeks') ?? '12');
 
     if (!workerParam) {
-      return NextResponse.json({ error: 'Worker ID is required' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Worker ID is required',
+        code: 'REQUIRED_WORKER_ID',
+        status: 400,
+      });
     }
 
-    const workerId = parseWorkerId(
-      determineTargetWorker(session, workerParam, { required: true }),
-    );
+    const workerId = parseWorkerId(workerParam);
     if (!workerId) {
-      return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Invalid worker ID',
+        code: 'INVALID_WORKER_ID',
+        status: 400,
+      });
     }
 
-    const worker = await prisma.workers.findUnique({
-      where: { workerId },
+    const worker = await prisma.workers.findFirst({
+      where: scopedWorkerWhere(session, workerId),
       select: { cooperative: true },
     });
 
     if (!worker) {
-      return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
+      return apiErrorResponse({
+        message: 'Worker not found',
+        code: 'WORKER_NOT_FOUND',
+        status: 404,
+      });
     }
 
-    determineTargetCooperative(session, worker.cooperative);
     requireScopedPermission(
       session,
       'gamification',
@@ -331,18 +340,18 @@ export async function GET(request: NextRequest) {
       stats,
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching worker productivity:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch worker productivity data',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch worker productivity data',
+      code: 'WORKER_PRODUCTIVITY_READ_FAILED',
+      route: '/api/worker-productivity',
+      method: 'GET',
+      request,
+    });
   }
 }

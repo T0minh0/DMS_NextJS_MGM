@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
 import { getJwtSecret } from './secret';
+import { apiErrorResponse } from '@/lib/api/errors';
+import { createLogContext, LogContext, logWarn } from '@/lib/observability/logger';
 import {
   AUTH_COOKIE_NAME,
   AUTH_TOKEN_AUDIENCE,
@@ -179,12 +180,35 @@ export function requireScopedPermission(
   requirePermission(session, ...args);
 }
 
-export function authErrorResponse(error: unknown) {
+function resolveAuthLogContext(contextOrRequest?: LogContext | Request | null) {
+  if (!contextOrRequest) {
+    return undefined;
+  }
+
+  if (contextOrRequest instanceof Request) {
+    return createLogContext(contextOrRequest, { domain: 'auth' });
+  }
+
+  return contextOrRequest;
+}
+
+export function authErrorResponse(error: unknown, contextOrRequest?: LogContext | Request | null) {
   if (error instanceof AuthError) {
-    return NextResponse.json(
-      { error: error.message, code: error.code },
-      { status: error.status },
-    );
+    const context = resolveAuthLogContext(contextOrRequest);
+
+    if (context) {
+      logWarn('auth.rejected', context, {
+        code: error.code,
+        status: error.status,
+      });
+    }
+
+    return apiErrorResponse({
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      requestId: context?.requestId,
+    });
   }
 
   return null;

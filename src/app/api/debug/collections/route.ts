@@ -3,8 +3,9 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requireAdmin();
     const disabledResponse = getDebugRouteDisabledResponse();
@@ -110,15 +111,18 @@ export async function GET() {
       }, {}),
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching collections:', error);
-    return NextResponse.json(
-      { message: 'Error fetching collections', error: String(error) },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Error fetching collections',
+      code: 'DEBUG_COLLECTIONS_FAILED',
+      route: '/api/debug/collections',
+      method: 'GET',
+      request,
+    });
   }
 }

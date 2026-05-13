@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type MaterialContext = {
@@ -58,7 +59,11 @@ async function resolveMaterialIds(
     return { ids: [BigInt(materialParam)] };
   } catch {
     return {
-      error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }),
+      error: apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+      }),
     };
   }
 }
@@ -243,18 +248,18 @@ export async function GET(request: Request) {
       priceData,
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching price fluctuation:', error);
-    return NextResponse.json(
-      {
-        noData: true,
-        message: 'Erro ao buscar dados de preços',
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao buscar dados de preços',
+      code: 'PRICE_FLUCTUATION_READ_FAILED',
+      route: '/api/price-fluctuation',
+      method: 'GET',
+      request,
+    });
   }
 }

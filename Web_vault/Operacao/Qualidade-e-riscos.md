@@ -4,16 +4,16 @@
 
 | Risco | Evidencia | Impacto |
 | --- | --- | --- |
-| Documentos pessoais retornam em claro | APIs de usuario retornam CPF/PIS/RG | Exposicao de PII no cliente |
+| Detalhe autorizado retorna documentos completos | `/api/user?id=...` retorna CPF/PIS/RG para usuario no escopo | Necessario para edicao/perfil; manter fora de listagens e auditar fluxos |
 | Endpoints debug existem no app | `/api/debug/*` com `requireAdmin` e bloqueio por `NODE_ENV=production` | So devem ser habilitados em producao com `DMS_DEBUG_ENDPOINTS_ENABLED=true` e aprovacao operacional |
-| Enumeração limitada em usuario | `/api/user?id|cpf` pode diferenciar `403` fora de escopo e `404` inexistente para gerente autenticado | Baixo; resolver em S5-05 ao revisar PII/escopo de equipe |
+| Rate limit de login em memoria | App so confia em headers de proxy com `DMS_TRUST_PROXY_HEADERS=true` | Em scale-out precisa rate limit no ingress/proxy |
 
 ## Riscos de integridade
 
 | Risco | Evidencia | Impacto |
 | --- | --- | --- |
 | Recalc sem transacao explicita | `deleteMany` seguido por inserts SQL raw | Falha no meio pode deixar contribuicoes vazias/parciais |
-| Venda cria/atualiza estoque sem transacao | `Sales.create/update/delete` e `Stock.update` separados | Falha parcial pode desalinhar venda e estoque |
+| Estoque sem unique formal | `Stock` ainda nao tem unique `(Cooperative, Material)` | Transacoes normalizam duplicatas em linha canonica, mas migration futura deve adicionar constraint |
 | `phone` no cliente nao existe no backend | profile/manage-workers | Usuario pode achar que telefone sera salvo |
 | `material_id` retorna number em `/api/materials` | algumas telas esperam string | Comparacoes podem falhar em casos especificos |
 
@@ -30,7 +30,7 @@
 
 1. Planejar upgrade major Prisma 7 com guia oficial e ambiente de banco controlado.
 2. Ampliar testes de smoke para rotas reais com banco controlado.
-3. Envolver mutacoes venda+estoque e recalc em transacoes.
+3. Envolver recalc em transacao.
 4. Atualizar documentacao legada ou marcar como historica.
-5. Mascarar documentos pessoais em respostas de API e telas de gestao.
-6. Normalizar respostas fora de escopo em `/api/user` ou consultar por cooperativa para nao-admin.
+5. Adicionar rate limit de login no ingress/proxy de producao.
+6. Planejar migration para unique `(Cooperative, Material)` em `Stock`.

@@ -8,17 +8,14 @@ import {
   requireManagerOrAdmin,
   requireScopedPermission,
 } from '@/lib/auth/server';
+import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
-
-function toBigInt(value: string | number | bigint, message: string) {
-  try {
-    return BigInt(value);
-  } catch {
-    throw new Error(message);
-  }
-}
+import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
+import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
 
 export async function GET(request: NextRequest) {
+  const context = createLogContext(request, { domain: 'sales' });
+
   try {
     const session = await requireManagerOrAdmin();
     const { searchParams } = new URL(request.url);
@@ -41,7 +38,12 @@ export async function GET(request: NextRequest) {
       try {
         where.material = BigInt(materialId);
       } catch {
-        return NextResponse.json({ error: 'Material inválido' }, { status: 400 });
+        return apiErrorResponse({
+          message: 'Material inválido',
+          code: 'INVALID_MATERIAL',
+          status: 400,
+          requestId: context.requestId,
+        });
       }
     }
 
@@ -56,14 +58,24 @@ export async function GET(request: NextRequest) {
       if (startDate) {
         const start = new Date(startDate);
         if (Number.isNaN(start.getTime())) {
-          return NextResponse.json({ error: 'Data inicial inválida' }, { status: 400 });
+          return apiErrorResponse({
+            message: 'Data inicial inválida',
+            code: 'INVALID_START_DATE',
+            status: 400,
+            requestId: context.requestId,
+          });
         }
         where.date.gte = start;
       }
       if (endDate) {
         const end = new Date(endDate);
         if (Number.isNaN(end.getTime())) {
-          return NextResponse.json({ error: 'Data final inválida' }, { status: 400 });
+          return apiErrorResponse({
+            message: 'Data final inválida',
+            code: 'INVALID_END_DATE',
+            status: 400,
+            requestId: context.requestId,
+          });
         }
         where.date.lte = end;
       }
@@ -101,6 +113,13 @@ export async function GET(request: NextRequest) {
       0,
     );
 
+    logInfo('sales.read.succeeded', context, {
+      role: session.role,
+      cooperativeId: targetCooperativeId,
+      totalSales,
+      totalWeight: Number(totalWeight.toFixed(2)),
+    });
+
     return NextResponse.json({
       sales: formattedSales,
       summary: {
@@ -110,23 +129,24 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, context);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching sales:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch sales',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiInternalErrorResponse({
+      message: 'Failed to fetch sales',
+      code: 'SALES_READ_FAILED',
+      context,
+      event: 'sales.read.failed',
+      error,
+    });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const context = createLogContext(request, { domain: 'sales' });
+
   try {
     const session = await requireManagerOrAdmin();
     const body = await request.json();
@@ -145,56 +165,75 @@ export async function POST(request: NextRequest) {
     const requiredFields = ['material_id', 'price/kg', 'weight_sold', 'date', 'Buyer'];
     for (const field of requiredFields) {
       if (!body[field]) {
-        return NextResponse.json({ error: `Campo obrigatório: ${field}` }, { status: 400 });
+        return apiErrorResponse({
+          message: `Campo obrigatório: ${field}`,
+          code: 'REQUIRED_FIELD',
+          status: 400,
+          requestId: context.requestId,
+        });
       }
     }
 
+    let targetCooperativeBigInt: bigint;
     try {
-      BigInt(targetCooperativeId);
+      targetCooperativeBigInt = BigInt(targetCooperativeId);
     } catch {
-      return NextResponse.json({ error: 'Cooperativa inválida' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Cooperativa inválida',
+        code: 'INVALID_COOPERATIVE',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     let materialId: bigint;
     try {
       materialId = BigInt(body.material_id);
     } catch {
-      return NextResponse.json({ error: 'Material inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     const pricePerKg = Number(body['price/kg']);
     const weightSold = Number(body.weight_sold);
     if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) {
-      return NextResponse.json({ error: 'Preço por kg deve ser maior que zero' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Preço por kg deve ser maior que zero',
+        code: 'INVALID_PRICE',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
     if (!Number.isFinite(weightSold) || weightSold <= 0) {
-      return NextResponse.json({ error: 'Peso vendido deve ser maior que zero' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Peso vendido deve ser maior que zero',
+        code: 'INVALID_WEIGHT',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     const saleDate = new Date(body.date);
     if (Number.isNaN(saleDate.getTime())) {
-      return NextResponse.json({ error: 'Data inválida' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Data inválida',
+        code: 'INVALID_DATE',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     const buyerName = body.Buyer?.trim();
     if (!buyerName) {
-      return NextResponse.json({ error: 'Comprador é obrigatório' }, { status: 400 });
-    }
-
-    let buyer = await prisma.buyers.findFirst({
-      where: {
-        buyerName: {
-          equals: buyerName,
-          mode: 'insensitive',
-        },
-      },
-    });
-
-    if (!buyer) {
-      buyer = await prisma.buyers.create({
-        data: {
-          buyerName,
-        },
+      return apiErrorResponse({
+        message: 'Comprador é obrigatório',
+        code: 'REQUIRED_BUYER',
+        status: 400,
+        requestId: context.requestId,
       });
     }
 
@@ -204,54 +243,119 @@ export async function POST(request: NextRequest) {
     });
 
     if (!responsibleWorker || responsibleWorker.cooperative.toString() !== targetCooperativeId) {
-      return NextResponse.json(
-        { error: 'Responsável fora do escopo da cooperativa' },
-        { status: 403 },
-      );
+      logWarn('sales.create.scope_denied', context, {
+        role: session.role,
+        cooperativeId: targetCooperativeId,
+        targetWorkerId,
+      });
+      return apiErrorResponse({
+        message: 'Responsável fora do escopo da cooperativa',
+        code: 'RESPONSIBLE_SCOPE_DENIED',
+        status: 403,
+        requestId: context.requestId,
+      });
     }
 
-    const stockRecord = await prisma.stock.findFirst({
-      where: {
-        cooperative: toBigInt(targetCooperativeId, 'Cooperativa inválida'),
-        material: materialId,
-      },
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      const stockRecord = await lockStockAggregateForUpdate(
+        tx,
+        targetCooperativeBigInt,
+        materialId,
+      );
+
+      if (!stockRecord) {
+        return { status: 'stock_missing' as const };
+      }
+
+      const currentStock = stockRecord.currentStockKg;
+      if (weightSold > currentStock) {
+        return {
+          status: 'insufficient_stock' as const,
+          currentStock,
+        };
+      }
+
+      let buyer = await tx.buyers.findFirst({
+        where: {
+          buyerName: {
+            equals: buyerName,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (!buyer) {
+        buyer = await tx.buyers.create({
+          data: {
+            buyerName,
+          },
+        });
+      }
+
+      const sale = await tx.sales.create({
+        data: {
+          material: materialId,
+          priceKg: pricePerKg.toFixed(2),
+          weight: weightSold.toFixed(2),
+          date: saleDate,
+          buyer: buyer.buyerId,
+          responsible: responsibleWorker.workerId,
+        },
+      });
+
+      const totalSold = stockRecord.totalSoldKg + weightSold;
+      const newCurrentStock = currentStock - weightSold;
+
+      await updateLockedStockAggregate(tx, stockRecord, {
+        totalSoldKg: totalSold,
+        currentStockKg: newCurrentStock,
+      });
+
+      return {
+        status: 'created' as const,
+        sale,
+        buyerName: buyer.buyerName,
+        newCurrentStock,
+        duplicateStockRows: stockRecord.duplicateStockIds.length,
+      };
     });
 
-    if (!stockRecord) {
-      return NextResponse.json(
-        { error: 'Não há estoque registrado para este material nesta cooperativa' },
-        { status: 400 },
-      );
+    if (transactionResult.status === 'stock_missing') {
+      logWarn('sales.create.stock_missing', context, {
+        cooperativeId: targetCooperativeId,
+        materialId: materialId.toString(),
+      });
+      return apiErrorResponse({
+        message: 'Não há estoque registrado para este material nesta cooperativa',
+        code: 'STOCK_MISSING',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
-    const currentStock = decimalToNumber(stockRecord.currentStockKg) ?? 0;
-    if (weightSold > currentStock) {
-      return NextResponse.json(
-        { error: `Estoque insuficiente! Disponível: ${currentStock.toFixed(2)} kg` },
-        { status: 400 },
-      );
+    if (transactionResult.status === 'insufficient_stock') {
+      logWarn('sales.create.insufficient_stock', context, {
+        cooperativeId: targetCooperativeId,
+        materialId: materialId.toString(),
+        requestedWeight: weightSold,
+        availableWeight: Number(transactionResult.currentStock.toFixed(2)),
+      });
+      return apiErrorResponse({
+        message: `Estoque insuficiente! Disponível: ${transactionResult.currentStock.toFixed(2)} kg`,
+        code: 'INSUFFICIENT_STOCK',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
-    const sale = await prisma.sales.create({
-      data: {
-        material: materialId,
-        priceKg: pricePerKg.toFixed(2),
-        weight: weightSold.toFixed(2),
-        date: saleDate,
-        buyer: buyer.buyerId,
-        responsible: responsibleWorker.workerId,
-      },
-    });
-
-    const totalSold = (decimalToNumber(stockRecord.totalSoldKg) ?? 0) + weightSold;
-    const newCurrentStock = currentStock - weightSold;
-
-    await prisma.stock.update({
-      where: { stockId: stockRecord.stockId },
-      data: {
-        totalSoldKg: totalSold.toFixed(2),
-        currentStockKg: newCurrentStock.toFixed(2),
-      },
+    logInfo('sales.create.succeeded', context, {
+      role: session.role,
+      saleId: transactionResult.sale.saleId.toString(),
+      cooperativeId: targetCooperativeId,
+      materialId: materialId.toString(),
+      weightSold,
+      newCurrentStock: Number(transactionResult.newCurrentStock.toFixed(2)),
+      duplicateStockRows: transactionResult.duplicateStockRows,
     });
 
     return NextResponse.json(
@@ -259,30 +363,29 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Venda registrada com sucesso',
         sale: {
-          _id: sale.saleId.toString(),
-          material_id: sale.material.toString(),
+          _id: transactionResult.sale.saleId.toString(),
+          material_id: transactionResult.sale.material.toString(),
           cooperative_id: targetCooperativeId,
           'price/kg': pricePerKg,
           weight_sold: weightSold,
-          date: sale.date.toISOString(),
-          Buyer: buyer.buyerName,
+          date: transactionResult.sale.date.toISOString(),
+          Buyer: transactionResult.buyerName,
         },
       },
       { status: 201 },
     );
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, context);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error creating sale:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao registrar venda',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiInternalErrorResponse({
+      message: 'Erro ao registrar venda',
+      code: 'SALES_CREATE_FAILED',
+      context,
+      event: 'sales.create.failed',
+      error,
+    });
   }
 }

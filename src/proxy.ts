@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthTokenEdge } from '@/lib/auth/edge';
 import { AUTH_COOKIE_NAME } from '@/lib/auth/shared';
+import { apiErrorResponse } from '@/lib/api/errors';
+import { createLogContext, logWarn } from '@/lib/observability/logger';
 
 const PUBLIC_AUTH_PATHS = ['/login', '/api/auth/login'];
 const PUBLIC_FILE_PATTERN = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json|woff2?)$/i;
@@ -25,6 +27,7 @@ function isPublicPath(pathname: string) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const context = createLogContext(request, { domain: 'auth' });
   const publicPath = isPublicPath(pathname);
   const isApiRoute = pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/');
   const authToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
@@ -36,15 +39,29 @@ export async function proxy(request: NextRequest) {
     }
 
     const response = NextResponse.next();
-    return authToken && !session ? clearAuthCookie(response) : response;
+    if (authToken && !session) {
+      logWarn('auth.proxy.invalid_cookie_cleared', context);
+      return clearAuthCookie(response);
+    }
+
+    return response;
   }
 
   if (!session) {
     if (isApiRoute) {
-      return clearAuthCookie(NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 },
-      ));
+      logWarn('auth.proxy.api_unauthorized', context, {
+        hasCookie: Boolean(authToken),
+      });
+      return clearAuthCookie(apiErrorResponse({
+        message: 'Unauthorized',
+        code: 'UNAUTHORIZED',
+        status: 401,
+        requestId: context.requestId,
+      }));
+    }
+
+    if (authToken) {
+      logWarn('auth.proxy.page_invalid_cookie_redirected', context);
     }
 
     return clearAuthCookie(NextResponse.redirect(new URL('/login', request.url)));

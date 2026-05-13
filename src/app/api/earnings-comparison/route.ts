@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type PeriodType = 'weekly' | 'monthly' | 'yearly';
@@ -29,7 +30,14 @@ async function resolveMaterialIds(materialParam: string) {
   try {
     return { ids: [BigInt(materialParam)] };
   } catch {
-    return { ids: null, error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }) };
+    return {
+      ids: null,
+      error: apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+      }),
+    };
   }
 }
 
@@ -132,18 +140,18 @@ export async function GET(request: Request) {
 
     return NextResponse.json(periods);
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching earnings comparison:', error);
-    return NextResponse.json(
-      {
-        noData: true,
-        message: 'Erro ao buscar dados de vendas. Por favor, tente novamente mais tarde.',
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao buscar dados de vendas. Por favor, tente novamente mais tarde.',
+      code: 'EARNINGS_READ_FAILED',
+      route: '/api/earnings-comparison',
+      method: 'GET',
+      request,
+    });
   }
 }

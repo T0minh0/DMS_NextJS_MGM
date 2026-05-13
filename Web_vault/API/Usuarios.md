@@ -15,7 +15,7 @@ Exige pelo menos `id` ou `cpf`.
 
 ### Retorno
 
-Retorna `id`, `worker_id`, `wastepicker_id`, `full_name`, `cpf`, `role`, `userType`, `user_type`, `email`, `gender`, datas, `cooperative_id` e `cooperative_name`.
+Retorna `id`, `worker_id`, `wastepicker_id`, `full_name`, `cpf`/`CPF`, `PIS`, `RG`, `role`, `userType`, `user_type`, `email`, `gender`, datas, `cooperative_id` e `cooperative_name` para usuario autorizado no escopo.
 
 ### Autorizacao
 
@@ -71,7 +71,7 @@ Arquivo: `src/app/api/users/route.ts`
 
 Lista apenas catadores/trabalhadores (`mapUserType(userType) === 1`), ordenados por nome, incluindo cooperativa. `manager` recebe apenas a propria cooperativa; `admin` recebe todas.
 
-Campos retornados incluem aliases para compatibilidade: `wastepicker_id`, `worker_id`, `user_id`, `full_name`, `worker_name`, `cooperative_id`, `CPF`, `cpf`, `PIS`, `RG`, datas e email.
+Campos retornados incluem aliases para compatibilidade: `wastepicker_id`, `worker_id`, `user_id`, `full_name`, `worker_name`, `cooperative_id`, `CPF`, `cpf`, `PIS`, `RG`, datas e email. Documentos pessoais saem mascarados na listagem; fluxos de edicao buscam detalhe autorizado em `/api/user?id=...`.
 
 ## `GET /api/users/all`
 
@@ -104,7 +104,7 @@ Arquivo: `src/app/api/users/create/route.ts`
 
 ### Regras
 
-- CPF duplicado retorna `409`.
+- CPF duplicado retorna `409` com mensagem generica para evitar exposicao explicita de documento.
 - CPF, PIS e RG precisam conter digitos.
 - `manager` so pode criar usuario na propria cooperativa; `admin` pode informar outra cooperativa.
 - Cria `Workers`.

@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
@@ -24,32 +26,43 @@ export async function POST(request: Request) {
     } = await request.json();
 
     if (!id || !full_name || !birth_date || !enter_date || !cooperative_id || !PIS || !RG) {
-      return NextResponse.json(
-        { message: 'ID, nome, datas, cooperativa, PIS e RG são obrigatórios' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'ID, nome, datas, cooperativa, PIS e RG são obrigatórios',
+        code: 'REQUIRED_USER_FIELDS',
+        status: 400,
+      });
     }
 
     let workerId: bigint;
     try {
       workerId = BigInt(id);
     } catch {
-      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID inválido',
+        code: 'INVALID_USER_ID',
+        status: 400,
+      });
     }
 
-    const existing = await prisma.workers.findUnique({
-      where: { workerId },
+    const existing = await prisma.workers.findFirst({
+      where: scopedWorkerWhere(session, workerId),
     });
 
     if (!existing) {
-      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+      return apiErrorResponse({
+        message: 'Usuário não encontrado',
+        code: 'USER_NOT_FOUND',
+        status: 404,
+      });
     }
-
-    determineTargetCooperative(session, existing.cooperative);
 
     const userTypeNumber = Number(user_type);
     if (!Number.isFinite(userTypeNumber) || (userTypeNumber !== 0 && userTypeNumber !== 1)) {
-      return NextResponse.json({ message: 'Tipo de usuário inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Tipo de usuário inválido',
+        code: 'INVALID_USER_TYPE',
+        status: 400,
+      });
     }
 
     const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
@@ -57,26 +70,42 @@ export async function POST(request: Request) {
     try {
       cooperativeBigInt = BigInt(targetCooperativeId);
     } catch {
-      return NextResponse.json({ message: 'Cooperativa inválida' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Cooperativa inválida',
+        code: 'INVALID_COOPERATIVE',
+        status: 400,
+      });
     }
 
     const pisDigits = sanitizeDigits(PIS);
     const rgDigits = sanitizeDigits(RG);
     if (!pisDigits || !rgDigits) {
-      return NextResponse.json({ message: 'PIS e RG devem conter apenas números' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'PIS e RG devem conter apenas números',
+        code: 'INVALID_DOCUMENTS',
+        status: 400,
+      });
     }
 
     const birthDateObj = new Date(birth_date);
     const enterDateObj = new Date(enter_date);
     if (Number.isNaN(birthDateObj.getTime()) || Number.isNaN(enterDateObj.getTime())) {
-      return NextResponse.json({ message: 'Datas inválidas' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Datas inválidas',
+        code: 'INVALID_DATES',
+        status: 400,
+      });
     }
 
     let exitDateObj: Date | null = null;
     if (exit_date) {
       exitDateObj = new Date(exit_date);
       if (Number.isNaN(exitDateObj.getTime())) {
-        return NextResponse.json({ message: 'Data de saída inválida' }, { status: 400 });
+        return apiErrorResponse({
+          message: 'Data de saída inválida',
+          code: 'INVALID_EXIT_DATE',
+          status: 400,
+        });
       }
     }
 
@@ -110,12 +139,18 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'Usuário atualizado com sucesso' }, { status: 200 });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error updating user:', error);
-    return NextResponse.json({ message: 'Erro ao atualizar usuário' }, { status: 500 });
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao atualizar usuário',
+      code: 'USER_UPDATE_FAILED',
+      route: '/api/users/update',
+      method: 'POST',
+      request,
+    });
   }
 }

@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 import {
   decodeBytes,
   formatWorkerId,
   mapUserType,
-  sanitizeDigits,
 } from '@/lib/db-utils';
+import { maskCpf, maskPis, maskRg } from '@/lib/privacy/pii';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
     const targetCooperativeId = determineTargetCooperative(session);
@@ -21,11 +22,13 @@ export async function GET() {
     const formattedWorkers = workers
       .filter((worker) => mapUserType(worker.userType) === 1)
       .map((worker) => {
-        const cpf = sanitizeDigits(decodeBytes(worker.cpf));
+        const cpf = maskCpf(decodeBytes(worker.cpf));
         const pis = decodeBytes(worker.pis);
         const rg = decodeBytes(worker.rg);
 
         return {
+          _id: worker.workerId.toString(),
+          id: worker.workerId.toString(),
           wastepicker_id: formatWorkerId(worker.workerId),
           worker_id: Number(worker.workerId),
           user_id: Number(worker.workerId),
@@ -37,10 +40,10 @@ export async function GET() {
           cooperative_name: worker.cooperativeRef?.cooperativeName ?? null,
           CPF: cpf,
           cpf,
-          PIS: pis,
-          pis,
-          RG: rg,
-          rg,
+          PIS: maskPis(pis),
+          pis: maskPis(pis),
+          RG: maskRg(rg),
+          rg: maskRg(rg),
           gender: worker.gender,
           birthdate: worker.birthDate,
           enter_date: worker.enterDate,
@@ -52,18 +55,18 @@ export async function GET() {
 
     return NextResponse.json(formattedWorkers);
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching users:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch users',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch users',
+      code: 'USERS_READ_FAILED',
+      route: '/api/users',
+      method: 'GET',
+      request,
+    });
   }
 }

@@ -22,6 +22,7 @@ Vault operacional do projeto DMS Web. Esta documentacao reflete o codigo observa
 - [[Operacao/Setup-local]]: setup local e variaveis.
 - [[Operacao/Comandos-e-validacao]]: comandos verificados, build, lint e audit.
 - [[Operacao/Jobs-e-feature-flags]]: cron, runner, secrets e flags de migracao.
+- [[Operacao/Observabilidade-e-logs]]: logs estruturados, request id, redacao e contrato de erro API.
 - [[Operacao/PDF-e-sanitizacao]]: engine PDF, headers, locale e sanitizacao server-side de notices.
 - [[Operacao/Seed-e-dados-locais]]: seed Prisma, contas de teste e dados criados.
 - [[Operacao/Qualidade-e-riscos]]: riscos tecnicos observados.

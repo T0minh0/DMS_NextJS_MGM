@@ -39,6 +39,7 @@ npx prisma db seed
 | `DMS_FEATURE_NOTICES` | Nao | Flag opt-in para mural de avisos |
 | `DMS_FEATURE_REPORTS` | Nao | Flag opt-in para reports novos |
 | `DMS_DEBUG_ENDPOINTS_ENABLED` | Nao | Habilita `/api/debug/*` em producao somente para admin; nao habilita `create-test-user` |
+| `DMS_TRUST_PROXY_HEADERS` | Nao | Quando `true`, login usa `cf-connecting-ip`, `x-real-ip` ou `x-forwarded-for` para bucket de rate limit; habilitar apenas atras de proxy confiavel que sobrescreva esses headers |
 | `MONGODB_URI` | Nao | Comentada como legado no `env.example` |
 | `MONGODB_DB` | Nao | Comentada como legado no `env.example` |
 | `NODE_ENV` | Nao | Controla cookie `secure` e bloqueia endpoints debug em producao sem flag |
@@ -57,6 +58,10 @@ npx prisma db seed
 | `npm run check:whitespace` | OK | Varre arquivos de texto tracked e untracked |
 | `npm run quality` | OK | Gate completo local |
 | `npm audit` | OK | 0 vulnerabilidades apos atualizacao de lockfile e override de `postcss` |
+
+## Logs locais
+
+`npm run dev` escreve logs estruturados no terminal. Para correlacionar uma chamada manual, envie `x-request-id` ou `x-correlation-id` e busque esse valor na saida. O formato detalhado esta em [[Operacao/Observabilidade-e-logs]].
 
 ## Banco
 

@@ -3,11 +3,12 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
 const TEST_CPF = '12345678900';
 const TEST_PASSWORD = 'test123';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requireAdmin();
 
@@ -18,10 +19,11 @@ export async function GET() {
 
     const cooperative = await prisma.cooperative.findFirst();
     if (!cooperative) {
-      return NextResponse.json(
-        { message: 'Nenhuma cooperativa cadastrada. Execute o seed primeiro.' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nenhuma cooperativa cadastrada. Execute o seed primeiro.',
+        code: 'DEBUG_COOPERATIVE_REQUIRED',
+        status: 400,
+      });
     }
 
     const hashedPassword = await bcrypt.hash(TEST_PASSWORD, 10);
@@ -77,15 +79,18 @@ export async function GET() {
       },
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error creating test user:', error);
-    return NextResponse.json(
-      { message: 'Server error', error: String(error) },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Server error',
+      code: 'DEBUG_TEST_USER_FAILED',
+      route: '/api/debug/create-test-user',
+      method: 'GET',
+      request,
+    });
   }
 }

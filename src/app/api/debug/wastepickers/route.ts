@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { formatWorkerId } from '@/lib/db-utils';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 
 const MODEL_LIST = [
   'Workers',
@@ -17,7 +18,7 @@ const MODEL_LIST = [
   'Groups',
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requireAdmin();
     const disabledResponse = getDebugRouteDisabledResponse();
@@ -72,15 +73,18 @@ export async function GET() {
 
     return NextResponse.json(response);
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error in debug endpoint:', error);
-    return NextResponse.json(
-      { message: 'Error in debug endpoint', error: String(error) },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Error in debug endpoint',
+      code: 'DEBUG_WASTEPICKERS_FAILED',
+      route: '/api/debug/wastepickers',
+      method: 'GET',
+      request,
+    });
   }
 }

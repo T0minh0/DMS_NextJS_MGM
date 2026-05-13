@@ -103,13 +103,14 @@ npm test
 
 Resultado observado:
 
-- 24 testes passaram.
+- 31 testes passaram.
 - Cobre assinatura/verificacao JWT server-side.
 - Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo proxy.
 - Cobre que rotas `/api/*.json` continuam protegidas e nao sao tratadas como assets publicos.
 - Cobre ausencia de fallback e rejeicao de `JWT_SECRET` fraco em producao.
 - Cobre matriz RBAC e bloqueios de escopo admin/manager/worker.
 - Cobre bloqueio de endpoints debug em producao sem `DMS_DEBUG_ENDPOINTS_ENABLED=true`.
+- Cobre redacao de logs estruturados, contrato de erro API, `auth.rejected` com request id, guard de login anti-enumeracao/rate limit, mascara de documentos pessoais e eventos de lifecycle de jobs.
 - Cobre checker de whitespace em CRLF e arquivos limpos.
 - Cobre feature flags, segredo de job, bearer token interno e idempotencia de reexecucao.
 - Cobre POC PDF com bytes `%PDF-`, headers de download, sanitizacao de filename e sanitizacao de notices contra XSS, incluindo `svg onload` e atributos perigosos em tag permitida.

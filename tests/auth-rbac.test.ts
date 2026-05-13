@@ -20,6 +20,7 @@ import {
   signAuthToken,
   verifyAuthToken,
 } from '../src/lib/auth/server';
+import { scopedSaleWhere, scopedWorkerWhere } from '../src/lib/auth/scoped-queries';
 
 Object.defineProperty(globalThis, 'crypto', {
   value: globalThis.crypto ?? webcrypto,
@@ -115,7 +116,10 @@ test('proxy does not treat API paths with public file extensions as public asset
   const body = await response.json();
 
   assert.equal(response.status, 401);
-  assert.deepEqual(body, { message: 'Unauthorized' });
+  assert.equal(body.error, 'Unauthorized');
+  assert.equal(body.message, 'Unauthorized');
+  assert.equal(body.code, 'UNAUTHORIZED');
+  assert.equal(typeof body.requestId, 'string');
 });
 
 test('production runtime refuses JWT secret fallback', () => {
@@ -202,6 +206,31 @@ test('worker scope allows admin and manager targeting but limits worker to self'
   );
 });
 
+test('scoped query helpers hide out-of-scope sales and workers from managers', () => {
+  assert.deepEqual(scopedWorkerWhere(adminSession, BigInt(20)), { workerId: BigInt(20) });
+  assert.deepEqual(scopedWorkerWhere(managerSession, BigInt(20)), {
+    workerId: BigInt(20),
+    cooperative: BigInt(100),
+  });
+  assert.deepEqual(scopedWorkerWhere(workerSession, BigInt(20)), {
+    workerId: BigInt(20),
+    cooperative: BigInt(100),
+    AND: [{ workerId: BigInt(20) }],
+  });
+  assert.deepEqual(scopedWorkerWhere(workerSession, BigInt(21)), {
+    workerId: BigInt(20),
+    cooperative: BigInt(100),
+    AND: [{ workerId: BigInt(21) }],
+  });
+  assert.deepEqual(scopedSaleWhere(adminSession, BigInt(77)), { saleId: BigInt(77) });
+  assert.deepEqual(scopedSaleWhere(managerSession, BigInt(77)), {
+    saleId: BigInt(77),
+    responsibleRef: {
+      cooperative: BigInt(100),
+    },
+  });
+});
+
 test('debug routes are disabled in production unless explicitly enabled', async () => {
   const previousNodeEnv = process.env.NODE_ENV;
   const previousDebugFlag = process.env.DMS_DEBUG_ENDPOINTS_ENABLED;
@@ -215,13 +244,20 @@ test('debug routes are disabled in production unless explicitly enabled', async 
     mutableEnv.NODE_ENV = 'production';
     let response = getDebugRouteDisabledResponse();
     assert.equal(response?.status, 404);
-    assert.deepEqual(await response?.json(), { message: 'Debug endpoint disabled' });
+    assert.equal(response?.headers.get('x-request-id')?.length, 36);
+    let body = await response?.json();
+    assert.equal(body.error, 'Debug endpoint disabled');
+    assert.equal(body.message, 'Debug endpoint disabled');
+    assert.equal(body.code, 'DEBUG_ENDPOINT_DISABLED');
+    assert.equal(typeof body.requestId, 'string');
 
     mutableEnv.DMS_DEBUG_ENDPOINTS_ENABLED = 'true';
     assert.equal(getDebugRouteDisabledResponse(), null);
 
     response = getDebugRouteDisabledResponse({ allowProductionOverride: false });
     assert.equal(response?.status, 404);
+    body = await response?.json();
+    assert.equal(body.code, 'DEBUG_ENDPOINT_DISABLED');
   } finally {
     mutableEnv.NODE_ENV = previousNodeEnv;
     mutableEnv.DMS_DEBUG_ENDPOINTS_ENABLED = previousDebugFlag;

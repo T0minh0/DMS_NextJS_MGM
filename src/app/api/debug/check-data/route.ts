@@ -3,8 +3,9 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber, formatWorkerId } from '@/lib/db-utils';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requireAdmin();
     const disabledResponse = getDebugRouteDisabledResponse();
@@ -106,18 +107,18 @@ export async function GET() {
 
     return NextResponse.json(debugInfo);
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Debug check error:', error);
-    return NextResponse.json(
-      {
-        error: 'Debug check failed',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Debug check failed',
+      code: 'DEBUG_CHECK_FAILED',
+      route: '/api/debug/check-data',
+      method: 'GET',
+      request,
+    });
   }
 }

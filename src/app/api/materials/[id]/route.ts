@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
 type MaterialWithGroup = Prisma.MaterialsGetPayload<{
   include: { group: true };
@@ -34,10 +35,11 @@ export async function PUT(
     const { id: idParam } = await params;
     const id = parseMaterialId(idParam);
     if (id === null) {
-      return NextResponse.json(
-        { error: 'ID de material inválido' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'ID de material inválido',
+        code: 'INVALID_MATERIAL_ID',
+        status: 400,
+      });
     }
 
     const body = await request.json();
@@ -45,10 +47,11 @@ export async function PUT(
     const groupName = body.group?.trim();
 
     if (!materialName || !groupName) {
-      return NextResponse.json(
-        { error: 'Nome do material e grupo são obrigatórios' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nome do material e grupo são obrigatórios',
+        code: 'REQUIRED_MATERIAL_FIELDS',
+        status: 400,
+      });
     }
 
     const existingMaterial = await prisma.materials.findUnique({
@@ -57,10 +60,11 @@ export async function PUT(
     });
 
     if (!existingMaterial) {
-      return NextResponse.json(
-        { error: 'Material não encontrado' },
-        { status: 404 },
-      );
+      return apiErrorResponse({
+        message: 'Material não encontrado',
+        code: 'MATERIAL_NOT_FOUND',
+        status: 404,
+      });
     }
 
     const duplicateMaterial = await prisma.materials.findFirst({
@@ -74,10 +78,11 @@ export async function PUT(
     });
 
     if (duplicateMaterial) {
-      return NextResponse.json(
-        { error: 'Já existe outro material com este nome' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Já existe outro material com este nome',
+        code: 'MATERIAL_NAME_CONFLICT',
+        status: 400,
+      });
     }
 
     let group = await prisma.groups.findFirst({
@@ -110,19 +115,19 @@ export async function PUT(
       material: formatMaterial(updatedMaterial as MaterialWithGroup),
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error updating material:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao atualizar material',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao atualizar material',
+      code: 'MATERIAL_UPDATE_FAILED',
+      route: '/api/materials/[id]',
+      method: 'PUT',
+      request,
+    });
   }
 }
 
@@ -135,10 +140,11 @@ export async function DELETE(
     const { id: idParam } = await params;
     const id = parseMaterialId(idParam);
     if (id === null) {
-      return NextResponse.json(
-        { error: 'ID de material inválido' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'ID de material inválido',
+        code: 'INVALID_MATERIAL_ID',
+        status: 400,
+      });
     }
 
     const existingMaterial = await prisma.materials.findUnique({
@@ -146,10 +152,11 @@ export async function DELETE(
     });
 
     if (!existingMaterial) {
-      return NextResponse.json(
-        { error: 'Material não encontrado' },
-        { status: 404 },
-      );
+      return apiErrorResponse({
+        message: 'Material não encontrado',
+        code: 'MATERIAL_NOT_FOUND',
+        status: 404,
+      });
     }
 
     const [measurementUsage, salesUsage, stockUsage, contributionUsage] =
@@ -166,13 +173,12 @@ export async function DELETE(
       stockUsage > 0 ||
       contributionUsage > 0
     ) {
-      return NextResponse.json(
-        {
-          error:
-            'Este material não pode ser excluído pois está sendo usado em medições, vendas, estoque ou contribuições',
-        },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message:
+          'Este material não pode ser excluído pois está sendo usado em medições, vendas, estoque ou contribuições',
+        code: 'MATERIAL_DELETE_HAS_DEPENDENCIES',
+        status: 400,
+      });
     }
 
     await prisma.materials.delete({
@@ -184,18 +190,18 @@ export async function DELETE(
       message: 'Material excluído com sucesso',
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, _request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error deleting material:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao excluir material',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao excluir material',
+      code: 'MATERIAL_DELETE_FAILED',
+      route: '/api/materials/[id]',
+      method: 'DELETE',
+      request: _request,
+    });
   }
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import { authErrorResponse, requireManagerOrAdmin } from '@/lib/auth/server';
+import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
 export async function POST(request: Request) {
   try {
@@ -8,25 +10,35 @@ export async function POST(request: Request) {
     const { id } = await request.json();
 
     if (!id) {
-      return NextResponse.json({ message: 'ID do usuário é obrigatório' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID do usuário é obrigatório',
+        code: 'REQUIRED_USER_ID',
+        status: 400,
+      });
     }
 
     let workerId: bigint;
     try {
       workerId = BigInt(id);
     } catch {
-      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID inválido',
+        code: 'INVALID_USER_ID',
+        status: 400,
+      });
     }
 
-    const existing = await prisma.workers.findUnique({
-      where: { workerId },
+    const existing = await prisma.workers.findFirst({
+      where: scopedWorkerWhere(session, workerId),
     });
 
     if (!existing) {
-      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+      return apiErrorResponse({
+        message: 'Usuário não encontrado',
+        code: 'USER_NOT_FOUND',
+        status: 404,
+      });
     }
-
-    determineTargetCooperative(session, existing.cooperative);
 
     const [salesUsage, measurementUsage, contributionsUsage] = await Promise.all([
       prisma.sales.count({ where: { responsible: workerId } }),
@@ -35,13 +47,12 @@ export async function POST(request: Request) {
     ]);
 
     if (salesUsage > 0 || measurementUsage > 0 || contributionsUsage > 0) {
-      return NextResponse.json(
-        {
-          message:
-            'Não é possível excluir este usuário. Existem registros de vendas, medições ou contribuições associados.',
-        },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message:
+          'Não é possível excluir este usuário. Existem registros de vendas, medições ou contribuições associados.',
+        code: 'USER_DELETE_HAS_DEPENDENCIES',
+        status: 400,
+      });
     }
 
     await prisma.workers.delete({
@@ -50,12 +61,18 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'Usuário excluído com sucesso' }, { status: 200 });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error deleting user:', error);
-    return NextResponse.json({ message: 'Erro ao excluir usuário' }, { status: 500 });
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao excluir usuário',
+      code: 'USER_DELETE_FAILED',
+      route: '/api/users/delete',
+      method: 'POST',
+      request,
+    });
   }
 }

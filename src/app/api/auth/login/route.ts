@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { AUTH_COOKIE_NAME, AUTH_TOKEN_TTL_SECONDS, mapDatabaseUserTypeToRole, roleToUserType } from '@/lib/auth/shared';
 import { signAuthToken } from '@/lib/auth/server';
+import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
+import {
+  clearLoginFailures,
+  comparePasswordWithDummy,
+  getLoginRateLimit,
+  recordLoginFailure,
+} from '@/lib/auth/login-guard';
 import {
   decodeBytes,
   formatWorkerId,
   sanitizeDigits,
 } from '@/lib/db-utils';
+import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
 
 interface RawWorker {
   workerId: bigint;
@@ -27,23 +34,36 @@ interface RawWorker {
   lastUpdate: Date | null;
 }
 
-function isBcryptHash(value: string) {
-  return /^\$2[abxy]\$/.test(value);
-}
-
 export async function POST(request: Request) {
+  const context = createLogContext(request, { domain: 'auth' });
+
   try {
     const body = await request.json();
     const { cpf, password } = body as { cpf?: string; password?: string };
 
     if (!cpf || !password) {
-      return NextResponse.json(
-        { message: 'CPF e senha são obrigatórios' },
-        { status: 400 },
-      );
+      logWarn('auth.login.missing_credentials', context);
+      return apiErrorResponse({
+        message: 'CPF e senha são obrigatórios',
+        code: 'LOGIN_MISSING_CREDENTIALS',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     const normalizedCpf = sanitizeDigits(cpf);
+    const rateLimit = getLoginRateLimit(request, normalizedCpf);
+    if (rateLimit.limited) {
+      logWarn('auth.login.rate_limited', context, {
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      });
+      return apiErrorResponse({
+        message: 'Muitas tentativas de login. Tente novamente mais tarde.',
+        code: 'TOO_MANY_LOGIN_ATTEMPTS',
+        status: 429,
+        requestId: context.requestId,
+      });
+    }
 
     const workers = await prisma.$queryRaw<RawWorker[]>`
       SELECT
@@ -67,45 +87,59 @@ export async function POST(request: Request) {
     `;
 
     const worker = workers[0];
+    const role = worker ? mapDatabaseUserTypeToRole(worker.userType) : null;
+    const storedPassword = worker ? decodeBytes(worker.password) : null;
+    const { passwordIsValid, usedLegacyPassword } = await comparePasswordWithDummy(
+      password,
+      storedPassword,
+    );
 
-    if (!worker) {
-      return NextResponse.json(
-        { message: 'Usuário não encontrado' },
-        { status: 401 },
-      );
+    if (usedLegacyPassword && worker) {
+      logWarn('auth.login.legacy_password_rejected', context, {
+        workerId: worker.workerId.toString(),
+        role: role ?? 'unknown',
+      });
     }
 
-    const role = mapDatabaseUserTypeToRole(worker.userType);
+    if (!worker || !passwordIsValid) {
+      recordLoginFailure(request, normalizedCpf);
+      logWarn('auth.login.invalid_credentials', context, {
+        reason: worker ? 'password_mismatch' : 'user_not_found',
+        workerId: worker?.workerId.toString(),
+        role: role ?? undefined,
+      });
+      return apiErrorResponse({
+        message: 'Credenciais inválidas',
+        code: 'INVALID_CREDENTIALS',
+        status: 401,
+        requestId: context.requestId,
+      });
+    }
 
     if (!role) {
-      return NextResponse.json(
-        { message: 'Tipo de usuário inválido' },
-        { status: 403 },
-      );
+      recordLoginFailure(request, normalizedCpf);
+      logWarn('auth.login.invalid_user_type', context, { workerId: worker.workerId.toString() });
+      return apiErrorResponse({
+        message: 'Tipo de usuário inválido',
+        code: 'INVALID_USER_TYPE',
+        status: 403,
+        requestId: context.requestId,
+      });
     }
 
     if (role === 'worker') {
-      return NextResponse.json(
-        { message: 'Acesso restrito apenas para gerentes' },
-        { status: 403 },
-      );
-    }
-
-    const storedPassword = decodeBytes(worker.password);
-
-    let passwordIsValid = false;
-
-    if (isBcryptHash(storedPassword)) {
-      passwordIsValid = await bcrypt.compare(password, storedPassword);
-    } else if (storedPassword) {
-      console.warn('Rejected login for worker with non-bcrypt password hash');
-    }
-
-    if (!passwordIsValid) {
-      return NextResponse.json(
-        { message: 'Senha incorreta' },
-        { status: 401 },
-      );
+      recordLoginFailure(request, normalizedCpf);
+      logWarn('auth.login.web_role_denied', context, {
+        role,
+        workerId: worker.workerId.toString(),
+        cooperativeId: worker.cooperative.toString(),
+      });
+      return apiErrorResponse({
+        message: 'Acesso restrito apenas para gerentes',
+        code: 'WEB_ROLE_DENIED',
+        status: 403,
+        requestId: context.requestId,
+      });
     }
 
     const fullName = worker.workerName || 'Usuário';
@@ -136,6 +170,13 @@ export async function POST(request: Request) {
       maxAge: AUTH_TOKEN_TTL_SECONDS,
       sameSite: 'strict',
     });
+    clearLoginFailures(request, normalizedCpf);
+
+    logInfo('auth.login.succeeded', context, {
+      workerId: workerId.toString(),
+      cooperativeId: worker.cooperative.toString(),
+      role,
+    });
 
     return NextResponse.json({
       message: 'Login realizado com sucesso',
@@ -155,10 +196,12 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
-    return NextResponse.json(
-      { message: 'Erro no servidor' },
-      { status: 500 },
-    );
+    return apiInternalErrorResponse({
+      message: 'Erro no servidor',
+      code: 'LOGIN_INTERNAL_ERROR',
+      context,
+      event: 'auth.login.failed',
+      error,
+    });
   }
 }

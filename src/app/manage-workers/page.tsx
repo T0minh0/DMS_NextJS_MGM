@@ -24,7 +24,10 @@ interface User {
   user_type: number;
   PIS?: string;
   RG?: string;
+  pis?: string;
+  rg?: string;
   birthdate?: string;
+  birth_date?: string;
   enter_date?: string;
   exit_date?: string | null;
   gender?: string | null;
@@ -164,21 +167,44 @@ export default function ManageWorkersPage() {
   };
 
   // Open modal to edit an existing user
-  const openEditModal = (user: User) => {
+  const openEditModal = async (user: User) => {
+    const userId = user._id || user.id;
+    let editableUser = user;
+
+    try {
+      const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+      if (!response.ok) {
+        throw new Error('Erro ao carregar dados completos do usuário');
+      }
+
+      const detail = await response.json();
+      editableUser = {
+        ...user,
+        ...detail,
+        _id: userId,
+        id: detail.id ?? userId,
+        birthdate: detail.birth_date ?? user.birthdate,
+      };
+    } catch (error) {
+      console.error('Error loading editable user details:', error);
+      setError(error instanceof Error ? error.message : 'Erro ao carregar dados completos do usuário');
+      return;
+    }
+
     setModalMode('edit');
-    setCurrentUserId(user._id || user.id);
-    setFullName(user.full_name || '');
-    setCpf(user.CPF || user.cpf || '');
-    setEmail(user.email || '');
-    setPhone(user.phone || '');
-    setPis(user.PIS || '');
-    setRg(user.RG || '');
-    setUserType(user.user_type);
-    setBirthDate(formatDateForInput(user.birthdate));
-    setEnterDate(formatDateForInput(user.enter_date));
-    setExitDate(formatDateForInput(user.exit_date));
-    setGender(user.gender || '');
-    setCooperativeId(user.cooperative_id || cooperatives[0]?.cooperative_id || cooperativeId);
+    setCurrentUserId(userId);
+    setFullName(editableUser.full_name || '');
+    setCpf(editableUser.CPF || editableUser.cpf || '');
+    setEmail(editableUser.email || '');
+    setPhone(editableUser.phone || '');
+    setPis(editableUser.PIS || editableUser.pis || '');
+    setRg(editableUser.RG || editableUser.rg || '');
+    setUserType(editableUser.user_type);
+    setBirthDate(formatDateForInput(editableUser.birthdate || editableUser.birth_date));
+    setEnterDate(formatDateForInput(editableUser.enter_date));
+    setExitDate(formatDateForInput(editableUser.exit_date));
+    setGender(editableUser.gender || '');
+    setCooperativeId(editableUser.cooperative_id || cooperatives[0]?.cooperative_id || cooperativeId);
     setPassword('');
     setConfirmPassword('');
     setShowModal(true);

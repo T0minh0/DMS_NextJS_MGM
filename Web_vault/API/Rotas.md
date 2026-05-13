@@ -45,7 +45,7 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 
 - IDs `BigInt` geralmente saem como string; algumas respostas legadas tambem incluem `Number(...)`.
 - `Decimal` Prisma e convertido para `number` com `decimalToNumber`.
-- Documentos pessoais (`CPF`, `PIS`, `RG`) sao guardados como `Bytes` e expostos como string apos `decodeBytes`.
+- Documentos pessoais (`CPF`, `PIS`, `RG`) sao guardados como `Bytes`; listagens de usuarios retornam valores mascarados e detalhes autorizados usam `decodeBytes`.
 - Mutacoes de usuario/material/venda retornam mensagens em pt-BR.
 - Erros de validacao usam status `400`; conflitos de CPF usam `409`; nao encontrado usa `404`; falhas internas usam `500`.
 

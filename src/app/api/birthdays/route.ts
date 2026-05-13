@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
     const targetCooperativeId = determineTargetCooperative(session);
@@ -36,18 +37,18 @@ export async function GET() {
 
     return NextResponse.json(formatted);
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching birthdays:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch birthdays data',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch birthdays data',
+      code: 'BIRTHDAYS_READ_FAILED',
+      route: '/api/birthdays',
+      method: 'GET',
+      request,
+    });
   }
 }

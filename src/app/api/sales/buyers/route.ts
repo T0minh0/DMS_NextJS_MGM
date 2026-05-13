@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
     requireScopedPermission(session, 'sales', 'read', 'cooperative');
@@ -18,19 +19,19 @@ export async function GET() {
       count: names.length,
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching buyers:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch buyers',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch buyers',
+      code: 'BUYERS_READ_FAILED',
+      route: '/api/sales/buyers',
+      method: 'GET',
+      request,
+    });
   }
 }
 
@@ -43,7 +44,11 @@ export async function POST(request: NextRequest) {
 
     const buyerName = buyer?.trim();
     if (!buyerName) {
-      return NextResponse.json({ error: 'Nome do comprador é obrigatório' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Nome do comprador é obrigatório',
+        code: 'REQUIRED_BUYER_NAME',
+        status: 400,
+      });
     }
 
     const existing = await prisma.buyers.findFirst({
@@ -56,7 +61,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json({ error: 'Este comprador já existe na lista' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Este comprador já existe na lista',
+        code: 'BUYER_NAME_CONFLICT',
+        status: 400,
+      });
     }
 
     await prisma.buyers.create({
@@ -72,18 +81,18 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error adding buyer:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao adicionar comprador',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao adicionar comprador',
+      code: 'BUYER_CREATE_FAILED',
+      route: '/api/sales/buyers',
+      method: 'POST',
+      request,
+    });
   }
 }

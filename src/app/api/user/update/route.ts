@@ -4,10 +4,11 @@ import prisma from '@/lib/prisma';
 import {
   authErrorResponse,
   determineTargetCooperative,
-  determineTargetWorker,
   requireAuth,
   requireScopedPermission,
 } from '@/lib/auth/server';
+import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
@@ -16,22 +17,34 @@ export async function POST(request: Request) {
     const { id, full_name, email, PIS, RG } = await request.json();
 
     if (!id) {
-      return NextResponse.json({ message: 'ID do usuário é obrigatório' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID do usuário é obrigatório',
+        code: 'REQUIRED_USER_ID',
+        status: 400,
+      });
     }
 
     let workerId: bigint;
     try {
-      workerId = BigInt(determineTargetWorker(session, id, { required: true }));
+      workerId = BigInt(id);
     } catch {
-      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID inválido',
+        code: 'INVALID_USER_ID',
+        status: 400,
+      });
     }
 
-    const worker = await prisma.workers.findUnique({
-      where: { workerId },
+    const worker = await prisma.workers.findFirst({
+      where: scopedWorkerWhere(session, workerId),
     });
 
     if (!worker) {
-      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+      return apiErrorResponse({
+        message: 'Usuário não encontrado',
+        code: 'USER_NOT_FOUND',
+        status: 404,
+      });
     }
 
     const isSelfUpdate = worker.workerId.toString() === session.workerId;
@@ -71,12 +84,18 @@ export async function POST(request: Request) {
       updated: true,
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error updating user profile:', error);
-    return NextResponse.json({ message: 'Erro ao atualizar perfil' }, { status: 500 });
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao atualizar perfil',
+      code: 'USER_PROFILE_UPDATE_FAILED',
+      route: '/api/user/update',
+      method: 'POST',
+      request,
+    });
   }
 }

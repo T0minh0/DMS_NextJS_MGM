@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber, formatWorkerId } from '@/lib/db-utils';
 
 type PeriodType = 'weekly' | 'monthly' | 'yearly';
@@ -64,7 +65,11 @@ async function resolveMaterialFilter(materialParam: string | null) {
     return { ids: [BigInt(materialParam)] };
   } catch {
     return {
-      error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }),
+      error: apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+      }),
     };
   }
 }
@@ -237,18 +242,18 @@ export async function GET(request: Request) {
       data: formatted,
     });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching worker collections:', error);
-    return NextResponse.json(
-      {
-        noData: true,
-        message: 'Erro ao buscar dados de coletas. Por favor, tente novamente mais tarde.',
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao buscar dados de coletas. Por favor, tente novamente mais tarde.',
+      code: 'WORKER_COLLECTIONS_READ_FAILED',
+      route: '/api/worker-collections',
+      method: 'GET',
+      request,
+    });
   }
 }

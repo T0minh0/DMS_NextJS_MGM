@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 import {
   decodeBytes,
   formatWorkerId,
   mapUserType,
-  sanitizeDigits,
 } from '@/lib/db-utils';
+import { maskCpf, maskPis, maskRg } from '@/lib/privacy/pii';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await requireAdmin();
     const users = await prisma.workers.findMany({
@@ -16,12 +17,13 @@ export async function GET() {
     });
 
     const formattedUsers = users.map((user) => {
-      const cpf = sanitizeDigits(decodeBytes(user.cpf));
+      const cpf = maskCpf(decodeBytes(user.cpf));
       const pis = decodeBytes(user.pis);
       const rg = decodeBytes(user.rg);
       const userType = mapUserType(user.userType);
 
       return {
+        _id: user.workerId.toString(),
         id: user.workerId.toString(),
         worker_id: Number(user.workerId),
         user_id: Number(user.workerId),
@@ -34,10 +36,10 @@ export async function GET() {
         cooperative_id: user.cooperative.toString(),
         CPF: cpf,
         cpf,
-        PIS: pis,
-        pis,
-        RG: rg,
-        rg,
+        PIS: maskPis(pis),
+        pis: maskPis(pis),
+        RG: maskRg(rg),
+        rg: maskRg(rg),
         gender: user.gender,
         birthdate: user.birthDate,
         enter_date: user.enterDate,
@@ -49,15 +51,18 @@ export async function GET() {
 
     return NextResponse.json(formattedUsers, { status: 200 });
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Failed to fetch users:', error);
-    return NextResponse.json(
-      { message: 'Falha ao buscar usuários' },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Falha ao buscar usuários',
+      code: 'USERS_ALL_READ_FAILED',
+      route: '/api/users/all',
+      method: 'GET',
+      request,
+    });
   }
 }

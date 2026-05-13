@@ -1,3 +1,11 @@
+import {
+  createRequestId,
+  LogContext,
+  logError,
+  logInfo,
+  logWarn,
+} from '@/lib/observability/logger';
+
 export type JobName =
   | 'monthly-random-multiplier'
   | 'achievement-evaluation'
@@ -32,6 +40,10 @@ export interface JobRunLedger {
   fail(key: string, error: unknown): Promise<void>;
 }
 
+export interface RunIdempotentJobOptions {
+  context?: Partial<LogContext>;
+}
+
 export type RunIdempotentJobResult<T> =
   | { status: 'completed'; key: string; result: T }
   | { status: 'skipped'; key: string; reason: 'already_running' | 'already_completed' };
@@ -64,10 +76,22 @@ export async function runIdempotentJob<T>(
   ledger: JobRunLedger,
   key: string,
   execute: () => Promise<T>,
+  options: RunIdempotentJobOptions = {},
 ): Promise<RunIdempotentJobResult<T>> {
+  const context: LogContext = {
+    requestId: options.context?.requestId ?? createRequestId(),
+    domain: 'job',
+    ...options.context,
+  };
   const claim = await ledger.claim(key);
 
   if (!claim.acquired) {
+    logWarn('job.skipped', context, {
+      key,
+      reason: claim.reason ?? 'already_running',
+      attempts: claim.record?.attempts,
+    });
+
     return {
       status: 'skipped',
       key,
@@ -75,13 +99,27 @@ export async function runIdempotentJob<T>(
     };
   }
 
+  logInfo('job.started', context, {
+    key,
+    attempts: claim.record?.attempts,
+  });
+
   try {
     const result = await execute();
     await ledger.complete(key, result);
 
+    logInfo('job.completed', context, {
+      key,
+      attempts: claim.record?.attempts,
+    });
+
     return { status: 'completed', key, result };
   } catch (error) {
     await ledger.fail(key, error);
+    logError('job.failed', context, error, {
+      key,
+      attempts: claim.record?.attempts,
+    });
     throw error;
   }
 }

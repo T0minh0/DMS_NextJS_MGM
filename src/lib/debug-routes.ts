@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { apiErrorResponse } from '@/lib/api/errors';
 
 export function getDebugRouteDisabledResponse(options: { allowProductionOverride?: boolean } = {}) {
   const allowProductionOverride = options.allowProductionOverride ?? true;
@@ -6,10 +6,11 @@ export function getDebugRouteDisabledResponse(options: { allowProductionOverride
     allowProductionOverride && process.env.DMS_DEBUG_ENDPOINTS_ENABLED === 'true';
 
   if (process.env.NODE_ENV === 'production' && !enabledInProduction) {
-    return NextResponse.json(
-      { message: 'Debug endpoint disabled' },
-      { status: 404 },
-    );
+    return apiErrorResponse({
+      message: 'Debug endpoint disabled',
+      code: 'DEBUG_ENDPOINT_DISABLED',
+      status: 404,
+    });
   }
 
   return null;

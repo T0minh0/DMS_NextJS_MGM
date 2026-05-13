@@ -7,6 +7,7 @@ import {
   requireManagerOrAdmin,
   requireScopedPermission,
 } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
 function formatCooperative(cooperative: { cooperativeId: bigint; cooperativeName: string }) {
   const id = cooperative.cooperativeId.toString();
@@ -17,7 +18,7 @@ function formatCooperative(cooperative: { cooperativeId: bigint; cooperativeName
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
     const targetCooperativeId = determineTargetCooperative(session);
@@ -30,19 +31,19 @@ export async function GET() {
 
     return NextResponse.json(cooperatives.map(formatCooperative));
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error fetching cooperatives:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch cooperatives',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch cooperatives',
+      code: 'COOPERATIVES_READ_FAILED',
+      route: '/api/cooperatives',
+      method: 'GET',
+      request,
+    });
   }
 }
 
@@ -53,10 +54,11 @@ export async function POST(request: NextRequest) {
     const name = body.name?.trim();
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Nome da cooperativa é obrigatório' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nome da cooperativa é obrigatório',
+        code: 'REQUIRED_COOPERATIVE_NAME',
+        status: 400,
+      });
     }
 
     const created = await prisma.cooperative.create({
@@ -72,18 +74,18 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    const authResponse = authErrorResponse(error);
+    const authResponse = authErrorResponse(error, request);
     if (authResponse) {
       return authResponse;
     }
 
-    console.error('Error creating cooperative:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao criar cooperativa',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao criar cooperativa',
+      code: 'COOPERATIVE_CREATE_FAILED',
+      route: '/api/cooperatives',
+      method: 'POST',
+      request,
+    });
   }
 }

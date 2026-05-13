@@ -15,7 +15,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | Papel de produto | Mapeamento atual | Escopo | Rotas alvo | Acoes permitidas | Dados visiveis | Testes negativos obrigatorios |
 | --- | --- | --- | --- | --- | --- | --- |
 | Admin do sistema | `admin` | Global e por cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, futuras `/notices`, `/reports`, area admin/dev | Configurar cooperativas, materiais globais, usuarios, recalc, debug dev-only, leitura e suporte cross-cooperativa | Dados operacionais globais; PII apenas quando necessario para suporte ou cadastro | Manager nao acessa acoes globais; usuario sem sessao recebe `401`/redirect; debug exige admin e flag/dev quando aplicavel |
-| Gerente da cooperativa | `manager` | Somente propria cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, futuras `/notices`, `/reports` | Acompanhar painel, estoque, vendas, equipe, produtividade, avisos e relatorios da cooperativa | Alvo: dados da propria cooperativa com documentos pessoais mascarados por padrao. Atual: APIs de usuarios ainda expoem PII completa e S5-05 deve corrigir. | Nao ve outra cooperativa; nao executa recalc/debug global; nao cria recurso admin-only sem permissao server-side |
+| Gerente da cooperativa | `manager` | Somente propria cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, futuras `/notices`, `/reports` | Acompanhar painel, estoque, vendas, equipe, produtividade, avisos e relatorios da cooperativa | Dados da propria cooperativa com documentos mascarados em listagens; detalhe completo apenas em edicao/perfil autorizado | Nao ve outra cooperativa; nao executa recalc/debug global; nao cria recurso admin-only sem permissao server-side |
 | Operador interno / gestao operacional | Gap: hoje cairia em `manager` | Propria cooperativa, subconjunto operacional | `/`, `/materials`, `/sales`, futuras filas de pendencias | Registrar pesagens/ajustes operacionais, acompanhar venda e estoque, resolver pendencias atribuidas | Dados operacionais sem PII completa e sem configuracao sensivel | Nao gerencia usuarios, PII, cooperativas, debug ou relatorios financeiros completos |
 | Visualizador de relatorios | Gap: hoje cairia em `manager` | Propria cooperativa, leitura | `/`, futuras `/reports`, subconjunto de `/sales` e `/worker-productivity` | Filtrar, exportar e baixar relatorios aprovados | KPIs, relatorios e PDFs sem dados pessoais desnecessarios | Mutacoes em venda, estoque, usuario, aviso e admin retornam `403`; botoes de escrita nao aparecem |
 | Suporte tecnico autorizado | Gap: hoje cairia em `admin` | Auditado, temporario e minimizado | Futura area admin/dev, `/profile`; acesso operacional sob break-glass | Diagnosticar incidente, ler logs/healthchecks, acionar ferramentas dev-only com trilha | Minimo necessario; PII redigida por padrao | Sem feature flag ou janela ativa, suporte nao acessa debug; acesso cross-cooperativa exige trilha e motivo |
@@ -75,7 +75,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 - Entrada: nav `Equipe`.
 - Fluxo: buscar usuario, ver dados minimizados, criar/editar, desativar quando permitido, abrir produtividade.
 - Linguagem: usar `equipe` e `usuarios`; `catador` ou `trabalhador` apenas em campos de tipo, produtividade ou historico.
-- PII alvo: CPF/PIS/RG mascarados por padrao; revelar/editar somente em contexto explicito e permitido. Estado atual: `GET /api/users` retorna documentos completos para manager da cooperativa, entao S5-05 deve corrigir API/UI antes de qualquer aceite de production readiness.
+- PII alvo: CPF/PIS/RG mascarados por padrao; revelar/editar somente em contexto explicito e permitido. Estado atual: `GET /api/users` mascara documentos e `/manage-workers` busca detalhe autorizado somente ao editar.
 - Fixture S0-13: gerente, trabalhador ativo, trabalhador sem ID operacional, usuario desligado.
 - Teste negativo: usuario de outra cooperativa e PII completa nao aparecem para gerente comum.
 
@@ -151,7 +151,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | Pages protegidas | `src/proxy.ts` exige sessao, mas nao papel por pagina | UI deve esconder rotas por papel; API continua autoridade | S5-01 para nav role-aware |
 | Admin vs gerente no frontend | Dashboard usa `role` real para ferramentas admin; APIs continuam autoridade | Nao usar `userType` sozinho para comandos admin | Monitorar nas proximas tasks de UI |
 | Materiais | API cria/edita/deleta com `requireAdmin`; UI atual pode expor formulario | Gerente deve operar estoque da cooperativa, nao catalogo global sem permissao | S5-06 define UX e permissoes finas |
-| Usuarios/equipe | Manager/admin podem gerir usuarios da cooperativa; `GET /api/users` ainda retorna CPF/PIS/RG/email completos | PII deve ser mascarada por padrao e logs de payload devem sair | S5-05 para minimizacao de PII |
+| Usuarios/equipe | Manager/admin podem gerir usuarios da cooperativa; `GET /api/users` mascara CPF/PIS/RG e detalhe autorizado usa `/api/user` | PII deve continuar mascarada por padrao e logs de payload devem sair | S5-05 para UX refinada e auditoria de acesso a detalhe |
 | `/manage-workers` | A pagina usa `/api/users` com escopo server-side | Gerente deve usar contrato cooperativo seguro, nao endpoint global | S5-05 deve cobrir UX/PII e teste manager |
 | Debug/recalc | `/api/debug/*` exige admin e bloqueio em producao sem flag; recalc/assign/debug somem da UI gerencial | Dev-only/feature flag/admin auditado | Monitorar em QA de release |
 | Reports/PDF | Helpers e ADR existem; endpoints reais futuros | Reports devem exigir escopo e `runtime=nodejs` | S3-04/S3-05 |
@@ -173,7 +173,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 ## Criterios para proximas tasks UI
 
 - Toda tela nova deve declarar qual papel a usa, qual dado aparece, qual acao e primaria e qual teste negativo prova escopo.
-- Se a tela envolver equipe, produtividade ou documentos, PII vem mascarada por padrao. Enquanto `GET /api/users` devolver documentos completos, qualquer refactor de equipe deve falhar QA ou registrar accepted risk formal com dono e prazo.
+- Se a tela envolver equipe, produtividade ou documentos, PII vem mascarada por padrao. Fluxos que precisam editar documentos devem buscar detalhe por acao explicita e respeitar escopo server-side.
 - Se a tela envolver venda, estoque ou relatorio, a primeira tela deve mostrar unidade (`kg`, `BRL`, periodo e cooperativa).
 - Se uma acao depender de papel, esconder o botao nao basta: o endpoint deve retornar `401`/`403` corretamente.
 - Operador, visualizador e suporte nao podem ser habilitados como papeis reais ate existir RBAC server-side dedicado; antes disso sao apenas personas de desenho e UAT.

@@ -241,6 +241,8 @@ A primeira camada de navegacao deve refletir rotinas de gestao:
 
 Rotas ou acoes indisponiveis para o papel atual nao devem aparecer como comandos primarios. A UI pode esconder a navegacao, mas a protecao final precisa continuar no backend.
 
+O mapa operacional de papeis, jornadas, rotas, acoes permitidas, dados visiveis e testes negativos fica em `Web_vault/Planejamento/Jornadas-gerenciais-IA.md`. Esse documento e obrigatorio para tasks UI gerenciais: cada tela deve declarar o papel primario, a cooperativa/escopo, a PII visivel, a interacao principal e pelo menos um teste negativo de permissao quando houver auth, RBAC, estoque, venda, equipe, aviso ou relatorio. Quando o codigo atual divergir desse alvo, a task deve tratar como gap bloqueador ou registrar accepted risk formal; o mapa de IA nao substitui permissao server-side.
+
 ## Colors
 
 Use `background`, `surface`, `surface-alt` e `surface-elevated` para estrutura operacional escura. Use `primary` para acao principal, foco visivel, estados ativos e dados que precisam de atencao imediata. Use `secondary` apenas para destaque pontual, nunca como base dominante. Use `warning` para alerta, risco, recompensa ou valor financeiro que precise destaque controlado. Use `success` para conclusao, saude operacional e resultados positivos. Use `error` com texto e icone para erro, risco destrutivo ou bloqueio.

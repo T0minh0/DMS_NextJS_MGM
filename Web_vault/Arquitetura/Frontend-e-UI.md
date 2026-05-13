@@ -17,6 +17,8 @@ Arquivos base da implementacao:
 
 ## Rotas gerenciais obrigatorias
 
+O mapa de papeis, jornadas e arquitetura de informacao fica em [[Planejamento/Jornadas-gerenciais-IA]]. Ele e a referencia de produto para decidir quais rotas, acoes, dados visiveis e testes negativos cada task UI precisa cobrir.
+
 | Rota | Papel no produto | Evidencia minima em tasks UI |
 | --- | --- | --- |
 | `/login` | Entrada publica segura. | Tentativa invalida, login com fixture, console limpo. |

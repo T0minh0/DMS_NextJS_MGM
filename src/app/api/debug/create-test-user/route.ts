@@ -5,7 +5,7 @@ import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
-const TEST_CPF = '12345678900';
+const TEST_CPF = '00000000999';
 const TEST_PASSWORD = 'test123';
 
 export async function GET(request: Request) {
@@ -62,8 +62,8 @@ export async function GET(request: Request) {
         birthDate: new Date('1990-01-01'),
         enterDate: now,
         exitDate: null,
-        pis: Buffer.from('12345678901', 'utf8'),
-        rg: Buffer.from('123456789', 'utf8'),
+        pis: Buffer.from('90000000999', 'utf8'),
+        rg: Buffer.from('990000999', 'utf8'),
         gender: 'Não informado',
         password: Buffer.from(hashedPassword, 'utf8'),
         email: 'test.user@example.com',

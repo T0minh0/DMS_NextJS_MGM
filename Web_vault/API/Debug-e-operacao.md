@@ -79,7 +79,7 @@ Arquivo: `src/app/api/debug/wastepickers/route.ts`
 Endpoint diagnostico que tenta encontrar:
 
 - Worker por `workerId = 5`.
-- Worker por CPF `56789012345`.
+- Worker por CPF sintetico `00000000999`.
 
 Tambem retorna lista de nomes de modelos Prisma esperados.
 
@@ -99,7 +99,7 @@ Bloqueia em producao sem override, mesmo que `DMS_DEBUG_ENDPOINTS_ENABLED=true`.
 
 | Campo | Valor |
 | --- | --- |
-| CPF | `12345678900` |
+| CPF | `00000000999` |
 | Senha | `test123` |
 | Tipo | `1` |
 

@@ -22,7 +22,7 @@ npm install
 4. Opcionalmente popular dados locais com o seed:
 
 ```bash
-npx prisma db seed
+npm run db:seed:uat
 ```
 
 ## Variaveis
@@ -40,6 +40,7 @@ npx prisma db seed
 | `DMS_FEATURE_REPORTS` | Nao | Flag opt-in para reports novos |
 | `DMS_DEBUG_ENDPOINTS_ENABLED` | Nao | Habilita `/api/debug/*` em producao somente para admin; nao habilita `create-test-user` |
 | `DMS_TRUST_PROXY_HEADERS` | Nao | Quando `true`, login usa `cf-connecting-ip`, `x-real-ip` ou `x-forwarded-for` para bucket de rate limit; habilitar apenas atras de proxy confiavel que sobrescreva esses headers |
+| `DMS_ALLOW_REMOTE_UAT_SEED` | Nao | Permite seed UAT em banco remoto descartavel; por padrao o seed roda apenas em hosts locais |
 | `MONGODB_URI` | Nao | Comentada como legado no `env.example` |
 | `MONGODB_DB` | Nao | Comentada como legado no `env.example` |
 | `NODE_ENV` | Nao | Controla cookie `secure` e bloqueia endpoints debug em producao sem flag |
@@ -54,6 +55,7 @@ npx prisma db seed
 | `npm run lint` | OK | Usa `eslint .` |
 | `npm run typecheck` | OK | Usa `tsc --noEmit --incremental false` |
 | `npm test` | OK | Descobre `tests/**/*.test.ts(x)` e executa via Node/tsx |
+| `npm run db:seed:uat` | Nao executado nesta documentacao | Popula dados sinteticos em banco descartavel local/preview |
 | `npm run prisma:validate` | OK | Valida schema Prisma com `DATABASE_URL` real ou placeholder |
 | `npm run check:whitespace` | OK | Varre arquivos de texto tracked e untracked |
 | `npm run quality` | OK | Gate completo local |
@@ -71,6 +73,7 @@ npx prisma db seed
 - SQL de referencia: `New_db_schema.sql`.
 - Seed: `prisma/seed.ts`.
 - O seed usa `TRUNCATE ... RESTART IDENTITY CASCADE`, entao apaga dados existentes.
+- O seed recusa URLs com aparencia de producao, URLs sem marcador descartavel no usuario ou banco (`uat`, `dev`, `test`, `local`, `preview`, `sandbox`, `tmp`, `scratch` ou `seed`) e, por padrao, tambem recusa hosts remotos. Use `DMS_ALLOW_REMOTE_UAT_SEED=true` somente em preview descartavel.
 
 ## Login local com seed
 
@@ -78,7 +81,11 @@ Contas criadas pelo seed:
 
 | Perfil | CPF | Senha | Tipo |
 | --- | --- | --- | --- |
-| Gerente | `12345678901` | `manager123` | `0` |
-| Catador | `98765432100` | `worker123` | `1` |
+| Admin | `00000000001` | `uat-admin-123` | `A` |
+| Gerente Horizonte | `00000000002` | `uat-manager-123` | `M` |
+| Operador persona Horizonte | `00000000003` | `uat-operator-123` | `0` |
+| Visualizador persona Horizonte | `00000000004` | `uat-viewer-123` | `0` |
+| Gerente Leste | `00000000022` | `uat-manager-123` | `M` |
+| Worker web-denied | `00000000011` | `uat-worker-123` | `1` |
 
-Somente gerentes acessam o dashboard pelo login atual.
+Admin e gerentes/personas de gestao acessam a web pelo login atual. Worker continua como fixture negativa: login web deve retornar `WEB_ROLE_DENIED`.

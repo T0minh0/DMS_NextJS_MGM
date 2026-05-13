@@ -88,7 +88,7 @@ Exemplo Java:
 
 ```json
 {
-  "cpf": "12345678900",
+  "cpf": "00000000001",
   "password": "senha"
 }
 ```

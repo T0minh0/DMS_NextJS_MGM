@@ -119,12 +119,12 @@ function findDirectApiErrorResponses(filePath: string) {
 
 test('structured log sanitizer redacts sensitive fields and token-like text', () => {
   const sanitized = sanitizeLogData({
-    cpf: '12345678901',
+    cpf: '00000000001',
     password: 'secret',
     authorization: 'Bearer super-secret-token',
     nested: {
       token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwMSJ9.signature',
-      message: 'CPF 123.456.789-01 failed login',
+      message: 'CPF 000.000.000-01 failed login',
     },
   }) as Record<string, unknown>;
 
@@ -204,7 +204,7 @@ test('request context accepts inbound correlation id and logs without PII', () =
 
   try {
     logWarn('auth.login.invalid_credentials', context, {
-      cpf: '12345678901',
+      cpf: '00000000001',
       password: 'secret',
       reason: 'password_mismatch',
     });
@@ -215,13 +215,13 @@ test('request context accepts inbound correlation id and logs without PII', () =
   assert.equal(context.requestId, 'req-from-client');
   assert.equal(warnCapture.lines.length, 1);
   assert.match(warnCapture.lines[0], /"event":"auth\.login\.invalid_credentials"/);
-  assert.doesNotMatch(warnCapture.lines[0], /12345678901|secret/);
+  assert.doesNotMatch(warnCapture.lines[0], /00000000001|secret/);
 });
 
 test('privacy helpers mask personal documents for list responses', () => {
-  assert.equal(maskCpf('12345678901'), '***.***.***-01');
-  assert.equal(maskPis('12345678901'), '***.*****.**-1');
-  assert.equal(maskRg('123456789'), '*******89');
+  assert.equal(maskCpf('00000000001'), '***.***.***-01');
+  assert.equal(maskPis('90000000001'), '***.*****.**-1');
+  assert.equal(maskRg('990000001'), '*******01');
 });
 
 test('manager worker lists keep stable ids for edit and delete flows', () => {
@@ -254,24 +254,24 @@ test('login guard compares dummy hash and ignores untrusted forwarded headers', 
     assert.equal(getTrustedClientIp(request), null);
 
     for (let i = 0; i < 10; i += 1) {
-      recordLoginFailure(request, '12345678901');
+      recordLoginFailure(request, '00000000001');
     }
 
-    assert.equal(getLoginRateLimit(request, '12345678901').limited, true);
-    assert.equal(getLoginRateLimit(request, '99999999999').limited, false);
+    assert.equal(getLoginRateLimit(request, '00000000001').limited, true);
+    assert.equal(getLoginRateLimit(request, '00000009999').limited, false);
 
-    clearLoginFailures(request, '12345678901');
-    assert.equal(getLoginRateLimit(request, '12345678901').limited, false);
+    clearLoginFailures(request, '00000000001');
+    assert.equal(getLoginRateLimit(request, '00000000001').limited, false);
 
     process.env.DMS_TRUST_PROXY_HEADERS = 'true';
     resetLoginRateLimitForTests();
     assert.equal(getTrustedClientIp(request), '203.0.113.10');
 
     for (let i = 0; i < 40; i += 1) {
-      recordLoginFailure(request, `123456789${i.toString().padStart(2, '0')}`);
+      recordLoginFailure(request, `0000001${i.toString().padStart(4, '0')}`);
     }
 
-    assert.equal(getLoginRateLimit(request, '99999999999').limited, true);
+    assert.equal(getLoginRateLimit(request, '00000019999').limited, true);
   } finally {
     process.env.DMS_TRUST_PROXY_HEADERS = previousTrustProxyHeaders;
     resetLoginRateLimitForTests();

@@ -7,6 +7,7 @@
 | Detalhe autorizado retorna documentos completos | `/api/user?id=...` retorna CPF/PIS/RG para usuario no escopo | Necessario para edicao/perfil; manter fora de listagens e auditar fluxos |
 | Endpoints debug existem no app | `/api/debug/*` com `requireAdmin` e bloqueio por `NODE_ENV=production` | So devem ser habilitados em producao com `DMS_DEBUG_ENDPOINTS_ENABLED=true` e aprovacao operacional |
 | Rate limit de login em memoria | App so confia em headers de proxy com `DMS_TRUST_PROXY_HEADERS=true` | Em scale-out precisa rate limit no ingress/proxy |
+| Seed UAT destrutivo | `prisma/seed.ts` trunca tabelas operacionais | Rodar apenas em banco descartavel; guard bloqueia URLs remotas por padrao e nomes com `prod` |
 
 ## Riscos de integridade
 

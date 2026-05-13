@@ -141,7 +141,7 @@ The calculation logic implements the following rules:
 {
   _id: ObjectId("..."),
   full_name: "João Silva",
-  CPF: "12345678901",
+  CPF: "00000000011",
   email: "joao@example.com",
   phone: "+5511999999999",
   user_type: 1, // 1 = Worker, 0 = Management

@@ -159,6 +159,8 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 
 ## Plano de browser evidence para tasks dependentes
 
+Matriz de dados S0-13: [[Planejamento/Matriz-fixtures-UAT]].
+
 | Jornada | Rotas | Interacao principal | Teste negativo |
 | --- | --- | --- | --- |
 | Painel do dia | `/login`, `/` | Login gerente, filtro dashboard, abrir alerta | Sem sessao redireciona; console sem logs de debug |
@@ -169,6 +171,19 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | Avisos | Futura `/notices` | Criar aviso e renderizar conteudo sanitizado | XSS nao aparece no DOM; aviso global negado para gerente |
 | Relatorio/PDF | Futura `/reports`, detalhe de venda | Baixar PDF e conferir headers | PDF de outra cooperativa negado |
 | Pendencia operacional | `/`, rotas de dominio | Abrir pendencia e navegar para correcao | Debug/recalc invisivel ou `403` para gerente |
+
+## Matriz S0-13 jornada -> fixture
+
+| Jornada | Fixtures S0-13 | Lacuna aceita ate task futura |
+| --- | --- | --- |
+| Painel do dia | `manager-horizonte`, `cardboard-stocked`, `aluminum-low-stock`, `normal-active-horizonte` | Nenhuma para telas atuais |
+| Estoque critico | `aluminum-low-stock`, `glass-empty-stock`, `leste-cardboard-stocked` | Nenhuma para telas atuais |
+| Venda normal | `normal-active-horizonte`, `normal-completed-horizonte`, `normal-cancelled-horizonte` | Estado cancelado depende de S2-01 |
+| Venda coletiva | `collective-open-two-coops`, `collective-contribution-pending` | Persistencia depende de S1-02/S3-01/S3-02 |
+| Equipe/PII | `manager-horizonte`, `worker-horizonte-active`, `worker-horizonte-empty`, `worker-horizonte-inactive`, `worker-leste` | UX final em S5-05 |
+| Avisos | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | Persistencia depende de S4-01/S4-02 |
+| Relatorio/PDF | `normal-completed-horizonte`, `collective-open-two-coops`, `normal-cancelled-horizonte` | PDF real depende de S3-04/S3-05 |
+| Pendencia operacional | `glass-empty-stock`, `worker-horizonte-empty`, `job-pending-achievements` | Fila/jobs persistidos dependem de S4/S5 |
 
 ## Criterios para proximas tasks UI
 

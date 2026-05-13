@@ -5,6 +5,8 @@ import { formatWorkerId } from '@/lib/db-utils';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
 import { apiRouteErrorResponse } from '@/lib/api/errors';
 
+const DEBUG_WORKER_CPF = '00000000999';
+
 const MODEL_LIST = [
   'Workers',
   'Materials',
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
         },
       }),
       prisma.workers.findFirst({
-        where: { cpf: Buffer.from('56789012345', 'utf8') },
+        where: { cpf: Buffer.from(DEBUG_WORKER_CPF, 'utf8') },
         select: {
           workerId: true,
           workerName: true,

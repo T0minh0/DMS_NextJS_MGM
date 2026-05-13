@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | `dev` | `next dev --turbopack` | Declarado; nao executado nesta rodada |
 | `build` | `next build` | Executado com sucesso |
+| `db:seed:uat` | `tsx prisma/seed.ts` | Seed UAT local/preview descartavel com guard contra producao |
 | `start` | `next start` | Declarado; requer build previo |
 | `check:visual-contract` | `node scripts/check-visual-contract.mjs` | Executado com sucesso |
 | `check:whitespace` | `node scripts/check-whitespace.mjs` | Executado com sucesso |
@@ -103,7 +104,7 @@ npm test
 
 Resultado observado:
 
-- 31 testes passaram.
+- 39 testes passaram.
 - Cobre assinatura/verificacao JWT server-side.
 - Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo proxy.
 - Cobre que rotas `/api/*.json` continuam protegidas e nao sao tratadas como assets publicos.
@@ -114,6 +115,7 @@ Resultado observado:
 - Cobre checker de whitespace em CRLF e arquivos limpos.
 - Cobre feature flags, segredo de job, bearer token interno e idempotencia de reexecucao.
 - Cobre POC PDF com bytes `%PDF-`, headers de download, sanitizacao de filename e sanitizacao de notices contra XSS, incluindo `svg onload` e atributos perigosos em tag permitida.
+- Cobre matriz de fixtures UAT gerenciais, documentos sinteticos, jornadas -> dados, estados de venda, venda coletiva declarada e guard contra seed em banco de producao/remoto por padrao.
 
 ## Prisma migrations
 
@@ -170,7 +172,7 @@ pg_restore --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-dms-p
 Smoke minimo apos migration:
 
 ```bash
-npx prisma db seed
+npm run db:seed:uat
 node -e 'const {PrismaClient}=require("@prisma/client"); const p=new PrismaClient(); Promise.all([p.cooperative.count(), p.materials.count(), p.sales.count(), p.stock.count()]).then(console.log).finally(()=>p.$disconnect())'
 ```
 

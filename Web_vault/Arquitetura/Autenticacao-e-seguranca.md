@@ -99,12 +99,12 @@ Regras base:
 - Criacao de usuarios: `bcrypt.hash(password, 10)`.
 - Atualizacao de usuarios: `bcrypt.hash(password, 10)` quando senha e informada.
 - Troca de senha de perfil: valida senha atual com bcrypt e grava hash com custo `12`.
-- Seed cria `manager123` e `worker123` com custo `10`.
+- Seed UAT cria contas sinteticas (`uat-admin-123`, `uat-manager-123`, `uat-operator-123`, `uat-viewer-123`, `uat-worker-123`) com custo `10`.
 
 ## Dados pessoais
 
 - CPF, PIS e RG ficam em `Bytes`, mas nao ha criptografia observada; os bytes representam strings UTF-8.
-- APIs retornam CPF/PIS/RG em texto para frontend.
+- Listagens retornam CPF/PIS/RG mascarados; detalhe autorizado em `/api/user` pode retornar documentos completos apenas para edicao/perfil no escopo permitido.
 
 ## Dependencias e audit
 

@@ -60,7 +60,7 @@ function makeToken() {
     role: managerSession.role,
     userType: managerSession.userType,
     name: managerSession.name,
-    cpf: '12345678901',
+    cpf: '00000000001',
     cooperativeName: 'Coop A',
   });
 }

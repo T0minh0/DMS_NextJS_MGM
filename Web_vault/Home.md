@@ -28,6 +28,7 @@ Vault operacional do projeto DMS Web. Esta documentacao reflete o codigo observa
 - [[Operacao/Qualidade-e-riscos]]: riscos tecnicos observados.
 - [[Planejamento/Tony]]: configuracao ClickUp, agentes e runtime.
 - [[Planejamento/Jornadas-gerenciais-IA]]: papeis de produto, jornadas gerenciais, IA alvo e evidencias browser para UI.
+- [[Planejamento/Matriz-fixtures-UAT]]: fixtures sinteticos por papel, jornada, material, venda e negativos cross-coop.
 - [[Planejamento/Backlog-tecnico]]: proximas melhorias recomendadas.
 - [[Planejamento/Inventario-portabilidade-java-next]]: mapa de paridade para portar o repo Java para Next/Prisma.
 - [[ADR/ADR-0001-schema-prisma-baseline-rollback]]: decisao de schema Prisma, baseline migration e rollback.

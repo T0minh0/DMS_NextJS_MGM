@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
 
 const TEST_CPF = '12345678900';
 const TEST_PASSWORD = 'test123';
@@ -10,11 +11,9 @@ export async function GET() {
   try {
     await requireAdmin();
 
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        { message: 'This route is not available in production' },
-        { status: 403 },
-      );
+    const disabledResponse = getDebugRouteDisabledResponse({ allowProductionOverride: false });
+    if (disabledResponse) {
+      return disabledResponse;
     }
 
     const cooperative = await prisma.cooperative.findFirst();

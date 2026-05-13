@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
-import { formatWorkerId, decodeBytes } from '@/lib/db-utils';
+import { formatWorkerId } from '@/lib/db-utils';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
 
 const MODEL_LIST = [
   'Workers',
@@ -19,13 +20,17 @@ const MODEL_LIST = [
 export async function GET() {
   try {
     await requireAdmin();
+    const disabledResponse = getDebugRouteDisabledResponse();
+    if (disabledResponse) {
+      return disabledResponse;
+    }
+
     const [byId, byCpf] = await Promise.all([
       prisma.workers.findFirst({
         where: { workerId: BigInt(5) },
         select: {
           workerId: true,
           workerName: true,
-          cpf: true,
           cooperative: true,
           userType: true,
         },
@@ -35,7 +40,6 @@ export async function GET() {
         select: {
           workerId: true,
           workerName: true,
-          cpf: true,
           cooperative: true,
           userType: true,
         },
@@ -48,7 +52,6 @@ export async function GET() {
           workerId: byId.workerId.toString(),
           wastepicker_id: formatWorkerId(byId.workerId),
           workerName: byId.workerName,
-          cpf: decodeBytes(byId.cpf),
           cooperative: byId.cooperative.toString(),
           userType: byId.userType,
         }
@@ -58,7 +61,6 @@ export async function GET() {
           workerId: byCpf.workerId.toString(),
           wastepicker_id: formatWorkerId(byCpf.workerId),
           workerName: byCpf.workerName,
-          cpf: decodeBytes(byCpf.cpf),
           cooperative: byCpf.cooperative.toString(),
           userType: byCpf.userType,
         }

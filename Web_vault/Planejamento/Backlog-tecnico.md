@@ -4,24 +4,23 @@ Backlog derivado de fatos observados no codigo e nos checks locais.
 
 ## Seguranca
 
-- Migrar `src/middleware.ts` para `proxy` quando o projeto adotar a convencao nova do Next 16.
 - Ampliar testes de API com banco controlado para cobrir login, vendas, usuarios e dashboard.
-- Rever a necessidade de manter `/api/debug/*` no build de producao mesmo com `requireAdmin`.
+- Revisar a politica operacional antes de habilitar `DMS_DEBUG_ENDPOINTS_ENABLED=true` em producao, incluindo trilha de auditoria e rate limit.
 - Reduzir PII em respostas de API ou mascarar CPF/PIS/RG no cliente.
-- Atualizar dependencias vulneraveis apontadas por `npm audit`.
+- Normalizar `/api/user?id|cpf` para nao revelar diferenca entre usuario inexistente e fora de escopo para gerente autenticado.
+- Planejar upgrade major Prisma 7 em task separada.
 
 ## Integridade de dados
 
 - Usar transacao Prisma em criacao/edicao/exclusao de venda + update de estoque.
 - Aplicar [[ADR/ADR-0002-lifecycle-vendas-estoque-decimal]] nas migrations e APIs de vendas/estoque.
 - Usar transacao no recalc de contribuicoes.
-- Corrigir mensagem de recalc no dashboard para nao acessar `statistics.totalEarnings` inexistente.
 - Decidir se `phone` deve existir no schema ou sair dos formularios.
 - Padronizar tipos de `material_id` nas respostas e componentes.
 
 ## Tooling
 
-- Expandir `npm test` alem de auth/RBAC para smoke tests.
+- Expandir `npm test` alem de auth/RBAC/debug para smoke tests.
 - Ampliar workflow CI quando houver ambientes reais de banco/staging.
 - Registrar comando de seed no README atualizado.
 - Manter migrations Prisma versionadas apos a baseline `00000000000000_baseline`.
@@ -44,7 +43,6 @@ Backlog derivado de fatos observados no codigo e nos checks locais.
 
 - Consolidar paleta verde/vinho em tokens.
 - Reduzir estilos inline.
-- Remover ou condicionar logs de debug no frontend.
 - Corrigir metadata default `Create Next App`.
 - Revisar responsividade dos graficos e menu FAB.
 

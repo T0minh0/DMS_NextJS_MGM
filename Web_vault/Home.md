@@ -7,13 +7,13 @@ Vault operacional do projeto DMS Web. Esta documentacao reflete o codigo observa
 - [[Arquitetura/Visao-geral]]: visao de sistema, stack e limites.
 - [[Arquitetura/Mapa-do-codigo]]: inventario de arquivos, responsabilidades e pontos de entrada.
 - [[Arquitetura/Frontend-e-UI]]: telas, layout, navegacao, design tokens e dados consumidos.
-- [[Arquitetura/Autenticacao-e-seguranca]]: login, cookie JWT, middleware, riscos e dependencias vulneraveis.
+- [[Arquitetura/Autenticacao-e-seguranca]]: login, cookie JWT, proxy, RBAC e riscos de seguranca.
 - [[Dominio/Modelo-de-dados]]: modelos Prisma, tabelas SQL, relacionamentos e campos.
 - [[Modelos/Prisma]]: referencia rapida dos modelos Prisma e tabelas SQL.
 - [[Dominio/Regras-de-negocio]]: regras observadas em vendas, estoque, usuarios, produtividade e contribuicoes.
 - [[Dominio/Fluxos-operacionais]]: fluxos ponta a ponta do produto.
 - [[API/Rotas]]: indice completo de endpoints.
-- [[API/Autenticacao]]: endpoints de login/logout e middleware.
+- [[API/Autenticacao]]: endpoints de login/logout e proxy.
 - [[API/Usuarios]]: endpoints de perfil, usuarios e catadores.
 - [[API/Materiais-e-cooperativas]]: endpoints de materiais, grupos e cooperativas.
 - [[API/Vendas-e-estoque]]: endpoints de vendas, compradores e estoque.
@@ -55,6 +55,6 @@ Vault operacional do projeto DMS Web. Esta documentacao reflete o codigo observa
 
 - `DOCUMENTATION.md` e partes do texto antigo ainda citam MongoDB/Mongoose, mas o codigo atual usa Prisma/PostgreSQL.
 - `npm run quality` passa e agrega lint, typecheck, testes, Prisma validate, contrato visual, build e whitespace.
-- `npm run build` passa, mas mostra aviso de convencao deprecated para `src/middleware.ts`.
+- `npm run build` passa usando `src/proxy.ts`, sem alerta de convencao antiga do Next.
 - `npm run lint` usa `eslint .` e passa.
-- `npm audit` reporta 12 vulnerabilidades: 3 moderadas e 9 altas.
+- `npm audit` e `npm audit --omit=dev` retornam 0 vulnerabilidades.

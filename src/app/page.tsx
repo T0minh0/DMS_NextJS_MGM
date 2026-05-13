@@ -77,6 +77,7 @@ interface User {
   name?: string;
   full_name?: string;
   userType: number;
+  role?: 'admin' | 'manager' | 'worker';
   notFound?: boolean;
 }
 
@@ -140,13 +141,13 @@ export default function HomePage() {
             const response = await fetch(`/api/user?id=${parsedUser.id}`);
             if (response.ok) {
               const realUserData = await response.json();
-              console.log('Real user data fetched:', realUserData);
 
               // Create updated user object
               const updatedUser = {
                 ...parsedUser,
-                full_name: realUserData.full_name,
-                name: realUserData.name || realUserData.full_name
+                full_name: realUserData.full_name || parsedUser.full_name,
+                name: realUserData.name || realUserData.full_name || parsedUser.name,
+                role: realUserData.role || parsedUser.role
               };
 
               // Update the user state with real data
@@ -190,26 +191,20 @@ export default function HomePage() {
     };
     return now.toLocaleDateString('pt-BR', options);
   }, []);
+  const isAdminUser = user?.role === 'admin';
 
   // Fetch materials for the filter
   useEffect(() => {
     async function fetchMaterials() {
       try {
-        console.log('Fetching materials...');
         const response = await fetch('/api/materials');
-        console.log('Materials API response status:', response.status, response.statusText);
 
         if (!response.ok) throw new Error(`Failed to fetch materials: ${response.status} ${response.statusText}`);
 
         const data = await response.json();
-        console.log('Materials data received:', data);
-        console.log('Materials data type:', typeof data);
-        console.log('Is materials data an array?', Array.isArray(data));
-        console.log('Materials data length:', data.length);
 
         if (Array.isArray(data)) {
           setMaterials(data);
-          console.log('Materials state updated with data');
         } else {
           console.error('Materials data is not an array:', data);
         }
@@ -217,7 +212,6 @@ export default function HomePage() {
         console.error('Error fetching materials:', error);
       } finally {
         setLoading(prev => ({ ...prev, materials: false }));
-        console.log('Materials loading state set to false');
       }
     }
 
@@ -231,7 +225,6 @@ export default function HomePage() {
         const response = await fetch('/api/users');
         if (!response.ok) throw new Error('Failed to fetch workers');
         const data = await response.json();
-        console.log('Workers data:', data);
         setWorkers(data);
       } catch (error) {
         console.error('Error fetching workers:', error);
@@ -247,33 +240,25 @@ export default function HomePage() {
   useEffect(() => {
     // Only fetch stock data if materials are loaded
     if (loading.materials) {
-      console.log('Waiting for materials to load before fetching stock data...');
       return;
     }
 
     async function fetchStock() {
       try {
         setLoading(prev => ({ ...prev, stock: true }));
-        console.log('Fetching stock data...');
 
         const url = materialFilter
           ? `/api/stock?material_id=${materialFilter}`
           : '/api/stock';
 
-        console.log('Stock API URL:', url);
         const response = await fetch(url);
-        console.log('Stock API response status:', response.status, response.statusText);
 
         if (!response.ok) throw new Error(`Failed to fetch stock data: ${response.status} ${response.statusText}`);
 
         const data = await response.json();
-        console.log('Stock data received:', data);
-        console.log('Stock data type:', typeof data);
-        console.log('Stock data keys:', Object.keys(data));
 
         // Check if we got a no-data response
         if (data.noData) {
-          console.log('No stock data available for this material');
           setStockData({ noData: true, message: data.message });
           // Clear any previous no-data message
           setNoDataMessages(prev => ({ ...prev, stock: data.message }));
@@ -283,21 +268,11 @@ export default function HomePage() {
           // Transform stock data to use proper material names
           const transformedStockData: Record<string, number> = {};
 
-          // Debug materials array
-          console.log('Materials available for mapping:', materials.map(m => ({
-            id: m._id,
-            material_id: m.material_id,
-            name: m.name || m.material
-          })));
-
           // Process each material in the stock data
           Object.entries(data).forEach(([key, value]) => {
-            console.log(`Processing stock item: ${key} = ${value}`);
-
             // If the key starts with "Material ", try to replace it with a proper name
             if (key.startsWith("Material ")) {
               const materialId = key.replace("Material ", "");
-              console.log(`Looking for material with ID: ${materialId}`);
 
               // Debug: try different matching methods
               const exactMatch = materials.find(m => m._id === materialId);
@@ -307,22 +282,13 @@ export default function HomePage() {
                 m.material_id && m.material_id.toString() === materialId
               );
 
-              console.log('Match results:', {
-                exactMatch: !!exactMatch,
-                stringMatch: !!stringMatch,
-                materialIdMatch: !!materialIdMatch,
-                stringMaterialIdMatch: !!stringMaterialIdMatch
-              });
-
               const material = exactMatch || stringMatch || materialIdMatch || stringMaterialIdMatch;
 
               if (material) {
                 const materialName = material.name || material.material;
-                console.log(`✅ Found material match: ${materialId} -> ${materialName}`);
                 // Use the proper material name as the key
                 transformedStockData[materialName] = value as number;
               } else {
-                console.log(`❌ No material match found for: ${materialId}`);
                 // Keep original if no match found
                 transformedStockData[key] = value as number;
               }
@@ -332,7 +298,6 @@ export default function HomePage() {
             }
           });
 
-          console.log('Transformed stock data:', transformedStockData);
           setStockData(transformedStockData);
 
           // Clear any previous no-data message
@@ -346,7 +311,6 @@ export default function HomePage() {
         setStockData({});
       } finally {
         setLoading(prev => ({ ...prev, stock: false }));
-        console.log('Stock loading set to false');
       }
     }
 
@@ -367,7 +331,6 @@ export default function HomePage() {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch earnings data');
         const data = await response.json();
-        console.log('Earnings data:', data);
 
         // Check if we got a no-data response
         if (data.noData) {
@@ -407,7 +370,6 @@ export default function HomePage() {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch worker collections');
         const data = await response.json();
-        console.log('Worker collections data:', data);
 
         // Check if we got a no-data response
         if (data.noData) {
@@ -441,7 +403,6 @@ export default function HomePage() {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch price fluctuation');
         const data = await response.json();
-        console.log('Price fluctuation data:', data);
 
         // Check if we got a no-data response
         if (data.noData) {
@@ -470,7 +431,6 @@ export default function HomePage() {
         const response = await fetch('/api/birthdays');
         if (!response.ok) throw new Error('Failed to fetch birthdays');
         const data = await response.json();
-        console.log('Birthdays data:', data);
         setBirthdays(data);
       } catch (error) {
         console.error('Error fetching birthdays:', error);
@@ -557,13 +517,6 @@ export default function HomePage() {
         return originalKey && typeof stockData[originalKey] === 'number' ? stockData[originalKey] : 0;
       });
 
-      // Log the chart data
-      console.log('Prepared stock chart data:', {
-        originalLabels: Object.keys(stockData),
-        transformedLabels: labels,
-        values
-      });
-
       return {
         labels,
         datasets: [
@@ -603,25 +556,9 @@ export default function HomePage() {
     return chartPalette;
   };
 
-  // DEBUG: Output all state values
-  console.log('DEBUG STATE:', {
-    materials,
-    workers,
-    stockData,
-    earningsData,
-    workerCollections,
-    priceFluctuationData,
-    birthdays,
-    loading,
-    totalMaterials,
-    totalWorkers,
-    totalStock,
-    currentMonthEarnings
-  });
-
   // Add recalculation function
   const handleRecalculateContributions = async () => {
-    if (!user || user.userType !== 0) {
+    if (!isAdminUser) {
       alert('Apenas administradores podem executar o recálculo.');
       return;
     }
@@ -644,7 +581,8 @@ export default function HomePage() {
       const data = await response.json();
 
       if (response.ok) {
-        setRecalculationMessage(`✅ Recálculo concluído! Processados ${data.processed} registros. Total: ${data.statistics.totalWeight} kg e R$ ${data.statistics.totalEarnings.toFixed(2)}`);
+        const totalWeight = Number(data.statistics?.totalWeight || 0);
+        setRecalculationMessage(`✅ Recálculo concluído! Processados ${data.processed} registros. Total: ${totalWeight.toFixed(2)} kg`);
 
         // Refresh the data on the dashboard
         window.location.reload();
@@ -661,7 +599,7 @@ export default function HomePage() {
 
   // Add function to assign wastepicker_ids
   const handleAssignWastepickerIds = async () => {
-    if (!user || user.userType !== 0) {
+    if (!isAdminUser) {
       alert('Apenas administradores podem executar esta operação.');
       return;
     }
@@ -715,7 +653,7 @@ export default function HomePage() {
 
   // Add debug function
   const handleDebugData = async () => {
-    if (!user || user.userType !== 0) {
+    if (!isAdminUser) {
       alert('Apenas administradores podem executar esta operação.');
       return;
     }
@@ -739,7 +677,6 @@ ${data.measurements.total === 0 ? '⚠️ PROBLEMA: Nenhuma medição encontrada
 ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuição calculada!' : ''}`;
 
         setDebugMessage(summary);
-        console.log('Debug Data Full:', data);
       } else {
         setDebugMessage(`❌ Erro no diagnóstico: ${data.error}`);
       }
@@ -1009,18 +946,15 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   labels: workerCollections.workers.map((worker: any) => worker.worker_name),
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  datasets: workerCollections.materials.map((material: any, index: number) => {
-                    console.log(`Material ${index}:`, material);
-                    return {
-                      label: material.name,
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      data: workerCollections.workers.map((worker: any) => worker[material.id] || 0),
-                      backgroundColor: getMaterialColors()[index % getMaterialColors().length],
-                      borderColor: chartBorderColor,
-                      borderWidth: 0.5,
-                      stack: 'Stack 0',
-                    };
-                  }),
+                  datasets: workerCollections.materials.map((material: any, index: number) => ({
+                    label: material.name,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    data: workerCollections.workers.map((worker: any) => worker[material.id] || 0),
+                    backgroundColor: getMaterialColors()[index % getMaterialColors().length],
+                    borderColor: chartBorderColor,
+                    borderWidth: 0.5,
+                    stack: 'Stack 0',
+                  })),
                 }}
                 options={{
                   indexAxis: 'y', // Horizontal bar chart
@@ -1322,7 +1256,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
       </div>
 
       {/* Admin Tools Section - Only show for administrators */}
-      {user && user.userType === 0 && (
+      {isAdminUser && (
         <div className="surface-panel rounded-xl border-l-4 border-warning p-6">
           <h3 className="mb-4 flex items-center text-xl font-semibold text-warning">
             <FaCog className="mr-2 text-warning" />
@@ -1398,7 +1332,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               )}
             </div>
 
-            {/* Debug Data */}
+            {/* Ferramentas de diagnostico */}
             <div className="border-t border-outline pt-6">
               <p className="mb-3 text-text-secondary">
                 Verificar o estado atual dos dados para ajudar a solucionar problemas.

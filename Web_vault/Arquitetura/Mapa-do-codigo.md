@@ -28,7 +28,7 @@ Inventario factual do repositorio observado.
 | `src/app/layout.tsx` | Root layout; carrega fontes Geist e metadata default `Create Next App` |
 | `src/app/globals.css` | Import Tailwind, CSS variables DMS verdes e base de body |
 | `src/components/Layout.tsx` | Layout autenticado com navbar, menu FAB, footer e logout |
-| `src/middleware.ts` | Protecao de rotas por cookie `auth_token` |
+| `src/proxy.ts` | Protecao de rotas por cookie `auth_token` no padrao Next 16 |
 
 ## Paginas
 
@@ -86,5 +86,5 @@ As 28 rotas observadas estao detalhadas em [[API/Rotas]].
 
 - Evitar usar `DOCUMENTATION.md` como fonte unica; conferir contra `prisma/schema.prisma` e `src/app/api`.
 - O nome `Measurments` esta grafado assim no schema e nas APIs; mudar isso exigiria migracao cuidadosa.
-- O projeto tem muitos `console.log` em paginas client-side, especialmente no dashboard.
+- Logs de debug do dashboard e fallback falso de usuario foram removidos; `console.error` permanece para erros operacionais.
 - A UI atual mistura tokens verdes (`dms-*`) com paleta vinho inline.

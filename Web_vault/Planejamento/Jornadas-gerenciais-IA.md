@@ -30,7 +30,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | `/materials` | Ler e manter catalogo global | Ler estoque e solicitar/operar ajustes permitidos | Operar pesagens/ajustes permitidos | Leitura | Diagnostico | Nao primario | Busca, estoque critico, permissao negativa para mutacoes admin-only |
 | `/sales` | Todas as cooperativas quando filtrado | Criar e acompanhar vendas da propria cooperativa | Criar/atualizar conforme permissao futura | Leitura/export | Diagnostico | Nao primario | Criar venda normal, estado sem estoque, cross-coop negado |
 | Futura venda coletiva | Criar/participar globalmente conforme regra | Criar/participar pela cooperativa | Acompanhar operacao | Leitura | Diagnostico | Nao primario | Convite, contribuicao, cancelamento, permissao de cooperativa |
-| `/manage-workers` | Gerir usuarios por cooperativa/global | Alvo: gerir equipe da propria cooperativa. Atual: tela chama `/api/users/all`, que e admin-only; S5-05 deve trocar para contrato cooperativo seguro. | Sem acesso ou leitura limitada | Sem acesso | Redigido/auditado | Nao primario | Mascara PII, criar/editar usuario, negar outra cooperativa |
+| `/manage-workers` | Gerir usuarios por cooperativa/global | Tela usa `/api/users`; S5-05 ainda deve minimizar PII e refinar UX cooperativa. | Sem acesso ou leitura limitada | Sem acesso | Redigido/auditado | Nao primario | Mascara PII, criar/editar usuario, negar outra cooperativa |
 | `/worker-productivity` | Global/filtrado | Equipe propria | Equipe propria sem PII completa | Leitura agregada | Diagnostico | Nao primario | Filtro periodo/trabalhador, estado sem dados, worker fora de escopo negado |
 | Futura `/notices` | Avisos globais e cooperativa | Avisos da cooperativa | Publicar operacional se permitido | Leitura | Diagnostico | Nao primario | Sanitizacao, escopo global/cooperativa, payload XSS negativo |
 | Futura `/reports` | Relatorios globais/filtrados | Relatorios da cooperativa | Relatorios operacionais | Export/PDF leitura | Diagnostico | Nao primario | JSON/PDF, `no-store`, filename seguro, cross-coop negado |
@@ -148,12 +148,12 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | --- | --- | --- | --- |
 | Papeis tecnicos | `admin`, `manager`, `worker` em `src/lib/auth/shared.ts` | Produto precisa tambem de operador, visualizador e suporte | Criar RBAC dedicado antes de habilitar esses papeis reais; ate la, esses papeis sao personas de planejamento, nao permissoes implementadas |
 | Login web | `POST /api/auth/login` rejeita `worker` | Correto: worker nao e publico primario da web | Manter teste negativo de worker |
-| Pages protegidas | `middleware.ts` exige sessao, mas nao papel por pagina | UI deve esconder rotas por papel; API continua autoridade | S0-12/S5-01 para nav role-aware |
-| Admin vs gerente no frontend | `userType === 0` representa admin e manager; dashboard mostra ferramentas admin para ambos | Nao usar `userType` sozinho para comandos admin; usar `role` real | S0-12 deve remover debug/recalc da UI gerencial |
+| Pages protegidas | `src/proxy.ts` exige sessao, mas nao papel por pagina | UI deve esconder rotas por papel; API continua autoridade | S5-01 para nav role-aware |
+| Admin vs gerente no frontend | Dashboard usa `role` real para ferramentas admin; APIs continuam autoridade | Nao usar `userType` sozinho para comandos admin | Monitorar nas proximas tasks de UI |
 | Materiais | API cria/edita/deleta com `requireAdmin`; UI atual pode expor formulario | Gerente deve operar estoque da cooperativa, nao catalogo global sem permissao | S5-06 define UX e permissoes finas |
-| Usuarios/equipe | Manager/admin podem gerir usuarios da cooperativa; `GET /api/users` retorna CPF/PIS/RG/email completos; dashboard/Layout ainda podem logar payloads | PII deve ser mascarada por padrao e logs de payload devem sair | S5-05 para minimizacao de PII; S0-12 para logs/debug |
-| `/manage-workers` | A pagina usa `/api/users/all`, endpoint admin-only | Gerente deve usar contrato cooperativo seguro, nao endpoint global | S5-05 deve trocar endpoint/UX e cobrir teste manager |
-| Debug/recalc | `/api/debug/*` e recalc exigem admin, mas existem no build | Dev-only/feature flag/admin auditado | S0-12 |
+| Usuarios/equipe | Manager/admin podem gerir usuarios da cooperativa; `GET /api/users` ainda retorna CPF/PIS/RG/email completos | PII deve ser mascarada por padrao e logs de payload devem sair | S5-05 para minimizacao de PII |
+| `/manage-workers` | A pagina usa `/api/users` com escopo server-side | Gerente deve usar contrato cooperativo seguro, nao endpoint global | S5-05 deve cobrir UX/PII e teste manager |
+| Debug/recalc | `/api/debug/*` exige admin e bloqueio em producao sem flag; recalc/assign/debug somem da UI gerencial | Dev-only/feature flag/admin auditado | Monitorar em QA de release |
 | Reports/PDF | Helpers e ADR existem; endpoints reais futuros | Reports devem exigir escopo e `runtime=nodejs` | S3-04/S3-05 |
 | Notices | Sanitizacao existe; APIs/tela futuras | Avisos global/cooperativa com HTML seguro | S4-01/S4-02 |
 

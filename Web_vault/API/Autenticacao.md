@@ -68,9 +68,9 @@ Arquivo: `src/app/api/auth/logout/route.ts`
 { "message": "Logout realizado com sucesso" }
 ```
 
-## Middleware
+## Proxy
 
-Arquivo: `src/middleware.ts`
+Arquivo: `src/proxy.ts`
 
 ### Publico
 
@@ -86,4 +86,4 @@ Arquivo: `src/middleware.ts`
 
 ### Verificacao
 
-O middleware usa `verifyAuthTokenEdge` para validar assinatura HS256, issuer, audience, expiracao e payload minimo. APIs protegidas tambem usam helpers server-side (`requireAuth`, `requireAdmin`, `requireManagerOrAdmin`) para nao depender apenas do middleware.
+O proxy usa `verifyAuthTokenEdge` para validar assinatura HS256, issuer, audience, expiracao e payload minimo. APIs protegidas tambem usam helpers server-side (`requireAuth`, `requireAdmin`, `requireManagerOrAdmin`) para nao depender apenas do proxy.

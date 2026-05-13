@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
 
 export async function GET() {
   try {
     await requireAdmin();
+    const disabledResponse = getDebugRouteDisabledResponse();
+    if (disabledResponse) {
+      return disabledResponse;
+    }
+
     const samples = await Promise.all([
       prisma.workers.findFirst({
         orderBy: { workerId: 'asc' },
@@ -35,7 +41,6 @@ export async function GET() {
             workerId: samples[0]!.workerId.toString(),
             workerName: samples[0]!.workerName,
             userType: samples[0]!.userType,
-            email: samples[0]!.email,
           }
           : null,
       },

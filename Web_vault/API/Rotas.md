@@ -49,6 +49,6 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 - Mutacoes de usuario/material/venda retornam mensagens em pt-BR.
 - Erros de validacao usam status `400`; conflitos de CPF usam `409`; nao encontrado usa `404`; falhas internas usam `500`.
 
-## Middleware
+## Proxy
 
-O matcher de `src/middleware.ts` cobre praticamente todas as rotas fora de `_next/static`, `_next/image`, `favicon.ico` e `public/`. Rotas publicas: `/login`, `/api/auth/login` e qualquer rota que começa com `/api/auth/`.
+O matcher de `src/proxy.ts` cobre praticamente todas as rotas fora de `_next/static`, `_next/image`, `favicon.ico` e `public/`. Rotas publicas: `/login`, `/api/auth/login` e qualquer rota que começa com `/api/auth/`.

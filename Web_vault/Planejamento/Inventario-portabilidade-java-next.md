@@ -48,7 +48,7 @@ Rotas existentes em `src/app/api`:
 
 | Grupo | Rotas existentes | Observacao |
 | --- | --- | --- |
-| Auth | `/api/auth/login`, `/api/auth/logout` | JWT atual carrega `id`, `name`, `cpf`, `userType`; middleware so valida formato do token. |
+| Auth | `/api/auth/login`, `/api/auth/logout` | JWT atual carrega `id`, `name`, `cpf`, `role`, `userType`; `src/proxy.ts` valida assinatura e claims antes de liberar rotas protegidas. |
 | Usuarios | `/api/user`, `/api/user/update`, `/api/user/change-password`, `/api/users/*` | Expoe/consome `userType` numerico e dados legados. |
 | Cooperativas | `/api/cooperatives` | GET/POST basico. |
 | Materiais | `/api/materials`, `/api/materials/[id]` | CRUD de materiais/grupos. |
@@ -522,7 +522,7 @@ Gaps:
 2. **Venda coletiva sem completion observado:** falta endpoint/servico Java claro para setar `sold_at`, `total_weight` e `revenue_share`.
 3. **Venda normal com semantica divergente:** Next baixa estoque no create; Java baixa no complete.
 4. **Concorrencia de estoque:** Next atual faz read/create/update sem transacao atomica suficiente.
-5. **Auth fraco no Next:** middleware valida apenas forma do JWT.
+5. **Auth web em evolucao:** proxy ja valida JWT, mas proximas features ainda precisam testes negativos de papel/escopo e pagina role-aware.
 6. **JWT em query no Java:** `?token=` existe na referencia, mas deve ser descartado na portabilidade para evitar vazamento em URL/log.
 7. **RBAC incompleto no Next:** payload atual colapsa `A/M` em `userType: 0`.
 8. **Jobs pendentes:** random multiplier, achievements e leaderboard precisam runtime explicito.

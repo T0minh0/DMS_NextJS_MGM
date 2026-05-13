@@ -29,7 +29,7 @@ Resultado observado:
 - Rodou TypeScript.
 - Gerou paginas estaticas.
 - Listou 36 rotas/paginas.
-- Mostrou aviso: a convencao `middleware` esta deprecated e deve usar `proxy`.
+- Usa `src/proxy.ts` no padrao Next 16, sem alerta de convencao antiga.
 
 Rotas estaticas observadas no build:
 
@@ -103,11 +103,13 @@ npm test
 
 Resultado observado:
 
-- 22 testes passaram.
+- 24 testes passaram.
 - Cobre assinatura/verificacao JWT server-side.
-- Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo middleware.
+- Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo proxy.
+- Cobre que rotas `/api/*.json` continuam protegidas e nao sao tratadas como assets publicos.
 - Cobre ausencia de fallback e rejeicao de `JWT_SECRET` fraco em producao.
 - Cobre matriz RBAC e bloqueios de escopo admin/manager/worker.
+- Cobre bloqueio de endpoints debug em producao sem `DMS_DEBUG_ENDPOINTS_ENABLED=true`.
 - Cobre checker de whitespace em CRLF e arquivos limpos.
 - Cobre feature flags, segredo de job, bearer token interno e idempotencia de reexecucao.
 - Cobre POC PDF com bytes `%PDF-`, headers de download, sanitizacao de filename e sanitizacao de notices contra XSS, incluindo `svg onload` e atributos perigosos em tag permitida.
@@ -181,29 +183,10 @@ npm audit --json
 
 Resultado observado:
 
-| Severidade | Quantidade |
-| --- | --- |
-| Moderada | 3 |
-| Alta | 9 |
-| Total | 12 |
+- `npm audit`: 0 vulnerabilidades.
+- `npm audit --omit=dev`: 0 vulnerabilidades.
 
-Dependencias diretas afetadas:
-
-- `next`
-- `prisma`
-
-Dependencias transientes afetadas incluem:
-
-- `@prisma/config`
-- `effect`
-- `defu`
-- `flatted`
-- `minimatch`
-- `picomatch`
-- `postcss`
-- `tar`
-- `brace-expansion`
-- `ajv`
+Observacao: o lockfile foi atualizado e `postcss` fica fixado via `overrides` para evitar uma dependencia transitiva vulneravel.
 
 ## Design contract
 

@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import test from 'node:test';
 import jwt from 'jsonwebtoken';
+import { NextRequest } from 'next/server';
 import { verifyAuthTokenEdge } from '../src/lib/auth/edge';
 import { getJwtSecret } from '../src/lib/auth/secret';
+import { getDebugRouteDisabledResponse } from '../src/lib/debug-routes';
+import { proxy } from '../src/proxy';
 import {
   AUTH_TOKEN_AUDIENCE,
   AUTH_TOKEN_ISSUER,
@@ -107,6 +110,14 @@ test('edge verifier rejects invalid signatures and expired tokens', async () => 
   assert.equal(await verifyAuthTokenEdge(expired), null);
 });
 
+test('proxy does not treat API paths with public file extensions as public assets', async () => {
+  const response = await proxy(new NextRequest('http://localhost/api/private.json'));
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(body, { message: 'Unauthorized' });
+});
+
 test('production runtime refuses JWT secret fallback', () => {
   const previousSecret = process.env.JWT_SECRET;
   const previousNodeEnv = process.env.NODE_ENV;
@@ -189,4 +200,30 @@ test('worker scope allows admin and manager targeting but limits worker to self'
     () => determineTargetWorker(workerSession, '21'),
     /Usuário fora do escopo/,
   );
+});
+
+test('debug routes are disabled in production unless explicitly enabled', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousDebugFlag = process.env.DMS_DEBUG_ENDPOINTS_ENABLED;
+  const mutableEnv = process.env as Record<string, string | undefined>;
+
+  try {
+    mutableEnv.NODE_ENV = 'development';
+    delete mutableEnv.DMS_DEBUG_ENDPOINTS_ENABLED;
+    assert.equal(getDebugRouteDisabledResponse(), null);
+
+    mutableEnv.NODE_ENV = 'production';
+    let response = getDebugRouteDisabledResponse();
+    assert.equal(response?.status, 404);
+    assert.deepEqual(await response?.json(), { message: 'Debug endpoint disabled' });
+
+    mutableEnv.DMS_DEBUG_ENDPOINTS_ENABLED = 'true';
+    assert.equal(getDebugRouteDisabledResponse(), null);
+
+    response = getDebugRouteDisabledResponse({ allowProductionOverride: false });
+    assert.equal(response?.status, 404);
+  } finally {
+    mutableEnv.NODE_ENV = previousNodeEnv;
+    mutableEnv.DMS_DEBUG_ENDPOINTS_ENABLED = previousDebugFlag;
+  }
 });

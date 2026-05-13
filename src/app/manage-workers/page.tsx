@@ -130,7 +130,7 @@ export default function ManageWorkersPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/users/all');
+      const response = await fetch('/api/users');
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Falha ao carregar usuários' }));
@@ -367,14 +367,18 @@ export default function ManageWorkersPage() {
     );
   });
 
+  const labelClass = "block text-sm font-medium text-text-secondary mb-1";
+  const fieldClass = "block w-full px-3 py-2 border border-outline rounded-lg bg-surface text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0 disabled:bg-surface-elevated disabled:text-text-secondary";
+  const selectFieldClass = `${fieldClass} appearance-none`;
+
   return (
     <Layout activePath="/manage-workers">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-dms-primary">Gerenciar Usuários</h1>
+          <h1 className="text-3xl font-bold text-primary">Gerenciar Usuários</h1>
           <button
             onClick={openCreateModal}
-            className="bg-[#5C1D2E] hover:bg-[#8A2736] text-white px-4 py-2 rounded-lg flex items-center transition-colors duration-200"
+            className="bg-primary hover:bg-primary/90 text-background px-4 py-2 rounded-lg flex items-center transition-colors duration-200"
           >
             <FaUserPlus className="mr-2" />
             Novo Usuário
@@ -382,14 +386,14 @@ export default function ManageWorkersPage() {
         </div>
 
         {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start">
-            <FaExclamationCircle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+          <div className="mb-4 bg-error/12 border border-error/35 text-foreground px-4 py-3 rounded-lg flex items-start">
+            <FaExclamationCircle className="text-error mt-0.5 mr-2 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+          <div className="mb-4 bg-success/12 border border-success/35 text-foreground px-4 py-3 rounded-lg">
             {success}
           </div>
         )}
@@ -397,17 +401,17 @@ export default function ManageWorkersPage() {
         {/* Search Bar */}
         <div className="mb-6 relative">
           <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary" />
             <input
               type="text"
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg"
+              className="w-full pl-10 pr-10 py-2 border border-outline bg-surface text-foreground placeholder:text-text-secondary/45 rounded-lg focus:border-primary focus:ring-0"
               placeholder="Buscar por nome, CPF ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {searchTerm && (
               <button
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary hover:text-foreground"
                 onClick={() => setSearchTerm('')}
               >
                 <FaTimes />
@@ -426,63 +430,63 @@ export default function ManageWorkersPage() {
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="bg-surface rounded-xl border border-outline shadow-soft overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-outline">
+                <thead className="bg-surface-elevated">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
                       Nome
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
                       CPF
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
                       Email
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
                       Tipo
                     </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-text-secondary uppercase">
                       Ações
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-surface divide-y divide-outline">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-text-secondary">
                         {searchTerm ? 'Nenhum usuário encontrado para esta busca' : 'Nenhum usuário cadastrado'}
                       </td>
                     </tr>
                   ) : (
                     filteredUsers.map(user => (
-                      <tr key={user._id || user.id} className="hover:bg-gray-50">
+                      <tr key={user._id || user.id} className="hover:bg-surface-alt">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded-full bg-[#5C1D2E] flex items-center justify-center text-white">
+                              <div className="h-10 w-10 rounded-full bg-primary/14 border border-primary/35 flex items-center justify-center text-primary">
                                 <FaUser />
                               </div>
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-sm font-medium text-foreground">
                                 {user.full_name}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
                           {formatCPF(user.CPF || user.cpf || '')}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
                           {user.email || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                             user.user_type === 0
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-green-100 text-green-800'
+                              ? 'bg-secondary/14 text-secondary'
+                              : 'bg-success/14 text-success'
                           }`}>
                             {user.user_type === 0 ? 'Gerência' : 'Catador'}
                           </span>
@@ -490,14 +494,14 @@ export default function ManageWorkersPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
                             onClick={() => openEditModal(user)}
-                            className="text-indigo-600 hover:text-indigo-900 mr-3"
+                            className="text-primary hover:text-secondary mr-3"
                             title="Editar usuário"
                           >
                             <FaEdit />
                           </button>
                           <button
                             onClick={() => handleDeleteUser(user._id || user.id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-error hover:text-error/80"
                             title="Excluir usuário"
                           >
                             <FaTrash />
@@ -515,15 +519,15 @@ export default function ManageWorkersPage() {
 
       {/* User Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-auto my-8 overflow-hidden">
-            <div className="px-6 py-4 bg-[#5C1D2E] text-white flex justify-between items-center sticky top-0 z-10">
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-surface rounded-xl border border-outline shadow-xl w-full max-w-md mx-auto my-8 overflow-hidden">
+            <div className="px-6 py-4 bg-primary text-background flex justify-between items-center sticky top-0 z-10">
               <h3 className="text-lg font-medium">
                 {modalMode === 'create' ? 'Novo Usuário' : 'Editar Usuário'}
               </h3>
               <button
                 onClick={closeModal}
-                className="text-white hover:text-gray-200"
+                className="text-background hover:text-background/75"
               >
                 <FaTimes />
               </button>
@@ -531,15 +535,15 @@ export default function ManageWorkersPage() {
 
             <div className="p-6 max-h-[70vh] overflow-y-auto">
               {error && (
-                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start">
-                  <FaExclamationCircle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                <div className="mb-4 bg-error/12 border border-error/35 text-foreground px-4 py-3 rounded-lg flex items-start">
+                  <FaExclamationCircle className="text-error mt-0.5 mr-2 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="fullName" className={labelClass}>
                     Nome Completo *
                   </label>
                   <input
@@ -547,13 +551,13 @@ export default function ManageWorkersPage() {
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                     required
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="cpf" className={labelClass}>
                     CPF *
                   </label>
                   <input
@@ -561,18 +565,18 @@ export default function ManageWorkersPage() {
                     type="text"
                     value={cpf}
                     onChange={(e) => setCpf(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                     placeholder="000.000.000-00"
                     required
                     disabled={modalMode === 'edit'} // Cannot edit CPF for existing users
                   />
                   {modalMode === 'edit' && (
-                    <p className="mt-1 text-xs text-gray-500">CPF não pode ser alterado</p>
+                    <p className="mt-1 text-xs text-text-secondary">CPF não pode ser alterado</p>
                   )}
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="email" className={labelClass}>
                     Email
                   </label>
                   <input
@@ -580,12 +584,12 @@ export default function ManageWorkersPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="phone" className={labelClass}>
                     Telefone
                   </label>
                   <input
@@ -594,12 +598,12 @@ export default function ManageWorkersPage() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="(00) 00000-0000"
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="pis" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="pis" className={labelClass}>
                     PIS/NIS *
                   </label>
                   <input
@@ -608,13 +612,13 @@ export default function ManageWorkersPage() {
                     value={pis}
                     onChange={(e) => setPis(e.target.value)}
                     placeholder="000.00000.00-0"
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                     required
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="rg" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="rg" className={labelClass}>
                     RG *
                   </label>
                   <input
@@ -623,13 +627,13 @@ export default function ManageWorkersPage() {
                     value={rg}
                     onChange={(e) => setRg(e.target.value)}
                     placeholder="00.000.000-0"
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                     required
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="cooperative" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="cooperative" className={labelClass}>
                     Cooperativa *
                   </label>
                   <div className="relative">
@@ -637,7 +641,7 @@ export default function ManageWorkersPage() {
                       id="cooperative"
                       value={cooperativeId}
                       onChange={(e) => setCooperativeId(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736] appearance-none disabled:bg-gray-100"
+                      className={selectFieldClass}
                       disabled={loadingCooperatives || cooperatives.length === 0}
                     >
                       {loadingCooperatives && <option>Carregando...</option>}
@@ -651,7 +655,7 @@ export default function ManageWorkersPage() {
                           </option>
                         ))}
                     </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
                       <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                         <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                       </svg>
@@ -661,7 +665,7 @@ export default function ManageWorkersPage() {
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="mb-4">
-                    <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="birthDate" className={labelClass}>
                       Data de Nascimento *
                     </label>
                     <input
@@ -669,12 +673,12 @@ export default function ManageWorkersPage() {
                       type="date"
                       value={birthDate}
                       onChange={(e) => setBirthDate(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                      className={fieldClass}
                       required
                     />
                   </div>
                   <div className="mb-4">
-                    <label htmlFor="enterDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="enterDate" className={labelClass}>
                       Data de Entrada *
                     </label>
                     <input
@@ -682,7 +686,7 @@ export default function ManageWorkersPage() {
                       type="date"
                       value={enterDate}
                       onChange={(e) => setEnterDate(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                      className={fieldClass}
                       required
                     />
                   </div>
@@ -690,7 +694,7 @@ export default function ManageWorkersPage() {
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="mb-4">
-                    <label htmlFor="exitDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="exitDate" className={labelClass}>
                       Data de Saída
                     </label>
                     <input
@@ -698,11 +702,11 @@ export default function ManageWorkersPage() {
                       type="date"
                       value={exitDate}
                       onChange={(e) => setExitDate(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                      className={fieldClass}
                     />
                   </div>
                   <div className="mb-4">
-                    <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="gender" className={labelClass}>
                       Gênero
                     </label>
                     <div className="relative">
@@ -710,14 +714,14 @@ export default function ManageWorkersPage() {
                         id="gender"
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736] appearance-none"
+                        className={selectFieldClass}
                       >
                         <option value="">Não informar</option>
                         <option value="Feminino">Feminino</option>
                         <option value="Masculino">Masculino</option>
                         <option value="Outro">Outro</option>
                       </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
                         <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                           <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                         </svg>
@@ -727,7 +731,7 @@ export default function ManageWorkersPage() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="userType" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="userType" className={labelClass}>
                     Tipo de Usuário *
                   </label>
                   <div className="relative">
@@ -735,12 +739,12 @@ export default function ManageWorkersPage() {
                       id="userType"
                       value={userType}
                       onChange={(e) => setUserType(Number(e.target.value))}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736] appearance-none"
+                      className={selectFieldClass}
                     >
                       <option value={1}>Catador</option>
                       <option value={0}>Gerência (Acesso ao Dashboard)</option>
                     </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
                       <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                         <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                       </svg>
@@ -749,7 +753,7 @@ export default function ManageWorkersPage() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="password" className={labelClass}>
                     {modalMode === 'create' ? 'Senha *' : 'Nova Senha (deixe em branco para manter)'}
                   </label>
                   <input
@@ -757,15 +761,15 @@ export default function ManageWorkersPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
+                    className={fieldClass}
                     minLength={6}
                     required={modalMode === 'create'}
                   />
-                  <p className="mt-1 text-xs text-gray-500">Mínimo de 6 caracteres</p>
+                  <p className="mt-1 text-xs text-text-secondary">Mínimo de 6 caracteres</p>
                 </div>
 
                 <div className="mb-6">
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="confirmPassword" className={labelClass}>
                     {modalMode === 'create' ? 'Confirmar Senha *' : 'Confirmar Nova Senha'}
                   </label>
                   <input
@@ -773,30 +777,30 @@ export default function ManageWorkersPage() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`block w-full px-3 py-2 border rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736] ${
+                    className={`${fieldClass} ${
                       confirmPassword && confirmPassword !== password
-                        ? 'border-red-300 bg-red-50'
-                        : 'border-gray-300'
+                        ? 'border-error/40 bg-error/12'
+                        : ''
                     }`}
                     required={modalMode === 'create'}
                   />
                   {confirmPassword && confirmPassword !== password && (
-                    <p className="mt-1 text-xs text-red-500">As senhas não coincidem</p>
+                    <p className="mt-1 text-xs text-error">As senhas não coincidem</p>
                   )}
                 </div>
 
-                <div className="sticky bottom-0 pt-4 bg-white mt-6 border-t border-gray-100">
+                <div className="sticky bottom-0 pt-4 bg-surface mt-6 border-t border-outline">
                   <div className="flex justify-end space-x-3">
                     <button
                       type="button"
                       onClick={closeModal}
-                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                      className="px-4 py-2 border border-outline rounded-lg text-foreground hover:bg-surface-alt"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-[#5C1D2E] text-white rounded-lg hover:bg-[#8A2736] transition-colors duration-200"
+                      className="px-4 py-2 bg-primary text-background rounded-lg hover:bg-primary/90 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-70"
                       disabled={
                         loadingCooperatives ||
                         (modalMode === 'create' && (

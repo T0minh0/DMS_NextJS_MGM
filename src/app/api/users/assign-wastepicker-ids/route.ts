@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import { authErrorResponse, determineTargetCooperative, requireAdmin } from '@/lib/auth/server';
 import { formatWorkerId } from '@/lib/db-utils';
 
 export async function POST() {
   try {
-    const session = await requireManagerOrAdmin();
+    const session = await requireAdmin();
     const targetCooperativeId = determineTargetCooperative(session);
     const workers = await prisma.workers.findMany({
       where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,

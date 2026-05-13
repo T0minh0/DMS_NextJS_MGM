@@ -21,11 +21,14 @@ interface LayoutProps {
   activePath?: string;
 }
 
+type UserRole = 'admin' | 'manager' | 'worker';
+
 interface User {
   id: string;
   name?: string;
   full_name?: string;
   userType: number;
+  role?: UserRole;
   notFound?: boolean;
   cooperative_id?: string;
   cooperative_name?: string | null;
@@ -75,45 +78,37 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
 
     const fetchRealUserData = async () => {
       try {
-        const response = await fetch(`/api/user?id=${parsedUser.id}`);
+	        const response = await fetch(`/api/user?id=${parsedUser.id}`);
 
-        if (!response.ok) {
-          console.log('Fetching all users to debug...');
-          await fetch('/api/users/all')
-            .then((res) => res.json())
-            .then((data) => console.log('Available users:', data))
-            .catch((err) => console.error('Failed to fetch all users:', err));
-        }
+	        if (response.ok) {
+	          const realUserData = await response.json();
 
-        if (response.ok) {
-          const realUserData = await response.json();
-          console.log('Real user data fetched:', realUserData);
-
-          persistUser({
-            ...parsedUser,
-            full_name: realUserData.full_name || 'Carlos Ferreira',
-            name: realUserData.name,
-            cooperative_id: realUserData.cooperative_id,
-            cooperative_name: realUserData.cooperative_name,
-          });
-        } else {
-          persistUser({
-            ...parsedUser,
-            full_name: 'Carlos Ferreira',
-            notFound: true,
-            cooperative_id: parsedUser.cooperative_id,
-            cooperative_name: parsedUser.cooperative_name,
+	          persistUser({
+	            ...parsedUser,
+	            full_name: realUserData.full_name || parsedUser.full_name || parsedUser.name || 'Usuario',
+	            name: realUserData.name || parsedUser.name,
+	            role: realUserData.role || parsedUser.role,
+	            cooperative_id: realUserData.cooperative_id,
+	            cooperative_name: realUserData.cooperative_name,
+	          });
+	        } else {
+	          persistUser({
+	            ...parsedUser,
+	            full_name: parsedUser.full_name || parsedUser.name || 'Usuario',
+	            notFound: true,
+	            cooperative_id: parsedUser.cooperative_id,
+	            cooperative_name: parsedUser.cooperative_name,
           });
         }
       } catch (error) {
         console.error('Error fetching real user data:', error);
 
-        persistUser({
-          ...parsedUser,
-          full_name: 'Carlos Ferreira',
-          notFound: true,
-          cooperative_id: parsedUser.cooperative_id,
-          cooperative_name: parsedUser.cooperative_name,
+	        persistUser({
+	          ...parsedUser,
+	          full_name: parsedUser.full_name || parsedUser.name || 'Usuario',
+	          notFound: true,
+	          cooperative_id: parsedUser.cooperative_id,
+	          cooperative_name: parsedUser.cooperative_name,
         });
       } finally {
         setLoading(false);

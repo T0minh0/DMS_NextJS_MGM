@@ -40,7 +40,7 @@ Recalcula `Worker_contributions` a partir de todas as linhas de `Measurments`. R
 
 - Operacao destrutiva para `Worker_contributions`.
 - Nao ha transacao explicita envolvendo delete + inserts.
-- Frontend espera `statistics.totalEarnings`, mas o endpoint nao retorna esse campo.
+- Uso deve ficar restrito a admin; a UI gerencial nao exibe esta acao.
 
 ## `GET /api/debug/check-data`
 
@@ -55,7 +55,7 @@ Retorna diagnostico de:
 
 Inclui contagens e ate 3 amostras por grupo.
 
-Requer `admin`.
+Requer `admin`. Em producao, retorna `404` salvo quando `DMS_DEBUG_ENDPOINTS_ENABLED=true`. As amostras nao retornam CPF.
 
 ## `GET /api/debug/collections`
 
@@ -70,7 +70,7 @@ Retorna lista de colecoes/modelos principais e uma amostra de cada:
 - `Stock`
 - `WorkerContributions`
 
-Requer `admin`.
+Requer `admin`. Em producao, retorna `404` salvo quando `DMS_DEBUG_ENDPOINTS_ENABLED=true`. As amostras nao retornam email.
 
 ## `GET /api/debug/wastepickers`
 
@@ -83,7 +83,7 @@ Endpoint diagnostico que tenta encontrar:
 
 Tambem retorna lista de nomes de modelos Prisma esperados.
 
-Requer `admin`.
+Requer `admin`. Em producao, retorna `404` salvo quando `DMS_DEBUG_ENDPOINTS_ENABLED=true`. O endpoint nao retorna CPF nas amostras.
 
 ## `GET /api/debug/create-test-user`
 
@@ -93,11 +93,7 @@ Cria ou atualiza usuario de teste. Requer `admin`.
 
 ### Protecao
 
-Bloqueia em producao:
-
-```ts
-if (process.env.NODE_ENV === 'production') return 403
-```
+Bloqueia em producao sem override, mesmo que `DMS_DEBUG_ENDPOINTS_ENABLED=true`.
 
 ### Credenciais criadas
 

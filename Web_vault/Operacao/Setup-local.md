@@ -38,16 +38,17 @@ npx prisma db seed
 | `DMS_FEATURE_GAMIFICATION` | Nao | Flag opt-in para multipliers, achievements, levels e leaderboard |
 | `DMS_FEATURE_NOTICES` | Nao | Flag opt-in para mural de avisos |
 | `DMS_FEATURE_REPORTS` | Nao | Flag opt-in para reports novos |
+| `DMS_DEBUG_ENDPOINTS_ENABLED` | Nao | Habilita `/api/debug/*` em producao somente para admin; nao habilita `create-test-user` |
 | `MONGODB_URI` | Nao | Comentada como legado no `env.example` |
 | `MONGODB_DB` | Nao | Comentada como legado no `env.example` |
-| `NODE_ENV` | Nao | Controla cookie `secure` e bloqueia debug create-test-user em producao |
+| `NODE_ENV` | Nao | Controla cookie `secure` e bloqueia endpoints debug em producao sem flag |
 
 ## Comandos do projeto
 
 | Comando | Estado observado | Observacao |
 | --- | --- | --- |
 | `npm run dev` | Nao executado nesta documentacao | Executa `next dev --turbopack` |
-| `npm run build` | OK | Compila e gera 36 paginas/rotas; mostra aviso de middleware deprecated |
+| `npm run build` | OK | Compila e gera 36 paginas/rotas; usa `src/proxy.ts` no padrao Next 16 |
 | `npm run start` | Nao executado nesta documentacao | Requer build previo |
 | `npm run lint` | OK | Usa `eslint .` |
 | `npm run typecheck` | OK | Usa `tsc --noEmit --incremental false` |
@@ -55,7 +56,7 @@ npx prisma db seed
 | `npm run prisma:validate` | OK | Valida schema Prisma com `DATABASE_URL` real ou placeholder |
 | `npm run check:whitespace` | OK | Varre arquivos de texto tracked e untracked |
 | `npm run quality` | OK | Gate completo local |
-| `npm audit --json` | Falha por vulnerabilidades | 12 vulnerabilidades: 3 moderadas, 9 altas |
+| `npm audit` | OK | 0 vulnerabilidades apos atualizacao de lockfile e override de `postcss` |
 
 ## Banco
 

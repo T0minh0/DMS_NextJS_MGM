@@ -27,9 +27,9 @@ Endpoint: `POST /api/auth/logout`
 - Apaga cookie `auth_token`.
 - Retorna mensagem de sucesso.
 
-## Middleware
+## Proxy
 
-Arquivo: `src/middleware.ts`
+Arquivo: `src/proxy.ts`
 
 Rotas publicas:
 
@@ -51,11 +51,11 @@ Para rotas protegidas:
 | Area | Protecao observada |
 | --- | --- |
 | Login | Permite `admin` e `manager`; rejeita `worker` no painel web |
-| Middleware | Verifica assinatura, issuer, audience, expiracao e payload JWT |
+| Proxy | Verifica assinatura, issuer, audience, expiracao e payload JWT antes de liberar paginas/APIs protegidas |
 | `GET/POST /api/sales` | Usa `requireManagerOrAdmin`, escopo de cooperativa e responsavel valido |
 | `PUT/DELETE /api/sales/[id]` | Usa escopo de cooperativa da venda; admin global, manager apenas propria cooperativa |
 | Usuarios/perfil | Usa `requireAuth`, `determineTargetWorker` e `determineTargetCooperative` |
-| Materiais/cooperativas/debug/recalc | Mutacoes e debug exigem `requireAdmin`; leituras operacionais exigem gestor/admin |
+| Materiais/cooperativas/debug/recalc | Mutacoes globais, debug e recalc exigem `requireAdmin`; debug tambem fica bloqueado em producao sem flag operacional |
 | Dashboard/notices/reports/gamificacao | Revalidam JWT na API e aplicam escopo de cooperativa/usuario |
 
 ## Segredos e defaults
@@ -106,22 +106,14 @@ Regras base:
 - CPF, PIS e RG ficam em `Bytes`, mas nao ha criptografia observada; os bytes representam strings UTF-8.
 - APIs retornam CPF/PIS/RG em texto para frontend.
 
-## Dependencias vulneraveis observadas
+## Dependencias e audit
 
-`npm audit --json` reportou 12 vulnerabilidades:
+`npm audit` e `npm audit --omit=dev` retornam 0 vulnerabilidades apos atualizacao do lockfile, Next 16.2.x e override de `postcss`.
 
-| Severidade | Quantidade |
-| --- | --- |
-| Moderada | 3 |
-| Alta | 9 |
-| Critica | 0 |
-
-Pacotes afetados incluem `next`, `prisma`, `@prisma/config`, `effect`, `defu`, `flatted`, `minimatch`, `picomatch`, `postcss`, `tar`, `brace-expansion` e `ajv`.
+Prisma 7 ja esta disponivel como major update, mas deve ser planejado em task separada por potencial quebra de compatibilidade.
 
 ## Pontos de atencao
 
-- Migrar `src/middleware.ts` para a convencao `proxy` quando o projeto atualizar o padrao do Next 16.
-- Revisar exposicao de endpoints debug.
-- Corrigir vulnerabilidades de `next` e `prisma`.
-- Rever logs client-side que podem expor dados em console.
+- Revisar exposicao de endpoints debug sempre que `DMS_DEBUG_ENDPOINTS_ENABLED=true` for usado em producao.
+- Planejar upgrade major do Prisma 7 com banco controlado.
 - Considerar criptografia/mascara para documentos pessoais em respostas de API.

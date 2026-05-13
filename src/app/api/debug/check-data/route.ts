@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber, formatWorkerId } from '@/lib/db-utils';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
 
 export async function GET() {
   try {
     await requireAdmin();
+    const disabledResponse = getDebugRouteDisabledResponse();
+    if (disabledResponse) {
+      return disabledResponse;
+    }
+
     const [workers, measurments, contributions, materials] = await Promise.all([
       prisma.workers.findMany({
         where: { userType: '1' },
@@ -15,7 +21,6 @@ export async function GET() {
           workerId: true,
           workerName: true,
           userType: true,
-          cpf: true,
         },
       }),
       prisma.measurments.findMany({

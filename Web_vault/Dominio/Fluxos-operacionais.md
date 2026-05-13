@@ -5,7 +5,7 @@
 1. Usuario acessa `/login`.
 2. Frontend formata CPF e envia CPF sem pontuacao para `/api/auth/login`.
 3. API busca `Workers` por CPF.
-4. API aceita somente `userType === 0`.
+4. API aceita somente usuarios com `role` `admin` ou `manager`.
 5. API valida senha.
 6. API grava cookie `auth_token` e retorna objeto `user`.
 7. Frontend salva `user` no `localStorage`.
@@ -103,8 +103,8 @@
 
 ## Recalcular contribuicoes
 
-1. No dashboard, gerente aciona recalc.
-2. Frontend exige `user.userType === 0`.
+1. No dashboard, admin aciona recalc.
+2. Frontend exibe a acao somente para `role === 'admin'`.
 3. Envia `POST /api/recalculate-contributions`.
 4. API recalcula a partir de todas as medicoes.
 5. API apaga `Worker_contributions`.
@@ -113,8 +113,8 @@
 
 ## Diagnosticar dados
 
-1. No dashboard, gerente aciona debug.
-2. Frontend exige `user.userType === 0`.
+1. No dashboard, admin aciona debug.
+2. Frontend exibe a acao somente para `role === 'admin'`.
 3. Envia `GET /api/debug/check-data`.
 4. API retorna contagens e amostras de catadores, medicoes, contribuicoes e materiais.
 5. Frontend mostra resumo textual.

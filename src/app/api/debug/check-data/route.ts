@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber, formatWorkerId } from '@/lib/db-utils';
 
 export async function GET() {
   try {
+    await requireAdmin();
     const [workers, measurments, contributions, materials] = await Promise.all([
       prisma.workers.findMany({
         where: { userType: '1' },
@@ -99,6 +101,11 @@ export async function GET() {
 
     return NextResponse.json(debugInfo);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Debug check error:', error);
     return NextResponse.json(
       {

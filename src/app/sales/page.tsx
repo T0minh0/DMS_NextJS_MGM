@@ -816,4 +816,4 @@ export default function SalesPage() {
       </div>
     </Layout>
   );
-} 
+}

@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  determineTargetWorker,
+  requireAuth,
+} from '@/lib/auth/server';
+import { mapDatabaseUserTypeToRole, roleToUserType } from '@/lib/auth/shared';
 import { decodeBytes, formatWorkerId } from '@/lib/db-utils';
 
 export async function GET(request: Request) {
   try {
+    const session = await requireAuth();
     const { searchParams } = new URL(request.url);
     const idParam = searchParams.get('id');
     const cpfParam = searchParams.get('cpf');
@@ -16,7 +24,7 @@ export async function GET(request: Request) {
 
     if (idParam) {
       try {
-        const workerId = BigInt(idParam);
+        const workerId = BigInt(determineTargetWorker(session, idParam, { required: true }));
         worker = await prisma.workers.findUnique({
           where: { workerId },
           include: { cooperativeRef: true },
@@ -38,6 +46,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
     }
 
+    determineTargetWorker(session, worker.workerId);
+    determineTargetCooperative(session, worker.cooperative);
+
+    const role = mapDatabaseUserTypeToRole(worker.userType) ?? 'worker';
+    const userType = roleToUserType(role);
+
     const cpfValue = decodeBytes(worker.cpf);
     const response = {
       id: worker.workerId.toString(),
@@ -45,7 +59,9 @@ export async function GET(request: Request) {
       wastepicker_id: formatWorkerId(worker.workerId),
       full_name: worker.workerName,
       cpf: cpfValue,
-      user_type: Number(worker.userType),
+      role,
+      userType,
+      user_type: userType,
       email: worker.email,
       gender: worker.gender,
       birth_date: worker.birthDate?.toISOString().split('T')[0] ?? null,
@@ -57,6 +73,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching user:', error);
     return NextResponse.json({ message: 'Erro ao buscar dados do usuário' }, { status: 500 });
   }

@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import { AUTH_COOKIE_NAME, AUTH_TOKEN_TTL_SECONDS, mapDatabaseUserTypeToRole, roleToUserType } from '@/lib/auth/shared';
+import { signAuthToken } from '@/lib/auth/server';
 import {
   decodeBytes,
   formatWorkerId,
-  mapUserType,
   sanitizeDigits,
 } from '@/lib/db-utils';
-
-// JWT secret key - in production this should be stored in environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'dms-dashboard-secret-key';
 
 interface RawWorker {
   workerId: bigint;
@@ -28,6 +25,10 @@ interface RawWorker {
   password: Buffer;
   email: string;
   lastUpdate: Date | null;
+}
+
+function isBcryptHash(value: string) {
+  return /^\$2[abxy]\$/.test(value);
 }
 
 export async function POST(request: Request) {
@@ -74,9 +75,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const userType = mapUserType(worker.userType);
+    const role = mapDatabaseUserTypeToRole(worker.userType);
 
-    if (userType !== 0) {
+    if (!role) {
+      return NextResponse.json(
+        { message: 'Tipo de usuário inválido' },
+        { status: 403 },
+      );
+    }
+
+    if (role === 'worker') {
       return NextResponse.json(
         { message: 'Acesso restrito apenas para gerentes' },
         { status: 403 },
@@ -87,10 +95,10 @@ export async function POST(request: Request) {
 
     let passwordIsValid = false;
 
-    if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')) {
+    if (isBcryptHash(storedPassword)) {
       passwordIsValid = await bcrypt.compare(password, storedPassword);
     } else if (storedPassword) {
-      passwordIsValid = password === storedPassword;
+      console.warn('Rejected login for worker with non-bcrypt password hash');
     }
 
     if (!passwordIsValid) {
@@ -102,26 +110,30 @@ export async function POST(request: Request) {
 
     const fullName = worker.workerName || 'Usuário';
     const workerId = worker.workerId;
+    const cooperative = await prisma.cooperative.findUnique({
+      where: { cooperativeId: worker.cooperative },
+      select: { cooperativeName: true },
+    });
+    const userType = roleToUserType(role);
 
-    const token = jwt.sign(
-      {
-        id: workerId.toString(),
-        name: fullName,
-        cpf: normalizedCpf,
-        userType,
-      },
-      JWT_SECRET,
-      { expiresIn: '8h' },
-    );
+    const token = signAuthToken({
+      workerId: workerId.toString(),
+      cooperativeId: worker.cooperative.toString(),
+      cooperativeName: cooperative?.cooperativeName ?? null,
+      role,
+      userType,
+      name: fullName,
+      cpf: normalizedCpf,
+    });
 
     const cookieStore = await cookies();
     cookieStore.set({
-      name: 'auth_token',
+      name: AUTH_COOKIE_NAME,
       value: token,
       httpOnly: true,
       path: '/',
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 8,
+      maxAge: AUTH_TOKEN_TTL_SECONDS,
       sameSite: 'strict',
     });
 
@@ -129,9 +141,16 @@ export async function POST(request: Request) {
       message: 'Login realizado com sucesso',
       user: {
         id: workerId.toString(),
+        workerId: workerId.toString(),
+        worker_id: Number(workerId),
         name: fullName,
         full_name: fullName,
+        role,
         userType,
+        user_type: userType,
+        cooperativeId: worker.cooperative.toString(),
+        cooperative_id: worker.cooperative.toString(),
+        cooperative_name: cooperative?.cooperativeName ?? null,
         wastepicker_id: formatWorkerId(workerId),
       },
     });

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type MeasurementRecord = {
@@ -94,6 +95,9 @@ function calculateDailyContributions(measurements: MeasurementRecord[]) {
 
 export async function POST() {
   try {
+    const session = await requireAdmin();
+    requireScopedPermission(session, 'reports', 'recalculate', 'global');
+
     const prismaMeasurements = await prisma.measurments.findMany({
       select: {
         wastepicker: true,
@@ -183,6 +187,11 @@ export async function POST() {
       processed: weeklyContributions.length,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error recalculating contributions:', error);
     return NextResponse.json(
       {

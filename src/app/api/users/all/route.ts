@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import {
   decodeBytes,
   formatWorkerId,
@@ -9,6 +10,7 @@ import {
 
 export async function GET() {
   try {
+    await requireAdmin();
     const users = await prisma.workers.findMany({
       orderBy: { workerName: 'asc' },
     });
@@ -47,6 +49,11 @@ export async function GET() {
 
     return NextResponse.json(formattedUsers, { status: 200 });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Failed to fetch users:', error);
     return NextResponse.json(
       { message: 'Falha ao buscar usuários' },

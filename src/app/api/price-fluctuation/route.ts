@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type MaterialContext = {
@@ -64,6 +65,10 @@ async function resolveMaterialIds(
 
 export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
+
     const { searchParams } = new URL(request.url);
     const materialParam = searchParams.get('material_id');
     const context = await loadMaterialContext();
@@ -76,7 +81,16 @@ export async function GET(request: Request) {
       const materialIds = resolved.ids!;
 
       const sales = await prisma.sales.findMany({
-        where: { material: { in: materialIds } },
+        where: {
+          material: { in: materialIds },
+          ...(targetCooperativeId
+            ? {
+              responsibleRef: {
+                cooperative: BigInt(targetCooperativeId),
+              },
+            }
+            : {}),
+        },
         orderBy: { date: 'desc' },
         take: materialIds.length > 1 ? 200 : 10,
         select: {
@@ -164,7 +178,16 @@ export async function GET(request: Request) {
       recentMaterials.map(async (entry) => {
         const materialId = entry.material;
         const materialSales = await prisma.sales.findMany({
-          where: { material: materialId },
+          where: {
+            material: materialId,
+            ...(targetCooperativeId
+              ? {
+                responsibleRef: {
+                  cooperative: BigInt(targetCooperativeId),
+                },
+              }
+              : {}),
+          },
           orderBy: { date: 'desc' },
           take: 10,
           select: {
@@ -220,6 +243,11 @@ export async function GET(request: Request) {
       priceData,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching price fluctuation:', error);
     return NextResponse.json(
       {

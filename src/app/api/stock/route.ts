@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
 export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'stock', 'read', targetCooperativeId ? 'cooperative' : 'global');
     const { searchParams } = new URL(request.url);
     const materialIdParam = searchParams.get('material_id');
 
@@ -45,7 +49,10 @@ export async function GET(request: Request) {
     }
 
     const stocks = await prisma.stock.findMany({
-      where: materialFilter ? { material: { in: materialFilter } } : undefined,
+      where: {
+        ...(materialFilter ? { material: { in: materialFilter } } : {}),
+        ...(targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : {}),
+      },
       include: {
         materialRef: true,
         cooperativeRef: true,
@@ -74,6 +81,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json(formattedStock);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching stock:', error);
     return NextResponse.json(
       {

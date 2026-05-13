@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { decimalToNumber, formatWorkerId } from '@/lib/db-utils';
 
 type PeriodType = 'weekly' | 'monthly' | 'yearly';
@@ -85,6 +86,10 @@ function parseWorkerId(workerParam: string | null) {
 
 export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
+
     const { searchParams } = new URL(request.url);
     const workerParam = searchParams.get('worker_id');
     const materialParam = searchParams.get('material_id');
@@ -104,6 +109,13 @@ export async function GET(request: Request) {
       },
       ...(workerId ? { wastepicker: workerId } : {}),
       ...(materialFilter.ids ? { material: { in: materialFilter.ids } } : {}),
+      ...(targetCooperativeId
+        ? {
+          wastepickerRef: {
+            cooperative: BigInt(targetCooperativeId),
+          },
+        }
+        : {}),
     };
 
     if (periodType === 'yearly' && !materialParam) {
@@ -124,7 +136,10 @@ export async function GET(request: Request) {
 
       const workerIds = topWorkers.map((item) => item.wastepicker);
       const workers = await prisma.workers.findMany({
-        where: { workerId: { in: workerIds } },
+        where: {
+          workerId: { in: workerIds },
+          ...(targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : {}),
+        },
         select: { workerId: true, workerName: true },
       });
       const workerNameMap = new Map(workers.map((worker) => [worker.workerId, worker.workerName]));
@@ -203,7 +218,10 @@ export async function GET(request: Request) {
 
     const workerIds = topWorkers.map((item) => item.wastepicker);
     const workers = await prisma.workers.findMany({
-      where: { workerId: { in: workerIds } },
+      where: {
+        workerId: { in: workerIds },
+        ...(targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : {}),
+      },
       select: { workerId: true, workerName: true },
     });
     const workerNameMap = new Map(workers.map((worker) => [worker.workerId, worker.workerName]));
@@ -219,6 +237,11 @@ export async function GET(request: Request) {
       data: formatted,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching worker collections:', error);
     return NextResponse.json(
       {

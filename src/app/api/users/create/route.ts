@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
 import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
     const {
       full_name,
       CPF,
@@ -32,9 +34,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Tipo de usuário inválido' }, { status: 400 });
     }
 
+    const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
     let cooperativeBigInt: bigint;
     try {
-      cooperativeBigInt = BigInt(cooperative_id);
+      cooperativeBigInt = BigInt(targetCooperativeId);
     } catch {
       return NextResponse.json({ message: 'Cooperativa inválida' }, { status: 400 });
     }
@@ -104,6 +107,11 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error creating user:', error);
     return NextResponse.json({ message: 'Erro ao criar usuário' }, { status: 500 });
   }

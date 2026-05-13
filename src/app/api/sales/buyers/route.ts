@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 
 export async function GET() {
   try {
+    const session = await requireManagerOrAdmin();
+    requireScopedPermission(session, 'sales', 'read', 'cooperative');
+
     const buyers = await prisma.buyers.findMany({
       orderBy: { buyerName: 'asc' },
     });
@@ -14,6 +18,11 @@ export async function GET() {
       count: names.length,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching buyers:', error);
     return NextResponse.json(
       {
@@ -27,6 +36,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireManagerOrAdmin();
+    requireScopedPermission(session, 'sales', 'create', 'cooperative');
+
     const { buyer } = await request.json();
 
     const buyerName = buyer?.trim();
@@ -60,6 +72,11 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error adding buyer:', error);
     return NextResponse.json(
       {

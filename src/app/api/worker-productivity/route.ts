@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  determineTargetWorker,
+  requireAuth,
+  requireScopedPermission,
+} from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type MaterialContribution = {
@@ -147,6 +154,7 @@ function calculateNetContributions(measurements: MeasurementRecord[]) {
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireAuth();
     const { searchParams } = new URL(request.url);
     const workerParam = searchParams.get('worker_id');
     const weeks = Number(searchParams.get('weeks') ?? '12');
@@ -155,10 +163,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Worker ID is required' }, { status: 400 });
     }
 
-    const workerId = parseWorkerId(workerParam);
+    const workerId = parseWorkerId(
+      determineTargetWorker(session, workerParam, { required: true }),
+    );
     if (!workerId) {
       return NextResponse.json({ error: 'Invalid worker ID' }, { status: 400 });
     }
+
+    const worker = await prisma.workers.findUnique({
+      where: { workerId },
+      select: { cooperative: true },
+    });
+
+    if (!worker) {
+      return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
+    }
+
+    determineTargetCooperative(session, worker.cooperative);
+    requireScopedPermission(
+      session,
+      'gamification',
+      'read',
+      session.role === 'worker' ? 'self' : 'cooperative',
+    );
 
     const { startDate, endDate } = computeDateRange(weeks);
 
@@ -304,6 +331,11 @@ export async function GET(request: NextRequest) {
       stats,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching worker productivity:', error);
     return NextResponse.json(
       {

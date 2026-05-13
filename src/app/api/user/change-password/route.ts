@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetWorker,
+  requireAuth,
+  requireScopedPermission,
+} from '@/lib/auth/server';
+import { AuthError } from '@/lib/auth/shared';
 import { decodeBytes } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireAuth();
     const { id, currentPassword, newPassword } = await request.json();
 
     if (!id || !currentPassword || !newPassword) {
@@ -20,10 +28,16 @@ export async function POST(request: Request) {
 
     let workerId: bigint;
     try {
-      workerId = BigInt(id);
+      workerId = BigInt(determineTargetWorker(session, id, { required: true }));
     } catch {
       return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
     }
+
+    if (workerId.toString() !== session.workerId) {
+      throw new AuthError('Senha só pode ser alterada pelo próprio usuário', 403, 'SELF_PASSWORD_REQUIRED');
+    }
+
+    requireScopedPermission(session, 'users', 'update', 'self');
 
     const worker = await prisma.workers.findUnique({
       where: { workerId },
@@ -55,6 +69,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'Senha atualizada com sucesso' });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error updating password:', error);
     return NextResponse.json({ message: 'Erro ao atualizar senha' }, { status: 500 });
   }

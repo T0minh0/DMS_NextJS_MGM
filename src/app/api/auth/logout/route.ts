@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { AUTH_COOKIE_NAME } from '@/lib/auth/shared';
 
 export async function POST() {
   try {
     // Clear the auth token cookie
     const cookieStore = await cookies();
-    cookieStore.delete('auth_token');
+    cookieStore.delete(AUTH_COOKIE_NAME);
 
     return NextResponse.json({ message: 'Logout realizado com sucesso' });
   } catch (error) {
@@ -15,4 +16,4 @@ export async function POST() {
       { status: 500 }
     );
   }
-} 
+}

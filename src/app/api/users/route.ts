@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
 import {
   decodeBytes,
   formatWorkerId,
@@ -9,7 +10,10 @@ import {
 
 export async function GET() {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
     const workers = await prisma.workers.findMany({
+      where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
       orderBy: { workerName: 'asc' },
       include: { cooperativeRef: true },
     });
@@ -48,6 +52,11 @@ export async function GET() {
 
     return NextResponse.json(formattedWorkers);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching users:', error);
     return NextResponse.json(
       {

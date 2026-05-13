@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type PeriodType = 'weekly' | 'monthly' | 'yearly';
@@ -46,6 +47,10 @@ function formatPeriodLabel(periodType: PeriodType, start: Date, end: Date) {
 
 export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
+
     const { searchParams } = new URL(request.url);
     const materialParam = searchParams.get('material_id');
     const periodType = (searchParams.get('period_type') as PeriodType) || 'monthly';
@@ -90,6 +95,13 @@ export async function GET(request: Request) {
               },
             }
             : {}),
+          ...(targetCooperativeId
+            ? {
+              responsibleRef: {
+                cooperative: BigInt(targetCooperativeId),
+              },
+            }
+            : {}),
         },
         select: {
           priceKg: true,
@@ -120,6 +132,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json(periods);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching earnings comparison:', error);
     return NextResponse.json(
       {

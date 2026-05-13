@@ -1,46 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import jwt from 'jsonwebtoken';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  determineTargetWorker,
+  requireManagerOrAdmin,
+  requireScopedPermission,
+} from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dms-dashboard-secret-key';
-
-interface AuthTokenPayload {
-  id: string;
-  name: string;
-  cpf: string;
-  userType: number;
-  iat?: number;
-  exp?: number;
-}
-
-async function getAuthenticatedManager() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth_token')?.value;
-  if (!token) {
-    return null;
-  }
-
+function toBigInt(value: string | number | bigint, message: string) {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
-    const workerId = BigInt(payload.id);
-    const worker = await prisma.workers.findUnique({
-      where: { workerId },
-    });
-    if (!worker) {
-      return null;
-    }
-    return worker;
-  } catch (error) {
-    console.error('Failed to decode auth token:', error);
-    return null;
+    return BigInt(value);
+  } catch {
+    throw new Error(message);
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireManagerOrAdmin();
     const { searchParams } = new URL(request.url);
     const materialId = searchParams.get('material_id');
     const cooperativeId = searchParams.get('cooperative_id');
@@ -49,6 +29,13 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get('limit') || '100', 10);
 
     const where: Prisma.SalesWhereInput = {};
+    const targetCooperativeId = determineTargetCooperative(session, cooperativeId);
+    requireScopedPermission(
+      session,
+      'sales',
+      'read',
+      targetCooperativeId ? 'cooperative' : 'global',
+    );
 
     if (materialId) {
       try {
@@ -58,14 +45,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (cooperativeId) {
-      try {
-        where.responsibleRef = {
-          cooperative: BigInt(cooperativeId),
-        };
-      } catch {
-        return NextResponse.json({ error: 'Cooperativa inválida' }, { status: 400 });
-      }
+    if (targetCooperativeId) {
+      where.responsibleRef = {
+        cooperative: BigInt(targetCooperativeId),
+      };
     }
 
     if (startDate || endDate) {
@@ -127,6 +110,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching sales:', error);
     return NextResponse.json(
       {
@@ -140,18 +128,31 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const manager = await getAuthenticatedManager();
-    if (!manager) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
+    const session = await requireManagerOrAdmin();
     const body = await request.json();
+    const targetCooperativeId = determineTargetCooperative(
+      session,
+      body.cooperative_id ?? session.cooperativeId,
+      { required: true },
+    );
+    const targetWorkerId = determineTargetWorker(
+      session,
+      session.role === 'admin' ? body.responsible_worker_id ?? session.workerId : session.workerId,
+      { required: true },
+    );
+    requireScopedPermission(session, 'sales', 'create', 'cooperative');
 
     const requiredFields = ['material_id', 'price/kg', 'weight_sold', 'date', 'Buyer'];
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json({ error: `Campo obrigatório: ${field}` }, { status: 400 });
       }
+    }
+
+    try {
+      BigInt(targetCooperativeId);
+    } catch {
+      return NextResponse.json({ error: 'Cooperativa inválida' }, { status: 400 });
     }
 
     let materialId: bigint;
@@ -197,9 +198,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const responsibleWorker = await prisma.workers.findUnique({
+      where: { workerId: BigInt(targetWorkerId) },
+      select: { workerId: true, cooperative: true },
+    });
+
+    if (!responsibleWorker || responsibleWorker.cooperative.toString() !== targetCooperativeId) {
+      return NextResponse.json(
+        { error: 'Responsável fora do escopo da cooperativa' },
+        { status: 403 },
+      );
+    }
+
     const stockRecord = await prisma.stock.findFirst({
       where: {
-        cooperative: manager.cooperative,
+        cooperative: toBigInt(targetCooperativeId, 'Cooperativa inválida'),
         material: materialId,
       },
     });
@@ -226,7 +239,7 @@ export async function POST(request: NextRequest) {
         weight: weightSold.toFixed(2),
         date: saleDate,
         buyer: buyer.buyerId,
-        responsible: manager.workerId,
+        responsible: responsibleWorker.workerId,
       },
     });
 
@@ -248,7 +261,7 @@ export async function POST(request: NextRequest) {
         sale: {
           _id: sale.saleId.toString(),
           material_id: sale.material.toString(),
-          cooperative_id: manager.cooperative.toString(),
+          cooperative_id: targetCooperativeId,
           'price/kg': pricePerKg,
           weight_sold: weightSold,
           date: sale.date.toISOString(),
@@ -258,6 +271,11 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error creating sale:', error);
     return NextResponse.json(
       {

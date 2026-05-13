@@ -2,14 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaLock, FaIdCard, FaExclamationCircle } from 'react-icons/fa';
+import { FaExclamationCircle, FaIdCard, FaLock, FaRecycle, FaSignInAlt, FaSpinner } from 'react-icons/fa';
 
 export default function LoginPage() {
   const [cpf, setCpf] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [logoSrc, setLogoSrc] = useState<string>('/logo.svg');
   const router = useRouter();
 
   // Handle CPF input with formatting
@@ -30,15 +29,6 @@ export default function LoginPage() {
       }
 
       setCpf(formattedValue);
-    }
-  };
-
-  const handleLogoError = () => {
-    // Try fallbacks in order
-    if (logoSrc === '/logo.svg') {
-      setLogoSrc('/simple-logo.svg');
-    } else if (logoSrc === '/simple-logo.svg') {
-      setLogoSrc('/dms-text.svg');
     }
   };
 
@@ -91,39 +81,34 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8eef1] flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="p-8">
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-6">
-              <img
-                src={logoSrc}
-                alt="DMS Logo"
-                width={128}
-                height={128}
-                className="h-32 w-32 object-contain"
-                onError={handleLogoError}
-              />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-foreground sm:p-6">
+      <div className="surface-panel w-full max-w-md overflow-hidden rounded-xl">
+        <div className="p-6 sm:p-8">
+          <div className="mb-8 text-center">
+            <div className="mb-6 flex justify-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-primary/35 bg-primary/14 text-primary shadow-glow">
+                <FaRecycle className="h-9 w-9" aria-hidden="true" />
+              </div>
             </div>
-            <h2 className="text-2xl font-bold text-[#7a1c44]">Sistema de Gestão DMS</h2>
-            <p className="text-gray-500 mt-2">Faça login para acessar o dashboard</p>
+            <h2 className="text-2xl font-semibold text-foreground">Sistema de Gestão DMS</h2>
+            <p className="mt-2 text-sm text-text-secondary">Acesso de gestores ao painel operacional</p>
           </div>
 
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start">
-              <FaExclamationCircle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="mb-6 flex items-start rounded-lg border border-error/35 bg-error/12 px-4 py-3 text-sm text-foreground">
+              <FaExclamationCircle className="mr-2 mt-0.5 flex-shrink-0 text-error" />
               <span>{error}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin}>
             <div className="mb-6">
-              <label htmlFor="cpf" className="block text-sm font-medium text-[#333333] mb-1">
+              <label htmlFor="cpf" className="mb-1 block text-sm font-medium text-foreground">
                 CPF
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaIdCard className="text-gray-400" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <FaIdCard className="text-text-secondary" />
                 </div>
                 <input
                   id="cpf"
@@ -131,19 +116,19 @@ export default function LoginPage() {
                   value={cpf}
                   onChange={handleCpfChange}
                   placeholder="000.000.000-00"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-[#c15079] focus:border-[#c15079]"
+                  className="block min-h-[52px] w-full rounded-lg border border-outline bg-surface px-3 py-3 pl-10 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0"
                   required
                 />
               </div>
             </div>
 
             <div className="mb-6">
-              <label htmlFor="password" className="block text-sm font-medium text-[#333333] mb-1">
+              <label htmlFor="password" className="mb-1 block text-sm font-medium text-foreground">
                 Senha
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FaLock className="text-gray-400" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <FaLock className="text-text-secondary" />
                 </div>
                 <input
                   id="password"
@@ -151,7 +136,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Sua senha"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-[#c15079] focus:border-[#c15079]"
+                  className="block min-h-[52px] w-full rounded-lg border border-outline bg-surface px-3 py-3 pl-10 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0"
                   required
                 />
               </div>
@@ -160,28 +145,28 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full bg-[#7a1c44] text-white font-medium py-3 px-4 rounded-lg hover:bg-[#c15079] transition-colors duration-200 flex justify-center items-center ${loading ? 'opacity-70 cursor-not-allowed' : ''
+              className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-lg border border-primary/35 bg-primary px-4 py-3 font-semibold text-background shadow-glow hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70 ${loading ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                  <FaSpinner className="h-4 w-4 animate-spin" />
                   Autenticando...
                 </>
               ) : (
-                'Entrar'
+                <>
+                  <FaSignInAlt className="h-4 w-4" />
+                  Entrar
+                </>
               )}
             </button>
           </form>
         </div>
       </div>
 
-      <p className="mt-8 text-center text-sm text-gray-500">
+      <p className="mt-8 text-center text-sm text-text-secondary">
         © {new Date().getFullYear()} DMS - Todos os direitos reservados
       </p>
     </div>
   );
-} 
+}

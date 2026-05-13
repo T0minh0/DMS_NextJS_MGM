@@ -205,7 +205,7 @@ export default function ProfilePage() {
     return rg;
   };
 
-  // Get CPF from user object 
+  // Get CPF from user object
   const userCPF = user?.CPF || user?.cpf || '';
 
   return (
@@ -463,4 +463,4 @@ export default function ProfilePage() {
       </div>
     </Layout>
   );
-} 
+}

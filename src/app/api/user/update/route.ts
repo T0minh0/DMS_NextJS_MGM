@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  determineTargetWorker,
+  requireAuth,
+  requireScopedPermission,
+} from '@/lib/auth/server';
 import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireAuth();
     const { id, full_name, email, PIS, RG } = await request.json();
 
     if (!id) {
@@ -13,7 +21,7 @@ export async function POST(request: Request) {
 
     let workerId: bigint;
     try {
-      workerId = BigInt(id);
+      workerId = BigInt(determineTargetWorker(session, id, { required: true }));
     } catch {
       return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
     }
@@ -25,6 +33,10 @@ export async function POST(request: Request) {
     if (!worker) {
       return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
     }
+
+    const isSelfUpdate = worker.workerId.toString() === session.workerId;
+    determineTargetCooperative(session, worker.cooperative);
+    requireScopedPermission(session, 'users', 'update', isSelfUpdate ? 'self' : 'cooperative');
 
     const updateData: Prisma.WorkersUpdateInput = {
       lastUpdate: new Date(),
@@ -59,6 +71,11 @@ export async function POST(request: Request) {
       updated: true,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error updating user profile:', error);
     return NextResponse.json({ message: 'Erro ao atualizar perfil' }, { status: 500 });
   }

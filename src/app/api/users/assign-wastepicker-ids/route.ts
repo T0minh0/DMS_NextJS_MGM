@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
 import { formatWorkerId } from '@/lib/db-utils';
 
 export async function POST() {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
     const workers = await prisma.workers.findMany({
+      where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
       orderBy: { workerName: 'asc' },
     });
 
@@ -20,6 +24,11 @@ export async function POST() {
       assignments,
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error listing worker IDs:', error);
     return NextResponse.json(
       {

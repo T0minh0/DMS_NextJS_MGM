@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
     const { id } = await request.json();
 
     if (!id) {
@@ -23,6 +25,8 @@ export async function POST(request: Request) {
     if (!existing) {
       return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
     }
+
+    determineTargetCooperative(session, existing.cooperative);
 
     const [salesUsage, measurementUsage, contributionsUsage] = await Promise.all([
       prisma.sales.count({ where: { responsible: workerId } }),
@@ -46,6 +50,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'Usuário excluído com sucesso' }, { status: 200 });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error deleting user:', error);
     return NextResponse.json({ message: 'Erro ao excluir usuário' }, { status: 500 });
   }

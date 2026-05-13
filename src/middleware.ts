@@ -1,60 +1,62 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifyAuthTokenEdge } from '@/lib/auth/edge';
+import { AUTH_COOKIE_NAME } from '@/lib/auth/shared';
 
-// JWT secret key - should match the one in the login API
-// Note: JWT_SECRET is configured via environment variable but verification is done server-side
+const PUBLIC_AUTH_PATHS = ['/login', '/api/auth/login'];
+const PUBLIC_FILE_PATTERN = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json|woff2?)$/i;
 
-// Simple function to verify JWT token format without decoding
-// This is a simplified version for testing - in production use proper verification
-function verifyToken(token: string): boolean {
-  try {
-    // Simple check: JWT tokens have 3 parts separated by dots
-    const parts = token.split('.');
-    return parts.length === 3;
-  } catch {
-    return false;
-  }
+function clearAuthCookie(response: NextResponse) {
+  response.cookies.delete(AUTH_COOKIE_NAME);
+  return response;
 }
 
-export function middleware(request: NextRequest) {
-  // Paths that don't require authentication
-  const publicPaths = ['/login', '/api/auth/login'];
-
-  // Check if the requested path is a public path
-  const isPublicPath = publicPaths.some(path =>
-    request.nextUrl.pathname === path ||
-    request.nextUrl.pathname.startsWith('/api/auth/')
+function isPublicPath(pathname: string) {
+  return (
+    PUBLIC_AUTH_PATHS.includes(pathname) ||
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/_next/') ||
+    pathname === '/favicon.ico' ||
+    PUBLIC_FILE_PATTERN.test(pathname)
   );
+}
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  // Paths that don't require authentication
+  const publicPath = isPublicPath(pathname);
 
   // Check if it's an API route (except auth-related routes)
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api/') &&
-    !request.nextUrl.pathname.startsWith('/api/auth/');
+  const isApiRoute = pathname.startsWith('/api/') &&
+    !pathname.startsWith('/api/auth/');
 
   // Get auth cookie
-  const authToken = request.cookies.get('auth_token')?.value;
+  const authToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const session = authToken ? await verifyAuthTokenEdge(authToken) : null;
 
   // If it's a public path, allow access
-  if (isPublicPath) {
+  if (publicPath) {
     // If user is already logged in and trying to access login page, redirect to dashboard
-    if (authToken && verifyToken(authToken) && request.nextUrl.pathname === '/login') {
+    if (session && pathname === '/login') {
       return NextResponse.redirect(new URL('/', request.url));
     }
 
-    return NextResponse.next();
+    const response = NextResponse.next();
+    return authToken && !session ? clearAuthCookie(response) : response;
   }
 
   // For protected routes, check if user is authenticated
-  if (!authToken || !verifyToken(authToken)) {
+  if (!session) {
     // For API routes, return 401 Unauthorized
     if (isApiRoute) {
-      return NextResponse.json(
+      return clearAuthCookie(NextResponse.json(
         { message: 'Unauthorized' },
         { status: 401 }
-      );
+      ));
     }
 
     // For other routes, redirect to login page
-    return NextResponse.redirect(new URL('/login', request.url));
+    return clearAuthCookie(NextResponse.redirect(new URL('/login', request.url)));
   }
 
   // If user is authenticated and trying to access a protected route, allow access
@@ -63,5 +65,5 @@ export function middleware(request: NextRequest) {
 
 // Configure the middleware to apply to all routes
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|public/).*)'],
-}; 
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};

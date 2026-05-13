@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Layout from '@/components/Layout'; // Assuming @ is configured for src
-import { FaFilter, FaBirthdayCake, FaBoxes, FaUsers, FaWeightHanging, FaDollarSign, FaCalendarAlt, FaCog, FaIdCard } from 'react-icons/fa'; // Added FaIdCard
+import { FaFilter, FaBirthdayCake, FaBoxes, FaUsers, FaWeightHanging, FaDollarSign, FaCalendarAlt, FaCog, FaIdCard, FaSpinner } from 'react-icons/fa'; // Added FaIdCard
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 
@@ -26,6 +26,39 @@ const iconComponents: { [key: string]: React.ElementType } = {
   FaUsers,
   FaWeightHanging,
   FaDollarSign,
+};
+
+const chartPalette = [
+  '#00D4FF',
+  '#FF00D4',
+  '#00FF88',
+  '#FFD700',
+  '#FF6B35',
+  '#94A3C7',
+  '#65708D',
+];
+
+const chartTextColor = '#94A3C7';
+const chartGridColor = '#2A3441';
+const chartBorderColor = '#0A0E1A';
+
+ChartJS.defaults.color = chartTextColor;
+ChartJS.defaults.borderColor = chartGridColor;
+
+const chartAxisBase = {
+  ticks: {
+    color: chartTextColor,
+  },
+  grid: {
+    color: chartGridColor,
+  },
+  border: {
+    color: chartGridColor,
+  },
+};
+
+const chartLegendLabelsBase = {
+  color: chartTextColor,
 };
 
 // Add this interface for the stock data
@@ -484,14 +517,14 @@ export default function HomePage() {
     if (!stockData || typeof stockData !== 'object') {
       return {
         labels: [],
-        datasets: [{ data: [], backgroundColor: [], borderColor: '#fff', borderWidth: 1 }]
+        datasets: [{ data: [], backgroundColor: [], borderColor: chartBorderColor, borderWidth: 1 }]
       };
     }
 
     if (stockData.noData) {
       return {
         labels: [],
-        datasets: [{ data: [], backgroundColor: [], borderColor: '#fff', borderWidth: 1 }]
+        datasets: [{ data: [], backgroundColor: [], borderColor: chartBorderColor, borderWidth: 1 }]
       };
     }
 
@@ -536,11 +569,8 @@ export default function HomePage() {
         datasets: [
           {
             data: values,
-            backgroundColor: [
-              '#C74B6F', '#8A2736', '#5C1D2E', '#2D0D17', '#F7E4E4',
-              '#A23B5F', '#7A1726', '#4C0D1E', '#1D0007', '#E7D4D4',
-            ],
-            borderColor: '#fff',
+            backgroundColor: chartPalette,
+            borderColor: chartBorderColor,
             borderWidth: 1,
           },
         ],
@@ -550,7 +580,7 @@ export default function HomePage() {
       // Return empty data in case of error
       return {
         labels: [],
-        datasets: [{ data: [], backgroundColor: [], borderColor: '#fff', borderWidth: 1 }]
+        datasets: [{ data: [], backgroundColor: [], borderColor: chartBorderColor, borderWidth: 1 }]
       };
     }
   }, [stockData, materials]);
@@ -570,10 +600,7 @@ export default function HomePage() {
 
   // For material color scales in stacked bar chart
   const getMaterialColors = () => {
-    return [
-      '#C74B6F', '#8A2736', '#5C1D2E', '#2D0D17', '#F7E4E4',
-      '#A23B5F', '#7A1726', '#4C0D1E', '#1D0007', '#E7D4D4',
-    ];
+    return chartPalette;
   };
 
   // DEBUG: Output all state values
@@ -728,39 +755,39 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
     <Layout activePath="/">
       {/* Welcome Banner */}
       {user && (
-        <div className="mb-8 bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#c15079]">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+        <div className="surface-panel mb-8 rounded-xl border-l-4 border-primary p-6">
+          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
             <div>
-              <h2 className="text-xl font-bold text-[#7a1c44]">
+              <h2 className="text-xl font-semibold text-foreground">
                 Bem-vindo ao Dashboard, {user.full_name || user.name || 'Usuário'}!
               </h2>
-              <p className="text-gray-600 mt-1 flex items-center">
-                <FaCalendarAlt className="mr-2 text-[#c15079]" />
+              <p className="mt-1 flex items-center text-text-secondary">
+                <FaCalendarAlt className="mr-2 text-primary" />
                 {currentDate}
               </p>
             </div>
-            <div className="mt-4 md:mt-0 bg-[#f8eef1] rounded-lg px-4 py-2">
-              <p className="text-sm text-[#7a1c44]">Último acesso: {new Date().toLocaleDateString('pt-BR')}</p>
+            <div className="rounded-lg border border-outline bg-surface-alt px-4 py-2">
+              <p className="text-sm text-text-secondary">Último acesso: {new Date().toLocaleDateString('pt-BR')}</p>
             </div>
           </div>
         </div>
       )}
 
-      <h2 className="text-3xl font-bold text-dms-primary mb-6">
+      <h2 className="mb-6 text-3xl font-semibold text-primary">
         Dashboard de Coleta de Materiais
       </h2>
 
       {/* Filters Section */}
-      <div className="bg-white p-5 rounded-xl shadow-md mb-8">
-        <h3 className="text-xl font-semibold text-dms-primary mb-4 flex items-center">
-          <FaFilter className="mr-2 text-dms-secondary" />Filtros
+      <div className="surface-panel mb-8 rounded-xl p-5">
+        <h3 className="mb-4 flex items-center text-xl font-semibold text-primary">
+          <FaFilter className="mr-2 text-secondary" />Filtros
         </h3>
-        <div className="grid md:grid-cols-3 gap-x-6 gap-y-4">
+        <div className="grid gap-x-6 gap-y-4 md:grid-cols-3">
           <div>
-            <label htmlFor="materialFilterNext" className="block text-sm font-semibold text-dms-primary mb-1.5">Material</label>
+            <label htmlFor="materialFilterNext" className="mb-1.5 block text-sm font-semibold text-primary">Material</label>
             <select
               id="materialFilterNext"
-              className="w-full py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-dms-secondary focus:ring-2 focus:ring-dms-secondary focus:ring-opacity-25 transition-colors duration-150"
+              className="w-full rounded-lg border border-outline bg-surface px-4 py-2.5 text-foreground shadow-sm focus:border-primary focus:ring-0"
               value={materialFilter}
               onChange={handleMaterialFilterChange}
             >
@@ -770,14 +797,14 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 <option
                   key={material.material_id || material._id}
                   value={material.material_id || material._id}
-                  style={{ fontWeight: 'bold', color: '#8A2736' }}
+                  style={{ fontWeight: 'bold' }}
                 >
                   📁 {material.name || material.material}
                 </option>
               ))}
               {/* Separator if there are groups */}
               {materials.some(material => material.isGroup) && materials.some(material => !material.isGroup) && (
-                <option key="separator" disabled style={{ color: '#ccc', fontSize: '12px' }}>
+                <option key="separator" disabled style={{ color: '#65708D', fontSize: '12px' }}>
                   ──────────────────
                 </option>
               )}
@@ -793,10 +820,10 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             </select>
           </div>
           <div>
-            <label htmlFor="workerFilterNext" className="block text-sm font-semibold text-dms-primary mb-1.5">Trabalhador</label>
+            <label htmlFor="workerFilterNext" className="mb-1.5 block text-sm font-semibold text-primary">Trabalhador</label>
             <select
               id="workerFilterNext"
-              className="w-full py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-dms-secondary focus:ring-2 focus:ring-dms-secondary focus:ring-opacity-25 transition-colors duration-150"
+              className="w-full rounded-lg border border-outline bg-surface px-4 py-2.5 text-foreground shadow-sm focus:border-primary focus:ring-0"
               value={workerFilter}
               onChange={handleWorkerFilterChange}
             >
@@ -813,10 +840,10 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             </select>
           </div>
           <div>
-            <label htmlFor="periodFilterNext" className="block text-sm font-semibold text-dms-primary mb-1.5">Período</label>
+            <label htmlFor="periodFilterNext" className="mb-1.5 block text-sm font-semibold text-primary">Período</label>
             <select
               id="periodFilterNext"
-              className="w-full py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-dms-secondary focus:ring-2 focus:ring-dms-secondary focus:ring-opacity-25 transition-colors duration-150"
+              className="w-full rounded-lg border border-outline bg-surface px-4 py-2.5 text-foreground shadow-sm focus:border-primary focus:ring-0"
               value={periodFilter}
               onChange={handlePeriodFilterChange}
             >
@@ -829,7 +856,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
       </div>
 
       {/* Stats Cards Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { title: 'Materiais', value: loading.materials ? '-' : totalMaterials, iconName: 'FaBoxes', labelKey: 'totalMaterials' },
           { title: 'Trabalhadores', value: loading.workers ? '-' : totalWorkers, iconName: 'FaUsers', labelKey: 'totalWorkers' },
@@ -838,32 +865,27 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
         ].map(stat => {
           const IconComponent = iconComponents[stat.iconName];
           return (
-            <div key={stat.title} className="bg-white p-6 rounded-xl shadow-lg text-center flex flex-col items-center">
-              <div className="text-dms-secondary text-4xl mb-4">
+            <div key={stat.title} className="surface-panel flex flex-col items-center rounded-xl p-6 text-center">
+              <div className="mb-4 text-4xl text-secondary">
                 {IconComponent && <IconComponent />}
               </div>
-              <p id={stat.labelKey} className="text-3xl font-bold text-dms-primary mb-1">{stat.value}</p>
-              <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">{stat.title}</p>
+              <p id={stat.labelKey} className="mb-1 text-3xl font-semibold text-primary">{stat.value}</p>
+              <p className="text-xs font-medium uppercase text-text-secondary">{stat.title}</p>
             </div>
           );
         })}
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Estoque Atual Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold text-dms-primary mb-4 text-center lg:text-left">Estoque Atual</h3>
-          <div className="h-72 bg-gray-50 rounded-lg border border-gray-300 p-4 flex items-center justify-center">
+        <div className="surface-panel rounded-xl p-6">
+          <h3 className="mb-4 text-center text-xl font-semibold text-primary lg:text-left">Estoque Atual</h3>
+          <div className="flex h-72 items-center justify-center rounded-lg border border-outline bg-background/55 p-4">
             {loading.stock ? (
-              <div className="text-dms-secondary animate-spin text-2xl">
-                <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
+              <FaSpinner className="h-8 w-8 animate-spin text-secondary" />
             ) : noDataMessages.stock ? (
-              <p className="text-gray-400 italic">{noDataMessages.stock}</p>
+              <p className="text-text-secondary italic">{noDataMessages.stock}</p>
             ) : Object.keys(stockData).length > 0 ? (
               <Doughnut
                 data={stockChartData}
@@ -874,6 +896,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     legend: {
                       position: 'right',
                       labels: {
+                        ...chartLegendLabelsBase,
                         boxWidth: 12,
                         font: {
                           size: 10
@@ -899,26 +922,21 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 }}
               />
             ) : (
-              <p className="text-gray-400 italic">Nenhum estoque disponível</p>
+              <p className="text-text-secondary italic">Nenhum estoque disponível</p>
             )}
           </div>
         </div>
 
         {/* Ganhos Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold text-dms-primary mb-4 text-center lg:text-left">
+        <div className="surface-panel rounded-xl p-6">
+          <h3 className="mb-4 text-center text-xl font-semibold text-primary lg:text-left">
             Ganhos {getPeriodTypeLabel()}
           </h3>
-          <div className="h-72 bg-gray-50 rounded-lg border border-gray-300 p-4 flex items-center justify-center">
+          <div className="flex h-72 items-center justify-center rounded-lg border border-outline bg-background/55 p-4">
             {loading.earnings ? (
-              <div className="text-dms-secondary animate-spin text-2xl">
-                <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
+              <FaSpinner className="h-8 w-8 animate-spin text-secondary" />
             ) : noDataMessages.earnings ? (
-              <p className="text-gray-400 italic">{noDataMessages.earnings}</p>
+              <p className="text-text-secondary italic">{noDataMessages.earnings}</p>
             ) : earningsData.length > 0 ? (
               <Line
                 data={{
@@ -927,12 +945,12 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     {
                       label: 'Ganhos (R$)',
                       data: earningsData.map(item => item.earnings),
-                      borderColor: '#C74B6F',
-                      backgroundColor: 'rgba(199, 75, 111, 0.1)',
+                      borderColor: chartPalette[0],
+                      backgroundColor: 'rgba(0, 212, 255, 0.14)',
                       fill: true,
                       tension: 0.4,
-                      pointBackgroundColor: '#8A2736',
-                      pointBorderColor: '#fff',
+                      pointBackgroundColor: chartPalette[1],
+                      pointBorderColor: chartBorderColor,
                       pointBorderWidth: 2,
                       pointRadius: 4,
                     },
@@ -942,9 +960,12 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
+                    x: chartAxisBase,
                     y: {
+                      ...chartAxisBase,
                       beginAtZero: true,
                       ticks: {
+                        color: chartTextColor,
                         callback: function (value) {
                           return formatCurrency(Number(value));
                         }
@@ -966,26 +987,21 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 }}
               />
             ) : (
-              <p className="text-gray-400 italic">Nenhum dado de ganhos disponível</p>
+              <p className="text-text-secondary italic">Nenhum dado de ganhos disponível</p>
             )}
           </div>
         </div>
 
         {/* Coletas de Trabalhadores Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold text-dms-primary mb-4 text-center lg:text-left">
+        <div className="surface-panel rounded-xl p-6">
+          <h3 className="mb-4 text-center text-xl font-semibold text-primary lg:text-left">
             Coletas de Trabalhadores {getPeriodTypeLabel()}
           </h3>
-          <div className="h-72 bg-gray-50 rounded-lg border border-gray-300 p-4 flex items-center justify-center">
+          <div className="flex h-72 items-center justify-center rounded-lg border border-outline bg-background/55 p-4">
             {loading.workerCollections ? (
-              <div className="text-dms-secondary animate-spin text-2xl">
-                <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
+              <FaSpinner className="h-8 w-8 animate-spin text-secondary" />
             ) : noDataMessages.workerCollections ? (
-              <p className="text-gray-400 italic">{noDataMessages.workerCollections}</p>
+              <p className="text-text-secondary italic">{noDataMessages.workerCollections}</p>
             ) : workerCollections.grouped && periodFilter === 'yearly' && !materialFilter ? (
               // Display stacked bar chart for yearly data
               <Bar
@@ -1000,7 +1016,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       data: workerCollections.workers.map((worker: any) => worker[material.id] || 0),
                       backgroundColor: getMaterialColors()[index % getMaterialColors().length],
-                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      borderColor: chartBorderColor,
                       borderWidth: 0.5,
                       stack: 'Stack 0',
                     };
@@ -1012,15 +1028,18 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   maintainAspectRatio: false,
                   scales: {
                     x: {
+                      ...chartAxisBase,
                       stacked: true,
                       beginAtZero: true,
                       ticks: {
+                        color: chartTextColor,
                         callback: function (value) {
                           return value + ' kg';
                         }
                       }
                     },
                     y: {
+                      ...chartAxisBase,
                       stacked: true
                     }
                   },
@@ -1028,6 +1047,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     legend: {
                       position: 'top',
                       labels: {
+                        ...chartLegendLabelsBase,
                         boxWidth: 12,
                         font: {
                           size: 10
@@ -1057,8 +1077,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                       label: 'Peso Coletado (kg)',
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       data: workerCollections.data.map((worker: any) => worker.totalWeight),
-                      backgroundColor: '#8A2736',
-                      borderColor: 'rgba(138, 39, 54, 0.7)',
+                      backgroundColor: chartPalette[1],
+                      borderColor: chartBorderColor,
                       borderWidth: 1,
                     },
                   ],
@@ -1068,9 +1088,12 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
+                    y: chartAxisBase,
                     x: {
+                      ...chartAxisBase,
                       beginAtZero: true,
                       ticks: {
+                        color: chartTextColor,
                         callback: function (value) {
                           return value + ' kg';
                         }
@@ -1092,33 +1115,28 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 }}
               />
             ) : (
-              <p className="text-gray-400 italic">Nenhuma coleta de trabalhador disponível</p>
+              <p className="text-text-secondary italic">Nenhuma coleta de trabalhador disponível</p>
             )}
           </div>
         </div>
 
         {/* Flutuação de Preços Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold text-dms-primary mb-4 text-center lg:text-left">Flutuação de Preços</h3>
-          <div className="h-72 bg-gray-50 rounded-lg border border-gray-300 p-4 flex items-center justify-center">
+        <div className="surface-panel rounded-xl p-6">
+          <h3 className="mb-4 text-center text-xl font-semibold text-primary lg:text-left">Flutuação de Preços</h3>
+          <div className="flex h-72 items-center justify-center rounded-lg border border-outline bg-background/55 p-4">
             {loading.priceFluctuation ? (
-              <div className="text-dms-secondary animate-spin text-2xl">
-                <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
+              <FaSpinner className="h-8 w-8 animate-spin text-secondary" />
             ) : noDataMessages.priceFluctuation ? (
-              <p className="text-gray-400 italic">{noDataMessages.priceFluctuation}</p>
+              <p className="text-text-secondary italic">{noDataMessages.priceFluctuation}</p>
             ) : !materialFilter ? (
               <div className="text-center p-4">
-                <p className="text-gray-500 mb-3">Selecione um material específico para visualizar a flutuação de preços.</p>
-                <div className="flex flex-wrap justify-center gap-2 mt-4">
+                <p className="mb-3 text-text-secondary">Selecione um material específico para visualizar a flutuação de preços.</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {materials.slice(0, 5).map((material) => (
                     <button
                       key={material.material_id || material._id}
                       onClick={() => setMaterialFilter(material.material_id?.toString() || material._id?.toString() || '')}
-                      className="px-3 py-2 bg-dms-secondary text-white rounded-md hover:bg-dms-primary transition-colors duration-200"
+                      className="rounded-md bg-secondary px-3 py-2 text-background transition-colors duration-200 hover:bg-primary"
                     >
                       {material.name || material.material || `Material ${material.material_id || material._id}`}
                     </button>
@@ -1135,15 +1153,11 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     label: material,
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     data: priceFluctuationData.priceData.map((week: any) => week.materials[material] || null),
-                    borderColor: [
-                      '#C74B6F', '#8A2736', '#5C1D2E', '#2D0D17', '#F7E4E4',
-                    ][index % 5],
+                    borderColor: chartPalette[index % chartPalette.length],
                     backgroundColor: 'transparent',
                     borderWidth: 2,
-                    pointBackgroundColor: [
-                      '#C74B6F', '#8A2736', '#5C1D2E', '#2D0D17', '#F7E4E4',
-                    ][index % 5],
-                    pointBorderColor: '#fff',
+                    pointBackgroundColor: chartPalette[index % chartPalette.length],
+                    pointBorderColor: chartBorderColor,
                     pointRadius: 3,
                     tension: 0.1,
                   }))
@@ -1153,15 +1167,19 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   maintainAspectRatio: false,
                   scales: {
                     y: {
+                      ...chartAxisBase,
                       beginAtZero: false,
                       ticks: {
+                        color: chartTextColor,
                         callback: function (value) {
                           return formatCurrency(Number(value));
                         }
                       }
                     },
                     x: {
+                      ...chartAxisBase,
                       ticks: {
+                        color: chartTextColor,
                         maxRotation: 45,
                         minRotation: 45,
                         font: {
@@ -1175,6 +1193,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                     legend: {
                       position: 'top',
                       labels: {
+                        ...chartLegendLabelsBase,
                         boxWidth: 12,
                         font: {
                           size: 10
@@ -1210,11 +1229,11 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                       label: priceFluctuationData[0].material || 'Preço do Material',
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       data: priceFluctuationData.map((item: any) => item.price),
-                      borderColor: '#C74B6F',
+                      borderColor: chartPalette[0],
                       backgroundColor: 'transparent',
                       borderWidth: 2,
-                      pointBackgroundColor: '#C74B6F',
-                      pointBorderColor: '#fff',
+                      pointBackgroundColor: chartPalette[0],
+                      pointBorderColor: chartBorderColor,
                       pointRadius: 3,
                       tension: 0.1,
                     }
@@ -1225,15 +1244,19 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   maintainAspectRatio: false,
                   scales: {
                     y: {
+                      ...chartAxisBase,
                       beginAtZero: false,
                       ticks: {
+                        color: chartTextColor,
                         callback: function (value) {
                           return formatCurrency(Number(value));
                         }
                       }
                     },
                     x: {
+                      ...chartAxisBase,
                       ticks: {
+                        color: chartTextColor,
                         maxRotation: 45,
                         minRotation: 45,
                         font: {
@@ -1246,6 +1269,7 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                   plugins: {
                     legend: {
                       position: 'top',
+                      labels: chartLegendLabelsBase,
                     },
                     tooltip: {
                       callbacks: {
@@ -1265,71 +1289,63 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
                 }}
               />
             ) : (
-              <p className="text-gray-400 italic">Nenhum dado de flutuação de preços disponível</p>
+              <p className="text-text-secondary italic">Nenhum dado de flutuação de preços disponível</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Birthdays Section */}
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h3 className="text-xl font-semibold text-dms-primary mb-4 flex items-center">
-          <FaBirthdayCake className="mr-2 text-dms-secondary" />Aniversários do Mês
+      <div className="surface-panel rounded-xl p-6">
+        <h3 className="mb-4 flex items-center text-xl font-semibold text-primary">
+          <FaBirthdayCake className="mr-2 text-secondary" />Aniversários do Mês
         </h3>
         <div id="birthdaysListNext" className="space-y-3">
           {loading.birthdays ? (
-            <div className="flex justify-center p-4">
-              <div className="text-dms-secondary animate-spin text-xl">
-                <svg className="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
+            <div className="flex justify-center p-4 text-secondary">
+              <FaSpinner className="h-6 w-6 animate-spin" />
             </div>
           ) : birthdays && birthdays.length > 0 ? (
             birthdays.map((birthday, index) => (
               <div
                 key={index}
-                className="bg-dms-light-gray p-4 rounded-lg border-l-4 border-dms-accent shadow-sm hover:translate-x-1.5 transition-transform duration-200 ease-in-out cursor-pointer"
+                className="cursor-pointer rounded-lg border-l-4 border-warning bg-surface-alt p-4 shadow-sm transition-transform duration-200 ease-in-out hover:translate-x-1.5"
               >
-                <p className="font-semibold text-dms-primary text-md">{birthday.name}</p>
-                <p className="text-sm text-dms-text">Data: {birthday.date}</p>
+                <p className="text-md font-semibold text-primary">{birthday.name}</p>
+                <p className="text-sm text-foreground">Data: {birthday.date}</p>
               </div>
             ))
           ) : (
-            <p className="text-sm text-gray-500 italic">Não há aniversariantes no mês corrente.</p>
+            <p className="text-sm text-text-secondary italic">Não há aniversariantes no mês corrente.</p>
           )}
         </div>
       </div>
 
       {/* Admin Tools Section - Only show for administrators */}
       {user && user.userType === 0 && (
-        <div className="bg-white p-6 rounded-xl shadow-lg border-l-4 border-orange-500">
-          <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-            <FaCog className="mr-2 text-orange-500" />
+        <div className="surface-panel rounded-xl border-l-4 border-warning p-6">
+          <h3 className="mb-4 flex items-center text-xl font-semibold text-warning">
+            <FaCog className="mr-2 text-warning" />
             Ferramentas de Administração
           </h3>
           <div className="space-y-6">
             {/* Recalculate Contributions */}
             <div>
-              <p className="text-gray-600 mb-3">
+              <p className="mb-3 text-text-secondary">
                 Recalcular todas as contribuições dos trabalhadores baseado nas medições.
                 Isso corrige problemas de dupla contagem e atualiza os dados automaticamente.
               </p>
               <button
                 onClick={handleRecalculateContributions}
                 disabled={recalculating}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 mr-4 ${recalculating
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                  : 'bg-orange-500 text-white hover:bg-orange-600'
+                className={`mr-4 rounded-lg px-6 py-3 font-semibold transition-colors duration-200 ${recalculating
+                  ? 'cursor-not-allowed bg-surface-alt text-text-secondary'
+                  : 'bg-warning text-background hover:bg-warning/90'
                   }`}
               >
                 {recalculating ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <FaSpinner className="mr-3 h-5 w-5 animate-spin" />
                     Recalculando...
                   </span>
                 ) : (
@@ -1338,8 +1354,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               </button>
               {recalculationMessage && (
                 <div className={`p-4 rounded-lg mt-3 ${recalculationMessage.startsWith('✅')
-                  ? 'bg-green-100 text-green-800 border border-green-200'
-                  : 'bg-red-100 text-red-800 border border-red-200'
+                  ? 'border border-success/35 bg-success/12 text-foreground'
+                  : 'border border-error/35 bg-error/12 text-foreground'
                   }`}>
                   {recalculationMessage}
                 </div>
@@ -1347,25 +1363,22 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             </div>
 
             {/* Assign Wastepicker IDs */}
-            <div className="border-t pt-6">
-              <p className="text-gray-600 mb-3">
+            <div className="border-t border-outline pt-6">
+              <p className="mb-3 text-text-secondary">
                 Atribuir IDs únicos (WP001, WP002, etc.) para catadores que ainda não possuem.
                 Necessário para rastreamento de produtividade e contribuições.
               </p>
               <button
                 onClick={handleAssignWastepickerIds}
                 disabled={assigningIds}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${assigningIds
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                className={`rounded-lg px-6 py-3 font-semibold transition-colors duration-200 ${assigningIds
+                  ? 'cursor-not-allowed bg-surface-alt text-text-secondary'
+                  : 'bg-primary text-background hover:bg-primary/90'
                   }`}
               >
                 {assigningIds ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <FaSpinner className="mr-3 h-5 w-5 animate-spin" />
                     Atribuindo IDs...
                   </span>
                 ) : (
@@ -1377,8 +1390,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               </button>
               {assignmentMessage && (
                 <div className={`p-4 rounded-lg mt-3 ${assignmentMessage.startsWith('✅') || assignmentMessage.startsWith('ℹ️')
-                  ? 'bg-green-100 text-green-800 border border-green-200'
-                  : 'bg-red-100 text-red-800 border border-red-200'
+                  ? 'border border-success/35 bg-success/12 text-foreground'
+                  : 'border border-error/35 bg-error/12 text-foreground'
                   }`}>
                   {assignmentMessage}
                 </div>
@@ -1386,24 +1399,21 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
             </div>
 
             {/* Debug Data */}
-            <div className="border-t pt-6">
-              <p className="text-gray-600 mb-3">
+            <div className="border-t border-outline pt-6">
+              <p className="mb-3 text-text-secondary">
                 Verificar o estado atual dos dados para ajudar a solucionar problemas.
               </p>
               <button
                 onClick={handleDebugData}
                 disabled={debugging}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors duration-200 ${debugging
-                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                  : 'bg-purple-500 text-white hover:bg-purple-600'
+                className={`rounded-lg px-6 py-3 font-semibold transition-colors duration-200 ${debugging
+                  ? 'cursor-not-allowed bg-surface-alt text-text-secondary'
+                  : 'bg-secondary text-background hover:bg-secondary/90'
                   }`}
               >
                 {debugging ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <FaSpinner className="mr-3 h-5 w-5 animate-spin" />
                     Verificando...
                   </span>
                 ) : (
@@ -1412,8 +1422,8 @@ ${data.worker_contributions.total === 0 ? '⚠️ PROBLEMA: Nenhuma contribuiç�
               </button>
               {debugMessage && (
                 <div className={`p-4 rounded-lg mt-3 ${debugMessage.startsWith('🔍')
-                  ? 'bg-green-100 text-green-800 border border-green-200'
-                  : 'bg-red-100 text-red-800 border border-red-200'
+                  ? 'border border-success/35 bg-success/12 text-foreground'
+                  : 'border border-error/35 bg-error/12 text-foreground'
                   }`}>
                   {debugMessage}
                 </div>

@@ -1,47 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import jwt from 'jsonwebtoken';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  requireManagerOrAdmin,
+  requireScopedPermission,
+} from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'dms-dashboard-secret-key';
-
-interface AuthTokenPayload {
-  id: string;
-  name: string;
-  cpf: string;
-  userType: number;
-  iat?: number;
-  exp?: number;
-}
-
-async function getAuthenticatedManager() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth_token')?.value;
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
-    const workerId = BigInt(payload.id);
-    const worker = await prisma.workers.findUnique({ where: { workerId } });
-    return worker;
-  } catch (error) {
-    console.error('Failed to decode auth token:', error);
-    return null;
-  }
-}
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const manager = await getAuthenticatedManager();
-    if (!manager) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const session = await requireManagerOrAdmin();
 
     const { id: idParam } = await params;
     let saleId: bigint;
@@ -63,12 +35,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Venda não encontrada' }, { status: 404 });
     }
 
-    if (existingSale.responsible !== manager.workerId) {
-      return NextResponse.json(
-        { error: 'Você não tem permissão para alterar esta venda' },
-        { status: 403 },
-      );
-    }
+    determineTargetCooperative(session, existingSale.responsibleRef.cooperative);
+    requireScopedPermission(session, 'sales', 'update', 'cooperative');
 
     const body = await request.json();
 
@@ -165,6 +133,11 @@ export async function PUT(
       message: 'Venda atualizada com sucesso',
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error updating sale:', error);
     return NextResponse.json(
       {
@@ -181,10 +154,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const manager = await getAuthenticatedManager();
-    if (!manager) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const session = await requireManagerOrAdmin();
 
     const { id: idParam } = await params;
     let saleId: bigint;
@@ -205,12 +175,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Venda não encontrada' }, { status: 404 });
     }
 
-    if (existingSale.responsible !== manager.workerId) {
-      return NextResponse.json(
-        { error: 'Você não tem permissão para excluir esta venda' },
-        { status: 403 },
-      );
-    }
+    determineTargetCooperative(session, existingSale.responsibleRef.cooperative);
+    requireScopedPermission(session, 'sales', 'delete', 'cooperative');
 
     const stockRecord = await prisma.stock.findFirst({
       where: {
@@ -247,6 +213,11 @@ export async function DELETE(
       message: 'Venda excluída com sucesso',
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error deleting sale:', error);
     return NextResponse.json(
       {

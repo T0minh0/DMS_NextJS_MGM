@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { authErrorResponse, requireAdmin, requireManagerOrAdmin } from '@/lib/auth/server';
 
 type MaterialWithGroup = Prisma.MaterialsGetPayload<{
   include: { group: true };
@@ -18,6 +19,7 @@ function formatMaterial(material: MaterialWithGroup) {
 
 export async function GET() {
   try {
+    await requireManagerOrAdmin();
     const materials = await prisma.materials.findMany({
       include: { group: true },
       orderBy: { materialName: 'asc' },
@@ -43,6 +45,11 @@ export async function GET() {
 
     return NextResponse.json([...groupObjects, ...formattedMaterials]);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching materials:', error);
     return NextResponse.json(
       {
@@ -56,6 +63,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAdmin();
     const body = await request.json();
     const materialName = body.material?.trim();
     const groupName = body.group?.trim();
@@ -116,6 +124,11 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error creating material:', error);
     return NextResponse.json(
       {

@@ -47,12 +47,12 @@ export default function ManageWorkersPage() {
   const [loadingCooperatives, setLoadingCooperatives] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
+
   // Modal states
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Form fields
   const [currentUserId, setCurrentUserId] = useState('');
   const [fullName, setFullName] = useState('');
@@ -69,7 +69,7 @@ export default function ManageWorkersPage() {
   const [cooperativeId, setCooperativeId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const formatDateForInput = (value?: string | null) => {
     if (!value) return '';
     const date = new Date(value);
@@ -89,7 +89,7 @@ export default function ManageWorkersPage() {
           router.push('/login');
           return;
         }
-        
+
         // No need to check user type since only managers can access the dashboard
         await loadUsers();
       } catch (error) {
@@ -98,7 +98,7 @@ export default function ManageWorkersPage() {
         setLoading(false);
       }
     };
-    
+
     fetchUsers();
   }, [router]);
 
@@ -131,12 +131,12 @@ export default function ManageWorkersPage() {
     setError(null);
     try {
       const response = await fetch('/api/users/all');
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Falha ao carregar usuários' }));
         throw new Error(errorData.message || `Error ${response.status}: Falha ao carregar usuários`);
       }
-      
+
       const data = await response.json();
       setUsers(data);
     } catch (error) {
@@ -146,23 +146,23 @@ export default function ManageWorkersPage() {
       setLoading(false);
     }
   };
-  
+
   // Format CPF for display
   const formatCPF = (cpf: string): string => {
     if (!cpf) return '';
     const numericCPF = cpf.replace(/\D/g, '');
     if (numericCPF.length !== 11) return cpf;
-    
+
     return numericCPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
-  
+
   // Open modal to create a new user
   const openCreateModal = () => {
     setModalMode('create');
     resetForm();
     setShowModal(true);
   };
-  
+
   // Open modal to edit an existing user
   const openEditModal = (user: User) => {
     setModalMode('edit');
@@ -183,7 +183,7 @@ export default function ManageWorkersPage() {
     setConfirmPassword('');
     setShowModal(true);
   };
-  
+
   // Reset form fields
   const resetForm = () => {
     setCurrentUserId('');
@@ -202,31 +202,31 @@ export default function ManageWorkersPage() {
     setPassword('');
     setConfirmPassword('');
   };
-  
+
   // Close modal
   const closeModal = () => {
     setShowModal(false);
     resetForm();
     setError(null);
   };
-  
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    
+
     // Validate form
     if (!fullName.trim()) {
       setError('Nome completo é obrigatório');
       return;
     }
-    
+
     if (!cpf.trim()) {
       setError('CPF é obrigatório');
       return;
     }
-    
+
     if (!birthDate) {
       setError('Data de nascimento é obrigatória');
       return;
@@ -258,7 +258,7 @@ export default function ManageWorkersPage() {
         setError('A senha deve ter pelo menos 6 caracteres');
         return;
       }
-      
+
       if (password !== confirmPassword) {
         setError('As senhas não coincidem');
         return;
@@ -270,12 +270,12 @@ export default function ManageWorkersPage() {
       setError('As senhas não coincidem');
       return;
     }
-    
+
     try {
-      const endpoint = modalMode === 'create' 
-        ? '/api/users/create' 
+      const endpoint = modalMode === 'create'
+        ? '/api/users/create'
         : '/api/users/update';
-        
+
       const payload: Record<string, unknown> = {
         full_name: fullName,
         CPF: cpf,
@@ -290,40 +290,40 @@ export default function ManageWorkersPage() {
         gender: gender || undefined,
         cooperative_id: cooperativeId
       };
-      
+
       // Add ID for updates
       if (modalMode === 'edit') {
         payload.id = currentUserId;
       }
-      
+
       // Add password for creation or if changing password
       if (modalMode === 'create' || (modalMode === 'edit' && password)) {
         payload.password = password;
       }
-      
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || 'Operação falhou');
       }
-      
+
       // Show success message and close modal
-      setSuccess(modalMode === 'create' 
-        ? 'Usuário criado com sucesso!' 
+      setSuccess(modalMode === 'create'
+        ? 'Usuário criado com sucesso!'
         : 'Usuário atualizado com sucesso!');
-      
+
       // Reset form and close modal
       closeModal();
-      
+
       // Reload users list
       loadUsers();
-      
+
     } catch (error) {
       console.error('Form submission error:', error);
       setError(error instanceof Error ? error.message : 'Erro ao processar requisição');
@@ -335,19 +335,19 @@ export default function ManageWorkersPage() {
     if (!confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) {
       return;
     }
-    
+
     try {
       const response = await fetch(`/api/users/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: userId })
       });
-      
+
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.message || 'Falha ao excluir usuário');
       }
-      
+
       setSuccess('Usuário excluído com sucesso!');
       loadUsers();
     } catch (error) {
@@ -355,7 +355,7 @@ export default function ManageWorkersPage() {
       setError(error instanceof Error ? error.message : 'Erro ao excluir usuário');
     }
   };
-  
+
   // Filter users based on search term
   const filteredUsers = users.filter(user => {
     const searchLower = searchTerm.toLowerCase();
@@ -366,7 +366,7 @@ export default function ManageWorkersPage() {
       (user.email && user.email.toLowerCase().includes(searchLower))
     );
   });
-  
+
   return (
     <Layout activePath="/manage-workers">
       <div className="max-w-6xl mx-auto">
@@ -380,20 +380,20 @@ export default function ManageWorkersPage() {
             Novo Usuário
           </button>
         </div>
-        
+
         {error && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start">
             <FaExclamationCircle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
-        
+
         {success && (
           <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
             {success}
           </div>
         )}
-        
+
         {/* Search Bar */}
         <div className="mb-6 relative">
           <div className="relative">
@@ -415,7 +415,7 @@ export default function ManageWorkersPage() {
             )}
           </div>
         </div>
-        
+
         {loading ? (
           <div className="flex justify-center p-8">
             <div className="animate-spin text-dms-secondary">
@@ -480,8 +480,8 @@ export default function ManageWorkersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            user.user_type === 0 
-                              ? 'bg-purple-100 text-purple-800' 
+                            user.user_type === 0
+                              ? 'bg-purple-100 text-purple-800'
                               : 'bg-green-100 text-green-800'
                           }`}>
                             {user.user_type === 0 ? 'Gerência' : 'Catador'}
@@ -512,7 +512,7 @@ export default function ManageWorkersPage() {
           </div>
         )}
       </div>
-      
+
       {/* User Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -528,7 +528,7 @@ export default function ManageWorkersPage() {
                 <FaTimes />
               </button>
             </div>
-            
+
             <div className="p-6 max-h-[70vh] overflow-y-auto">
               {error && (
                 <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start">
@@ -536,7 +536,7 @@ export default function ManageWorkersPage() {
                   <span>{error}</span>
                 </div>
               )}
-              
+
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -551,7 +551,7 @@ export default function ManageWorkersPage() {
                     required
                   />
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
                     CPF *
@@ -570,7 +570,7 @@ export default function ManageWorkersPage() {
                     <p className="mt-1 text-xs text-gray-500">CPF não pode ser alterado</p>
                   )}
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                     Email
@@ -583,7 +583,7 @@ export default function ManageWorkersPage() {
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
                   />
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
                     Telefone
@@ -597,7 +597,7 @@ export default function ManageWorkersPage() {
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-[#8A2736] focus:border-[#8A2736]"
                   />
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="pis" className="block text-sm font-medium text-gray-700 mb-1">
                     PIS/NIS *
@@ -612,7 +612,7 @@ export default function ManageWorkersPage() {
                     required
                   />
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="rg" className="block text-sm font-medium text-gray-700 mb-1">
                     RG *
@@ -627,7 +627,7 @@ export default function ManageWorkersPage() {
                     required
                   />
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="cooperative" className="block text-sm font-medium text-gray-700 mb-1">
                     Cooperativa *
@@ -747,7 +747,7 @@ export default function ManageWorkersPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="mb-4">
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     {modalMode === 'create' ? 'Senha *' : 'Nova Senha (deixe em branco para manter)'}
@@ -763,7 +763,7 @@ export default function ManageWorkersPage() {
                   />
                   <p className="mt-1 text-xs text-gray-500">Mínimo de 6 caracteres</p>
                 </div>
-                
+
                 <div className="mb-6">
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
                     {modalMode === 'create' ? 'Confirmar Senha *' : 'Confirmar Nova Senha'}
@@ -784,7 +784,7 @@ export default function ManageWorkersPage() {
                     <p className="mt-1 text-xs text-red-500">As senhas não coincidem</p>
                   )}
                 </div>
-                
+
                 <div className="sticky bottom-0 pt-4 bg-white mt-6 border-t border-gray-100">
                   <div className="flex justify-end space-x-3">
                     <button
@@ -800,14 +800,14 @@ export default function ManageWorkersPage() {
                       disabled={
                         loadingCooperatives ||
                         (modalMode === 'create' && (
-                          !fullName.trim() || 
+                          !fullName.trim() ||
                           !cpf.trim() ||
                           !pis.trim() ||
                           !rg.trim() ||
                           !birthDate ||
                           !enterDate ||
                           !cooperativeId ||
-                          password.length < 6 || 
+                          password.length < 6 ||
                           password !== confirmPassword
                         ))
                       }
@@ -823,4 +823,4 @@ export default function ManageWorkersPage() {
       )}
     </Layout>
   );
-} 
+}

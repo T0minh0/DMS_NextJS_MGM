@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
 import { sanitizeDigits } from '@/lib/db-utils';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
     const {
       id,
       full_name,
@@ -43,14 +45,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
     }
 
+    determineTargetCooperative(session, existing.cooperative);
+
     const userTypeNumber = Number(user_type);
     if (!Number.isFinite(userTypeNumber) || (userTypeNumber !== 0 && userTypeNumber !== 1)) {
       return NextResponse.json({ message: 'Tipo de usuário inválido' }, { status: 400 });
     }
 
+    const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
     let cooperativeBigInt: bigint;
     try {
-      cooperativeBigInt = BigInt(cooperative_id);
+      cooperativeBigInt = BigInt(targetCooperativeId);
     } catch {
       return NextResponse.json({ message: 'Cooperativa inválida' }, { status: 400 });
     }
@@ -105,6 +110,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: 'Usuário atualizado com sucesso' }, { status: 200 });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error updating user:', error);
     return NextResponse.json({ message: 'Erro ao atualizar usuário' }, { status: 500 });
   }

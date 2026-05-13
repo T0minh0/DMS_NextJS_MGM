@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
 
 export async function GET() {
   try {
+    await requireAdmin();
     const samples = await Promise.all([
       prisma.workers.findFirst({
         orderBy: { workerId: 'asc' },
@@ -103,6 +105,11 @@ export async function GET() {
       }, {}),
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error fetching collections:', error);
     return NextResponse.json(
       { message: 'Error fetching collections', error: String(error) },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 
 type MaterialWithGroup = Prisma.MaterialsGetPayload<{
   include: { group: true };
@@ -29,6 +30,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireAdmin();
     const { id: idParam } = await params;
     const id = parseMaterialId(idParam);
     if (id === null) {
@@ -108,6 +110,11 @@ export async function PUT(
       material: formatMaterial(updatedMaterial as MaterialWithGroup),
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error updating material:', error);
     return NextResponse.json(
       {
@@ -124,6 +131,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireAdmin();
     const { id: idParam } = await params;
     const id = parseMaterialId(idParam);
     if (id === null) {
@@ -176,6 +184,11 @@ export async function DELETE(
       message: 'Material excluído com sucesso',
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error deleting material:', error);
     return NextResponse.json(
       {

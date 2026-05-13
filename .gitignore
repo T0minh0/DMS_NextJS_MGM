@@ -11,12 +11,15 @@ pnpm-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.tony
+.codex
 
 # Build artifacts
 .next/
 dist/
 out/
 build/
+tsconfig.tsbuildinfo
 
 # Logs & coverage
 *.log
@@ -29,4 +32,3 @@ coverage/
 .vscode/
 *.swp
 Thumbs.db
-

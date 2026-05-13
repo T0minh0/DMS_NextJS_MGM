@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { formatWorkerId, decodeBytes } from '@/lib/db-utils';
 
 const MODEL_LIST = [
@@ -17,6 +18,7 @@ const MODEL_LIST = [
 
 export async function GET() {
   try {
+    await requireAdmin();
     const [byId, byCpf] = await Promise.all([
       prisma.workers.findFirst({
         where: { workerId: BigInt(5) },
@@ -68,6 +70,11 @@ export async function GET() {
 
     return NextResponse.json(response);
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error in debug endpoint:', error);
     return NextResponse.json(
       { message: 'Error in debug endpoint', error: String(error) },

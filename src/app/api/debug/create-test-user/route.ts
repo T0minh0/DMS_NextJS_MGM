@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 
 const TEST_CPF = '12345678900';
 const TEST_PASSWORD = 'test123';
 
 export async function GET() {
   try {
+    await requireAdmin();
+
     if (process.env.NODE_ENV === 'production') {
       return NextResponse.json(
         { message: 'This route is not available in production' },
@@ -75,6 +78,11 @@ export async function GET() {
       },
     });
   } catch (error) {
+    const authResponse = authErrorResponse(error);
+    if (authResponse) {
+      return authResponse;
+    }
+
     console.error('Error creating test user:', error);
     return NextResponse.json(
       { message: 'Server error', error: String(error) },

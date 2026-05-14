@@ -63,9 +63,9 @@ Fornecer dados sinteticos e repetiveis para provar fluxos web de gestores sem de
 | Criar e acompanhar venda normal | `/sales` | `normal-active-horizonte`, `normal-completed-horizonte`, `normal-cancelled-horizonte` | S1-01 persiste lifecycle; S2-01 porta complete/cancel e UX | `manager-horizonte-sale-leste-denied` |
 | Criar ou participar de venda coletiva | futura area de vendas coletivas | `collective-open-two-coops`, `collective-contribution-pending` | S1-02 persiste schema/seed; APIs/UI dependem de S3-01/S3-02 | `manager-horizonte-sale-leste-denied` |
 | Gerenciar equipe | `/manage-workers`, `/worker-productivity` | `manager-horizonte`, `worker-horizonte-active`, `worker-horizonte-empty`, `worker-horizonte-inactive`, `worker-leste` | UX final em S5-05 | `manager-horizonte-worker-leste-denied` |
-| Publicar aviso | futura `/notices` | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | Persistencia depende de S4-01/S4-02 | Manager nao publica global |
+| Publicar aviso | futura `/notices` | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | S1-03 persiste schema/seed; APIs e UI dependem de S4-01/S4-02 | Manager nao publica global |
 | Baixar relatorio/PDF | futura `/reports` | `normal-completed-horizonte`, `collective-open-two-coops`, `normal-cancelled-horizonte` | PDF real depende de S3-04/S3-05 | Relatorio cross-coop negado |
-| Investigar pendencia operacional | `/`, `/materials`, `/worker-productivity` | `glass-empty-stock`, `worker-horizonte-empty`, `job-pending-achievements` | Fila/jobs persistidos dependem de S4/S5 | Debug/recalc exige admin |
+| Investigar pendencia operacional | `/`, `/materials`, `/worker-productivity` | `glass-empty-stock`, `worker-horizonte-empty`, `job-pending-achievements` | S1-03 persiste base de gamificacao; execucao real de jobs depende de S4/S5 | Debug/recalc exige admin |
 
 ## Evidencia esperada
 

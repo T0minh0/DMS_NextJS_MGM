@@ -84,7 +84,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 - Entrada: futura nav `Avisos`.
 - Fluxo: criar aviso com titulo, conteudo, escopo global/cooperativa, prioridade e expiracao.
 - Conteudo HTML deve passar por `sanitizeNoticeTitle` e `sanitizeNoticeContent`.
-- Fixture S0-13: aviso global, aviso da cooperativa, aviso expirado, payload XSS bloqueado.
+- Fixture S0-13/S1-03: aviso global, aviso da cooperativa e payload XSS bloqueado persistidos em `notice_board`.
 - Teste negativo: gerente nao publica aviso global; payload malicioso nao reaparece no DOM.
 
 ### 7. Baixar relatorio/PDF
@@ -155,7 +155,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | `/manage-workers` | A pagina usa `/api/users` com escopo server-side | Gerente deve usar contrato cooperativo seguro, nao endpoint global | S5-05 deve cobrir UX/PII e teste manager |
 | Debug/recalc | `/api/debug/*` exige admin e bloqueio em producao sem flag; recalc/assign/debug somem da UI gerencial | Dev-only/feature flag/admin auditado | Monitorar em QA de release |
 | Reports/PDF | Helpers e ADR existem; endpoints reais futuros | Reports devem exigir escopo e `runtime=nodejs` | S3-04/S3-05 |
-| Notices | Sanitizacao existe; APIs/tela futuras | Avisos global/cooperativa com HTML seguro | S4-01/S4-02 |
+| Notices | Sanitizacao e schema/seed existem; APIs/tela futuras | Avisos global/cooperativa com HTML seguro | S4-01/S4-02 |
 
 ## Plano de browser evidence para tasks dependentes
 
@@ -181,9 +181,9 @@ Matriz de dados S0-13: [[Planejamento/Matriz-fixtures-UAT]].
 | Venda normal | `normal-active-horizonte`, `normal-completed-horizonte`, `normal-cancelled-horizonte` | S1-01 persiste lifecycle; S2-01 porta complete/cancel na API/UI |
 | Venda coletiva | `collective-open-two-coops`, `collective-contribution-pending` | S1-02 persiste schema/seed; APIs/UI dependem de S3-01/S3-02 |
 | Equipe/PII | `manager-horizonte`, `worker-horizonte-active`, `worker-horizonte-empty`, `worker-horizonte-inactive`, `worker-leste` | UX final em S5-05 |
-| Avisos | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | Persistencia depende de S4-01/S4-02 |
+| Avisos | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | S1-03 persiste schema/seed; APIs e UI dependem de S4-01/S4-02 |
 | Relatorio/PDF | `normal-completed-horizonte`, `collective-open-two-coops`, `normal-cancelled-horizonte` | PDF real depende de S3-04/S3-05 |
-| Pendencia operacional | `glass-empty-stock`, `worker-horizonte-empty`, `job-pending-achievements` | Fila/jobs persistidos dependem de S4/S5 |
+| Pendencia operacional | `glass-empty-stock`, `worker-horizonte-empty`, `job-pending-achievements` | S1-03 persiste base de gamificacao; execucao real de jobs depende de S4/S5 |
 
 ## Criterios para proximas tasks UI
 

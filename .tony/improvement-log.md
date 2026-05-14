@@ -1,6 +1,6 @@
-# Log de melhorias
+# Tony Improvement Log
 
-Espelho operacional de `.tony/improvement-log.md`.
+Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony neste projeto.
 
 | Data | Categoria | Observacao | Acao sugerida | Status |
 | --- | --- | --- | --- | --- |
@@ -30,6 +30,19 @@ Espelho operacional de `.tony/improvement-log.md`.
 - **Acao sistemica:** task
 - **Resolucao:** incorporado na task `86e1c9e29`; lockfile/dependencias atualizados e `postcss` fixado por override.
 - **Status:** concluido
+
+### [dx_friction] ClickUp recusou time entry do QA
+- **Data:** 2026-05-13
+- **Agente:** qa-reviewer
+- **Task:** 86e1c9dr3
+- **Fonte:** qa_comment
+- **Sinal:** PASS com warning
+- **Descricao:** Ao finalizar a S0-11, o QA tentou registrar time entry `tony-qa`, mas o ClickUp recusou por limite do plano de Advanced Time Tracking.
+- **Causa raiz:** Limite de plano/configuracao do workspace ClickUp, nao falha do codigo.
+- **Impacto:** Tempo de QA pode ficar fora do tracking automatico; comentarios finais continuam sendo a fonte de evidencia.
+- **Sugestao:** Tratar time tracking como best-effort no Tony quando o workspace nao tiver Advanced Time Tracking habilitado.
+- **Acao sistemica:** convencao
+- **Status:** pendente
 
 ### [security] `/api/user` pode diferenciar fora de escopo e inexistente
 - **Data:** 2026-05-13

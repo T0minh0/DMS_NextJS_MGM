@@ -217,6 +217,37 @@ export const UAT_COLLECTIVE_SALE_FIXTURES = [
   },
 ];
 
+export const UAT_NOTICE_FIXTURES = [
+  {
+    id: 'notice-global-safe',
+    scope: 'global',
+    seededInCurrentSchema: true,
+    notes: 'Aviso global sanitizado criado pelo admin para validar leitura futura multi-cooperativa.',
+  },
+  {
+    id: 'notice-coop-horizonte',
+    scope: 'cooperative-horizonte',
+    seededInCurrentSchema: true,
+    notes: 'Aviso da Cooperativa Horizonte para validar scoping futuro do mural.',
+  },
+  {
+    id: 'notice-xss-blocked',
+    scope: 'cooperative-horizonte',
+    seededInCurrentSchema: true,
+    notes: 'Payload malicioso sanitizado no seed para exercitar a politica server-side antes da API S4-01.',
+  },
+] as const;
+
+export const UAT_GAMIFICATION_FIXTURES = [
+  {
+    id: 'job-pending-achievements',
+    state: 'pending-achievement-evaluation',
+    seededInCurrentSchema: true,
+    notes:
+      'Definitions, material/random multipliers, worker level, worker achievements and leaderboard snapshot are persisted; jobs reais dependem de S4.',
+  },
+] as const;
+
 export const UAT_NEGATIVE_SCENARIOS = [
   {
     id: 'manager-horizonte-worker-leste-denied',
@@ -243,12 +274,7 @@ export const UAT_NEGATIVE_SCENARIOS = [
 
 export const UAT_DECLARED_PSEUDO_FIXTURE_IDS = ['web-session'] as const;
 
-export const UAT_DECLARED_FUTURE_FIXTURE_IDS = [
-  'notice-global-safe',
-  'notice-coop-horizonte',
-  'notice-xss-blocked',
-  'job-pending-achievements',
-] as const;
+export const UAT_DECLARED_FUTURE_FIXTURE_IDS = [] as const;
 
 export const UAT_JOURNEY_FIXTURE_MATRIX: Array<{
   journeyId: UatJourneyId;
@@ -315,7 +341,7 @@ export const UAT_JOURNEY_FIXTURE_MATRIX: Array<{
     title: 'Publicar aviso',
     routeTargets: ['/notices'],
     fixtureIds: ['notice-global-safe', 'notice-coop-horizonte', 'notice-xss-blocked'],
-    gap: 'Persistencia depende de S4-01/S4-02; payloads ficam na matriz ate existirem tabelas/API.',
+    gap: 'S1-03 persiste schema/seed; APIs e UI dependem de S4-01/S4-02.',
     negativeScenarioId: 'manager-horizonte-worker-leste-denied',
   },
   {
@@ -335,7 +361,7 @@ export const UAT_JOURNEY_FIXTURE_MATRIX: Array<{
     title: 'Investigar pendencia operacional',
     routeTargets: ['/', '/materials', '/worker-productivity'],
     fixtureIds: ['glass-empty-stock', 'worker-horizonte-empty', 'job-pending-achievements'],
-    gap: 'Fila de pendencias e jobs persistidos dependem de S4/S5; casos ficam declarados para UAT.',
+    gap: 'S1-03 persiste fixtures de gamificacao; execucao real de jobs e pendencias depende de S4/S5.',
     negativeScenarioId: 'worker-web-login-denied',
   },
 ];

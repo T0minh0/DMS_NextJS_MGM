@@ -104,7 +104,7 @@ npm test
 
 Resultado observado:
 
-- 59 testes passaram.
+- 65 testes passaram.
 - Cobre assinatura/verificacao JWT server-side.
 - Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo proxy.
 - Cobre que rotas `/api/*.json` continuam protegidas e nao sao tratadas como assets publicos.
@@ -117,6 +117,7 @@ Resultado observado:
 - Cobre POC PDF com bytes `%PDF-`, headers de download, sanitizacao de filename e sanitizacao de notices contra XSS, incluindo `svg onload` e atributos perigosos em tag permitida.
 - Cobre contratos S1-01 de schema/migration: lifecycle de `Sales`, unique/checks de `Stock`, `material_bag_state`, preflights de backfill e FKs para tabelas fisicas atuais.
 - Cobre contratos S1-02 de schema/migration: `collective_sale`, `collective_sale_contribution`, FKs para tabelas fisicas atuais, checks de lifecycle/decimal/status, seed coletivo e bloqueio de exclusao de material usado por venda coletiva.
+- Cobre contratos S1-03 de schema/migration: `notice_board`, multipliers, achievements, levels, leaderboard, FKs para tabelas fisicas atuais, FKs compostas de tenant, unique/check constraints, seeds idempotentes e fixtures UAT persistidas.
 - Cobre helpers de lifecycle para bloquear mutacoes legadas de estoque em vendas `ACTIVE`/`CANCELLED`, analytics apenas sobre vendas `SOLD` e escopo direto por `Sales.cooperative_id`.
 - Cobre bloqueio de transferencia de cooperativa para usuarios com vendas, medicoes ou contribuicoes associadas.
 - Cobre matriz de fixtures UAT gerenciais, documentos sinteticos, jornadas -> dados, estados de venda, vendas coletivas persistidas e guard contra seed em banco de producao/remoto por padrao.
@@ -177,7 +178,7 @@ Smoke minimo apos migration:
 
 ```bash
 npm run db:seed:uat
-node -e 'const {PrismaClient}=require("@prisma/client"); const p=new PrismaClient(); Promise.all([p.cooperative.count(), p.materials.count(), p.sales.count(), p.collectiveSale.count(), p.collectiveSaleContribution.count(), p.stock.count()]).then(console.log).finally(()=>p.$disconnect())'
+node -e 'const {PrismaClient}=require("@prisma/client"); const p=new PrismaClient(); Promise.all([p.cooperative.count(), p.materials.count(), p.sales.count(), p.collectiveSale.count(), p.collectiveSaleContribution.count(), p.noticeBoard.count(), p.levelDefinition.count(), p.achievementDefinition.count(), p.leaderboardEntry.count(), p.stock.count()]).then(console.log).finally(()=>p.$disconnect())'
 ```
 
 Migration S1-01 (`20260513224000_s1_01_core_sales_stock_bag_state`) e aditiva com backfill guardado. Antes de alterar o schema ela roda em transacao explicita, bloqueia writes em `Sales`, `Stock` e `Workers`, e aborta se encontrar duplicidade em `Stock` por cooperativa/material, totais negativos, vendas com peso/preco nao positivos, responsavel invalido ou vendas legadas sem representacao em `Stock.total_sold_kg`.
@@ -189,6 +190,12 @@ Migration S1-02 (`20260513233000_s1_02_collective_sales`) e aditiva e cria `coll
 Runbook operacional S1-02: aplicar apos S1-01, rodar `npx prisma migrate deploy`, `npx prisma migrate status`, `npm run prisma:validate`, `npx prisma generate`, `npm test` e smoke de contagem incluindo `collectiveSale` e `collectiveSaleContribution`. APIs de contribuicao/reserva devem manter writes pausados ou feature flag desligada ate S3 portar as transacoes.
 
 Validacao descartavel S1-02 observada em Postgres local `dms_uat`: `npx prisma migrate deploy` aplicou baseline, S1-01 e S1-02; `npm run db:seed:uat` concluiu; smoke Prisma retornou `cooperatives=3`, `collectiveSales=2`, `collectiveContributions=6`, com 3 contribuicoes por venda coletiva.
+
+Migration S1-03 (`20260514001500_s1_03_notices_multipliers_gamification`) e aditiva e cria `notice_board`, `cooperative_material_multiplier`, `cooperative_random_multiplier`, `achievement_definition`, `achievement_xp_override`, `worker_achievement`, `leaderboard_snapshot`, `leaderboard_entry`, `level_definition` e `worker_level`. Ela aborta se encontrar tabelas alvo preexistentes, usa `pgcrypto` para UUIDs, preserva FKs para tabelas fisicas atuais (`Cooperative`, `Workers`, `Materials`), adiciona a superchave `Workers(Worker_id, Cooperative)` e usa FKs compostas para bloquear registros cross-coop em notice author, XP override updater, worker achievements e leaderboard entries. Tambem adiciona checks de prioridade, ranges de multipliers, categorias/dificuldades, `YYYY-MM`, semana/ranking, XP/progresso nao negativo e texto obrigatorio.
+
+Runbook operacional S1-03: aplicar apos S1-02, rodar `npx prisma migrate deploy`, `npx prisma migrate status`, `npm run prisma:validate`, `npx prisma generate`, `npm run typecheck`, `npm test`, `npm run db:seed:uat` duas vezes no banco descartavel e smoke de contagens incluindo notices/gamificacao. Executar tambem inserts negativos cross-coop para `worker_achievement`, `leaderboard_entry`, `notice_board` e `achievement_xp_override`; todos devem falhar por FK composta. APIs/jobs/UI devem permanecer atras de feature flags ate S4/S5 portar as regras de dominio.
+
+Validacao descartavel S1-03 observada em Postgres local `dms_uat` na porta `55433`: `npx prisma migrate deploy` aplicou baseline, S1-01, S1-02 e S1-03; `npm run db:seed:uat` concluiu duas vezes; smoke Prisma retornou `cooperatives=3`, `notices=3`, `levelDefinition=10`, `achievementDefinition=14`, `cooperativeMaterialMultiplier=3`, `cooperativeRandomMultiplier=3`, `achievementXpOverride=1`, `workerAchievement=2`, `workerLevel=2`, `leaderboardSnapshot=1`, `leaderboardEntry=2`; consulta de constraints confirmou `Workers_worker_cooperative_key`, `notice_board_created_by_cooperative_fkey`, `achievement_xp_override_updated_by_cooperative_fkey`, `worker_achievement_worker_cooperative_fkey`, `leaderboard_snapshot_snapshot_cooperative_key`, `leaderboard_entry_snapshot_cooperative_fkey` e `leaderboard_entry_worker_cooperative_fkey`. Inserts negativos cross-coop foram bloqueados por essas FKs compostas, incluindo worker achievement, leaderboard worker, leaderboard snapshot, notice author e XP override updater.
 
 ## Audit
 

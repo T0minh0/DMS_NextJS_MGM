@@ -10,7 +10,7 @@ Matriz de UAT: [[Planejamento/Matriz-fixtures-UAT]].
 O seed comeca truncando as tabelas operacionais abaixo:
 
 ```sql
-TRUNCATE TABLE "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE "leaderboard_entry", "leaderboard_snapshot", "worker_achievement", "worker_level", "achievement_xp_override", "achievement_definition", "level_definition", "cooperative_random_multiplier", "cooperative_material_multiplier", "notice_board", "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;
 ```
 
 Use apenas em banco descartavel de desenvolvimento, preview ou UAT.
@@ -114,14 +114,36 @@ Desde S1-02, o schema possui `collective_sale` e `collective_sale_contribution`.
 | `collective-open-two-coops` | convite aberto | Sim | Horizonte criadora/`ACCEPTED`, Leste e Norte `INVITED`; sem reserva ate S3-02 |
 | `collective-contribution-pending` | contribuicao pendente | Sim | Horizonte, Leste e Norte `ACCEPTED` com `0.00 kg`; exercita edicao futura sem reserva inicial |
 
-### Avisos e jobs
+### Avisos
 
-Ainda nao ha tabelas Prisma para notices persistidos ou ledger persistido de jobs no schema atual. A S0-13 declara esses dados na matriz UAT para que as tasks futuras implementem os seeds reais quando criarem o schema:
+Desde S1-03, o schema possui `notice_board`. O seed persiste tres notices sanitizadas para as jornadas gerenciais futuras:
 
-- `notice-global-safe`
-- `notice-coop-horizonte`
-- `notice-xss-blocked`
-- `job-pending-achievements`
+| Fixture | Escopo | Persistido agora | Observacao |
+| --- | --- | --- | --- |
+| `notice-global-safe` | Global | Sim | Aviso criado pelo admin, sem `cooperative_id` |
+| `notice-coop-horizonte` | Cooperativa Horizonte | Sim | Aviso de prioridade 2 para validar scoping futuro |
+| `notice-xss-blocked` | Cooperativa Horizonte | Sim | Titulo/conteudo passam por `sanitizeNoticeTitle` e `sanitizeNoticeContent` |
+
+APIs e UI de notices dependem de S4-01/S4-02, mas a persistencia e os dados UAT ja existem.
+
+### Multipliers e gamificacao
+
+Desde S1-03, o schema possui multipliers, definicoes de achievements, overrides de XP, conquistas mensais, niveis e leaderboard.
+
+Dados seedados:
+
+- 10 registros em `level_definition`.
+- 14 registros em `achievement_definition`.
+- 3 registros em `cooperative_material_multiplier`.
+- 3 registros em `cooperative_random_multiplier`.
+- 1 override em `achievement_xp_override` para Horizonte.
+- 2 registros em `worker_level`.
+- 2 registros em `worker_achievement` para `2026-05`.
+- 1 `leaderboard_snapshot` com 2 `leaderboard_entry`.
+
+O fixture `job-pending-achievements` passa a ter base persistida: definitions, multipliers, level, achievements e snapshot. Os jobs reais de avaliacao/recalculo seguem pendentes para S4/S5.
+
+As fixtures respeitam as FKs compostas de tenant da S1-03: notices de cooperativa, overrides de XP, achievements e entries de leaderboard so aceitam workers da mesma cooperativa registrada.
 
 ## Cenario negativo obrigatorio
 
@@ -145,6 +167,7 @@ Cobertura automatizada:
 
 - `tests/uat-fixtures.test.ts` valida papeis, duas cooperativas com identidades, documentos sinteticos, estados de venda, vendas coletivas persistidas, jornada -> fixture, alvos negativos, scan de documentos realistas e guard contra seed em producao/banco duravel/remoto.
 - `tests/collective-sales-schema.test.ts` valida contratos S1-02 de schema/migration, FKs para tabelas fisicas atuais, checks de lifecycle/decimal/status, seed das vendas coletivas e bloqueio de exclusao de material usado por venda coletiva.
+- `tests/gamification-schema.test.ts` valida contratos S1-03 de schema/migration, FKs para tabelas fisicas atuais, FKs compostas de tenant, checks/unique constraints, seed idempotente de levels/achievements e fixtures persistidas de notices/gamificacao.
 - `tests/auth-rbac.test.ts` valida escopo RBAC/cooperativa.
 - `tests/schema-migrations.test.ts` valida os contratos S1-01 de lifecycle, `Stock` unico por cooperativa/material, `material_bag_state`, preflights e checks da migration.
 - `tests/observability.test.ts` valida PII/logs, contrato de erro API e estabilidade de IDs nas listagens de usuarios.

@@ -8,8 +8,8 @@ datasource db {
 }
 
 model Cooperative {
-  cooperativeId               BigInt                       @id @default(autoincrement()) @map("cooperative_id")
-  cooperativeName             String                       @map("cooperative_name")
+  cooperativeId               BigInt                          @id @default(autoincrement()) @map("cooperative_id")
+  cooperativeName             String                          @map("cooperative_name")
   devices                     Devices[]
   workers                     Workers[]
   stock                       Stock[]
@@ -18,6 +18,12 @@ model Cooperative {
   materialBagStates           MaterialBagState[]
   collectiveSales             CollectiveSale[]
   collectiveSaleContributions CollectiveSaleContribution[]
+  notices                     NoticeBoard[]
+  materialMultipliers         CooperativeMaterialMultiplier[]
+  randomMultiplier            CooperativeRandomMultiplier?
+  achievementXpOverrides      AchievementXpOverride[]
+  workerAchievements          WorkerAchievement[]
+  leaderboardSnapshots        LeaderboardSnapshot[]
 
   @@map("Cooperative")
 }
@@ -40,16 +46,17 @@ model Groups {
 }
 
 model Materials {
-  materialId          BigInt                @id @default(autoincrement()) @map("Material_id")
-  materialName        String                @map("Material_name")
-  materialGroup       BigInt?               @map("Material_group")
-  group               Groups?               @relation(fields: [materialGroup], references: [groupId], map: "Material_group")
+  materialId          BigInt                          @id @default(autoincrement()) @map("Material_id")
+  materialName        String                          @map("Material_name")
+  materialGroup       BigInt?                         @map("Material_group")
+  group               Groups?                         @relation(fields: [materialGroup], references: [groupId], map: "Material_group")
   sales               Sales[]
   measurements        Measurments[]
   stock               Stock[]
   workerContributions WorkerContributions[]
   materialBagStates   MaterialBagState[]
   collectiveSales     CollectiveSale[]
+  materialMultipliers CooperativeMaterialMultiplier[]
 
   @@map("Materials")
 }
@@ -88,25 +95,31 @@ model Sales {
 }
 
 model Workers {
-  workerId            BigInt                @id @default(autoincrement()) @map("Worker_id")
-  workerName          String                @map("Worker_name")
-  cooperative         BigInt                @map("Cooperative")
-  cpf                 Bytes                 @map("CPF")
-  userType            String                @map("User_type") @db.Char(1)
-  birthDate           DateTime              @map("Birth_date") @db.Date
-  enterDate           DateTime              @map("Enter_date") @db.Date
-  exitDate            DateTime?             @map("Exit_date") @db.Date
-  pis                 Bytes                 @map("PIS")
-  rg                  Bytes                 @map("RG")
-  gender              String?               @map("Gender")
-  password            Bytes                 @map("Password")
-  email               String                @map("Email")
-  lastUpdate          DateTime?             @map("Last_update") @db.Date
-  cooperativeRef      Cooperative           @relation(fields: [cooperative], references: [cooperativeId], map: "cooperative")
-  measurements        Measurments[]
-  responsibleSales    Sales[]               @relation("WorkersAsResponsible")
-  workerContributions WorkerContributions[]
+  workerId                    BigInt                  @id @default(autoincrement()) @map("Worker_id")
+  workerName                  String                  @map("Worker_name")
+  cooperative                 BigInt                  @map("Cooperative")
+  cpf                         Bytes                   @map("CPF")
+  userType                    String                  @map("User_type") @db.Char(1)
+  birthDate                   DateTime                @map("Birth_date") @db.Date
+  enterDate                   DateTime                @map("Enter_date") @db.Date
+  exitDate                    DateTime?               @map("Exit_date") @db.Date
+  pis                         Bytes                   @map("PIS")
+  rg                          Bytes                   @map("RG")
+  gender                      String?                 @map("Gender")
+  password                    Bytes                   @map("Password")
+  email                       String                  @map("Email")
+  lastUpdate                  DateTime?               @map("Last_update") @db.Date
+  cooperativeRef              Cooperative             @relation(fields: [cooperative], references: [cooperativeId], map: "cooperative")
+  measurements                Measurments[]
+  responsibleSales            Sales[]                 @relation("WorkersAsResponsible")
+  workerContributions         WorkerContributions[]
+  noticesCreated              NoticeBoard[]           @relation("NoticeCreatedBy")
+  achievementOverridesUpdated AchievementXpOverride[] @relation("AchievementOverrideUpdatedBy")
+  workerAchievements          WorkerAchievement[]
+  leaderboardEntries          LeaderboardEntry[]
+  workerLevel                 WorkerLevel?
 
+  @@unique([workerId, cooperative], map: "Workers_worker_cooperative_key")
   @@map("Workers")
 }
 
@@ -206,4 +219,153 @@ model CollectiveSaleContribution {
   @@index([cooperativeId], map: "collective_sale_contribution_cooperative_id_idx")
   @@index([status], map: "collective_sale_contribution_status_idx")
   @@map("collective_sale_contribution")
+}
+
+model NoticeBoard {
+  noticeId      BigInt       @id @default(autoincrement()) @map("notice_id")
+  cooperativeId BigInt?      @map("cooperative_id")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUpdated   DateTime     @default(now()) @map("last_updated") @db.Timestamp(6)
+  createdBy     BigInt       @map("created_by")
+  priority      Int          @default(1)
+  expiresAt     DateTime?    @map("expires_at") @db.Timestamp(6)
+  title         String       @db.Text
+  content       String       @db.Text
+  cooperative   Cooperative? @relation(fields: [cooperativeId], references: [cooperativeId], map: "notice_board_cooperative_id_fkey")
+  creator       Workers      @relation("NoticeCreatedBy", fields: [createdBy], references: [workerId], map: "notice_board_created_by_fkey")
+
+  @@index([cooperativeId], map: "notice_board_cooperative_id_idx")
+  @@index([priority], map: "notice_board_priority_idx")
+  @@index([expiresAt], map: "notice_board_expires_at_idx")
+  @@map("notice_board")
+}
+
+model CooperativeMaterialMultiplier {
+  cooperativeMaterialMultiplierId String      @id @default(dbgenerated("gen_random_uuid()")) @map("cooperative_material_multiplier_id") @db.Uuid
+  cooperativeId                   BigInt      @map("cooperative_id")
+  materialId                      BigInt      @map("material_id")
+  multiplierValue                 Decimal     @map("multiplier_value") @db.Decimal(5, 3)
+  lastUpdated                     DateTime    @default(now()) @map("last_updated") @db.Timestamp(6)
+  cooperative                     Cooperative @relation(fields: [cooperativeId], references: [cooperativeId], map: "cooperative_material_multiplier_cooperative_id_fkey")
+  material                        Materials   @relation(fields: [materialId], references: [materialId], map: "cooperative_material_multiplier_material_id_fkey")
+
+  @@unique([cooperativeId, materialId], map: "cooperative_material_multiplier_cooperative_material_key")
+  @@index([materialId], map: "cooperative_material_multiplier_material_id_idx")
+  @@map("cooperative_material_multiplier")
+}
+
+model CooperativeRandomMultiplier {
+  cooperativeRandomMultiplierId String      @id @default(dbgenerated("gen_random_uuid()")) @map("cooperative_random_multiplier_id") @db.Uuid
+  cooperativeId                 BigInt      @unique(map: "cooperative_random_multiplier_cooperative_id_key") @map("cooperative_id")
+  multiplierValue               Decimal     @default(1) @map("multiplier_value") @db.Decimal(5, 3)
+  lastUpdated                   DateTime    @default(now()) @map("last_updated") @db.Timestamp(6)
+  cooperative                   Cooperative @relation(fields: [cooperativeId], references: [cooperativeId], map: "cooperative_random_multiplier_cooperative_id_fkey")
+
+  @@map("cooperative_random_multiplier")
+}
+
+model AchievementDefinition {
+  achievementId      BigInt                  @id @default(autoincrement()) @map("achievement_id")
+  achievementKey     String                  @unique(map: "achievement_definition_key_key") @map("achievement_key") @db.Text
+  achievementName    String                  @map("achievement_name") @db.Text
+  description        String                  @db.Text
+  category           String                  @db.VarChar(30)
+  thresholdValue     Decimal                 @map("threshold_value") @db.Decimal(15, 2)
+  baseXpReward       Int                     @default(100) @map("base_xp_reward")
+  difficulty         String                  @default("MEDIUM") @db.VarChar(20)
+  xpOverrides        AchievementXpOverride[]
+  workerAchievements WorkerAchievement[]
+
+  @@map("achievement_definition")
+}
+
+model AchievementXpOverride {
+  overrideId       BigInt                @id @default(autoincrement()) @map("override_id")
+  cooperativeId    BigInt                @map("cooperative_id")
+  achievementId    BigInt                @map("achievement_id")
+  xpRewardOverride Int                   @map("xp_reward_override")
+  updatedBy        BigInt                @map("updated_by")
+  updatedAt        DateTime              @default(now()) @map("updated_at") @db.Timestamp(6)
+  cooperative      Cooperative           @relation(fields: [cooperativeId], references: [cooperativeId], map: "achievement_xp_override_cooperative_id_fkey")
+  achievement      AchievementDefinition @relation(fields: [achievementId], references: [achievementId], map: "achievement_xp_override_achievement_id_fkey")
+  updatedByWorker  Workers               @relation("AchievementOverrideUpdatedBy", fields: [updatedBy, cooperativeId], references: [workerId, cooperative], map: "achievement_xp_override_updated_by_cooperative_fkey")
+
+  @@unique([cooperativeId, achievementId], map: "achievement_xp_override_cooperative_achievement_key")
+  @@index([achievementId], map: "achievement_xp_override_achievement_id_idx")
+  @@index([updatedBy], map: "achievement_xp_override_updated_by_idx")
+  @@map("achievement_xp_override")
+}
+
+model WorkerAchievement {
+  workerAchievementId BigInt                @id @default(autoincrement()) @map("worker_achievement_id")
+  workerId            BigInt                @map("worker_id")
+  achievementId       BigInt                @map("achievement_id")
+  cooperativeId       BigInt                @map("cooperative_id")
+  yearMonth           String                @map("year_month") @db.Char(7)
+  unlockedAt          DateTime?             @map("unlocked_at") @db.Timestamp(6)
+  progressValue       Decimal               @default(0) @map("progress_value") @db.Decimal(15, 2)
+  worker              Workers               @relation(fields: [workerId, cooperativeId], references: [workerId, cooperative], map: "worker_achievement_worker_cooperative_fkey")
+  achievement         AchievementDefinition @relation(fields: [achievementId], references: [achievementId], map: "worker_achievement_achievement_id_fkey")
+  cooperative         Cooperative           @relation(fields: [cooperativeId], references: [cooperativeId], map: "worker_achievement_cooperative_id_fkey")
+
+  @@unique([workerId, achievementId, cooperativeId, yearMonth], map: "worker_achievement_worker_achievement_cooperative_month_key")
+  @@index([achievementId], map: "worker_achievement_achievement_id_idx")
+  @@index([cooperativeId], map: "worker_achievement_cooperative_id_idx")
+  @@index([yearMonth], map: "worker_achievement_year_month_idx")
+  @@map("worker_achievement")
+}
+
+model LeaderboardSnapshot {
+  snapshotId    BigInt             @id @default(autoincrement()) @map("snapshot_id")
+  cooperativeId BigInt             @map("cooperative_id")
+  yearMonth     String             @map("year_month") @db.Char(7)
+  weekNumber    Int                @map("week_number")
+  computedAt    DateTime           @default(now()) @map("computed_at") @db.Timestamp(6)
+  cooperative   Cooperative        @relation(fields: [cooperativeId], references: [cooperativeId], map: "leaderboard_snapshot_cooperative_id_fkey")
+  entries       LeaderboardEntry[]
+
+  @@unique([cooperativeId, yearMonth, weekNumber], map: "leaderboard_snapshot_cooperative_month_week_key")
+  @@unique([snapshotId, cooperativeId], map: "leaderboard_snapshot_snapshot_cooperative_key")
+  @@index([yearMonth], map: "leaderboard_snapshot_year_month_idx")
+  @@map("leaderboard_snapshot")
+}
+
+model LeaderboardEntry {
+  entryId       BigInt              @id @default(autoincrement()) @map("entry_id")
+  snapshotId    BigInt              @map("snapshot_id")
+  cooperativeId BigInt              @map("cooperative_id")
+  rankPosition  Int                 @map("rank_position")
+  workerId      BigInt              @map("worker_id")
+  workerName    String              @map("worker_name") @db.Text
+  rawXp         Decimal             @map("raw_xp") @db.Decimal(15, 2)
+  finalXp       Decimal             @map("final_xp") @db.Decimal(15, 2)
+  randomMult    Decimal             @map("random_mult") @db.Decimal(5, 3)
+  snapshot      LeaderboardSnapshot @relation(fields: [snapshotId, cooperativeId], references: [snapshotId, cooperativeId], onDelete: Cascade, map: "leaderboard_entry_snapshot_cooperative_fkey")
+  worker        Workers             @relation(fields: [workerId, cooperativeId], references: [workerId, cooperative], map: "leaderboard_entry_worker_cooperative_fkey")
+
+  @@unique([snapshotId, rankPosition], map: "leaderboard_entry_snapshot_rank_key")
+  @@unique([snapshotId, workerId], map: "leaderboard_entry_snapshot_worker_key")
+  @@index([workerId], map: "leaderboard_entry_worker_id_idx")
+  @@map("leaderboard_entry")
+}
+
+model LevelDefinition {
+  levelNumber  Int           @id @map("level_number")
+  levelName    String        @map("level_name") @db.Text
+  xpRequired   Int           @map("xp_required")
+  workerLevels WorkerLevel[]
+
+  @@map("level_definition")
+}
+
+model WorkerLevel {
+  workerId     BigInt          @id @map("worker_id")
+  totalXp      Int             @default(0) @map("total_xp")
+  currentLevel Int             @default(1) @map("current_level")
+  lastUpdated  DateTime        @default(now()) @map("last_updated") @db.Timestamp(6)
+  worker       Workers         @relation(fields: [workerId], references: [workerId], map: "worker_level_worker_id_fkey")
+  level        LevelDefinition @relation(fields: [currentLevel], references: [levelNumber], map: "worker_level_current_level_fkey")
+
+  @@index([currentLevel], map: "worker_level_current_level_idx")
+  @@map("worker_level")
 }

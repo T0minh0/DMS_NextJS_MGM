@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { assertSafeSeedTarget } from '../src/lib/uat/seed-safety';
+import { sanitizeNoticeContent, sanitizeNoticeTitle } from '../src/lib/notices/sanitize';
 
 const prisma = new PrismaClient();
 
@@ -35,6 +36,148 @@ const syntheticDocs = {
   rgManagerLeste: '990000022',
   rgWorkerLeste: '990000023',
 } as const;
+
+const LEVEL_DEFINITIONS = [
+  { levelNumber: 1, levelName: 'Beginner', xpRequired: 100 },
+  { levelNumber: 2, levelName: 'Amateur', xpRequired: 167 },
+  { levelNumber: 3, levelName: 'Apprentice', xpRequired: 278 },
+  { levelNumber: 4, levelName: 'Collector', xpRequired: 464 },
+  { levelNumber: 5, levelName: 'Professional', xpRequired: 774 },
+  { levelNumber: 6, levelName: 'Expert', xpRequired: 1291 },
+  { levelNumber: 7, levelName: 'Master', xpRequired: 2154 },
+  { levelNumber: 8, levelName: 'Elite', xpRequired: 3593 },
+  { levelNumber: 9, levelName: 'Champion', xpRequired: 5992 },
+  { levelNumber: 10, levelName: 'Legend', xpRequired: 10000 },
+] as const;
+
+const ACHIEVEMENT_DEFINITIONS = [
+  {
+    achievementKey: 'WEIGHT_50KG',
+    achievementName: 'Beginner',
+    description: 'Collect 50 kg of materials in a month',
+    category: 'WEIGHT',
+    thresholdValue: '50.00',
+    baseXpReward: 100,
+    difficulty: 'EASY',
+  },
+  {
+    achievementKey: 'WEIGHT_100KG',
+    achievementName: 'Amateur',
+    description: 'Collect 100 kg of materials in a month',
+    category: 'WEIGHT',
+    thresholdValue: '100.00',
+    baseXpReward: 200,
+    difficulty: 'EASY',
+  },
+  {
+    achievementKey: 'WEIGHT_250KG',
+    achievementName: 'Professional',
+    description: 'Collect 250 kg of materials in a month',
+    category: 'WEIGHT',
+    thresholdValue: '250.00',
+    baseXpReward: 400,
+    difficulty: 'MEDIUM',
+  },
+  {
+    achievementKey: 'WEIGHT_500KG',
+    achievementName: 'Master Collector',
+    description: 'Collect 500 kg of materials in a month',
+    category: 'WEIGHT',
+    thresholdValue: '500.00',
+    baseXpReward: 750,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'WEIGHT_1000KG',
+    achievementName: 'Legendary Collector',
+    description: 'Collect 1000 kg of materials in a month',
+    category: 'WEIGHT',
+    thresholdValue: '1000.00',
+    baseXpReward: 1500,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'DAYS_5',
+    achievementName: 'Getting Started',
+    description: 'Work at least 5 days in a month',
+    category: 'DAYS_WORKED',
+    thresholdValue: '5.00',
+    baseXpReward: 75,
+    difficulty: 'EASY',
+  },
+  {
+    achievementKey: 'DAYS_10',
+    achievementName: 'On a Roll',
+    description: 'Work at least 10 days in a month',
+    category: 'DAYS_WORKED',
+    thresholdValue: '10.00',
+    baseXpReward: 150,
+    difficulty: 'MEDIUM',
+  },
+  {
+    achievementKey: 'DAYS_15',
+    achievementName: 'Committed Worker',
+    description: 'Work at least 15 days in a month',
+    category: 'DAYS_WORKED',
+    thresholdValue: '15.00',
+    baseXpReward: 250,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'DAYS_20',
+    achievementName: 'Dedicated Worker',
+    description: 'Work at least 20 days in a month',
+    category: 'DAYS_WORKED',
+    thresholdValue: '20.00',
+    baseXpReward: 400,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'DAYS_25',
+    achievementName: 'Unstoppable Worker',
+    description: 'Work at least 25 days in a month',
+    category: 'DAYS_WORKED',
+    thresholdValue: '25.00',
+    baseXpReward: 600,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'ACHIEVEMENTS_COUNT_3',
+    achievementName: 'Rising Star',
+    description: 'Unlock 3 different achievements in a month',
+    category: 'ACHIEVEMENTS_COUNT',
+    thresholdValue: '3.00',
+    baseXpReward: 125,
+    difficulty: 'MEDIUM',
+  },
+  {
+    achievementKey: 'ACHIEVEMENTS_COUNT_5',
+    achievementName: 'Shining Star',
+    description: 'Unlock 5 different achievements in a month',
+    category: 'ACHIEVEMENTS_COUNT',
+    thresholdValue: '5.00',
+    baseXpReward: 300,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'ACHIEVEMENTS_COUNT_8',
+    achievementName: 'Superstar',
+    description: 'Unlock 8 different achievements in a month',
+    category: 'ACHIEVEMENTS_COUNT',
+    thresholdValue: '8.00',
+    baseXpReward: 500,
+    difficulty: 'HARD',
+  },
+  {
+    achievementKey: 'ACHIEVEMENTS_COUNT_10',
+    achievementName: 'Legendary Superstar',
+    description: 'Unlock 10 different achievements in a month',
+    category: 'ACHIEVEMENTS_COUNT',
+    thresholdValue: '10.00',
+    baseXpReward: 750,
+    difficulty: 'HARD',
+  },
+] as const;
 
 async function createWorker({
   workerName,
@@ -86,8 +229,18 @@ async function main() {
   assertSafeSeedTarget();
 
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "leaderboard_entry", "leaderboard_snapshot", "worker_achievement", "worker_level", "achievement_xp_override", "achievement_definition", "level_definition", "cooperative_random_multiplier", "cooperative_material_multiplier", "notice_board", "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
   );
+
+  await prisma.levelDefinition.createMany({
+    data: [...LEVEL_DEFINITIONS],
+    skipDuplicates: true,
+  });
+
+  await prisma.achievementDefinition.createMany({
+    data: [...ACHIEVEMENT_DEFINITIONS],
+    skipDuplicates: true,
+  });
 
   const [cooperativeHorizonte, cooperativeLeste, cooperativeNorte] = await Promise.all([
     prisma.cooperative.create({
@@ -285,6 +438,181 @@ async function main() {
     birthDate: '1993-12-04',
     enterDate: '2023-02-01',
     gender: 'Masculino',
+  });
+
+  await prisma.noticeBoard.createMany({
+    data: [
+      {
+        cooperativeId: null,
+        createdAt: new Date('2026-05-13T08:00:00Z'),
+        lastUpdated: new Date('2026-05-13T08:00:00Z'),
+        createdBy: admin.workerId,
+        priority: 1,
+        expiresAt: new Date('2026-06-30T23:59:59Z'),
+        title: sanitizeNoticeTitle('UAT Aviso global seguro'),
+        content: sanitizeNoticeContent(
+          '<p>Agenda de prestação de contas disponível para as cooperativas.</p>',
+        ),
+      },
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        createdAt: new Date('2026-05-13T09:00:00Z'),
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+        createdBy: managerHorizonte.workerId,
+        priority: 2,
+        expiresAt: new Date('2026-06-15T23:59:59Z'),
+        title: sanitizeNoticeTitle('UAT Horizonte - coleta antecipada'),
+        content: sanitizeNoticeContent(
+          '<p>Coleta de PET antecipada para <strong>sexta-feira</strong>.</p>',
+        ),
+      },
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        createdAt: new Date('2026-05-13T10:00:00Z'),
+        lastUpdated: new Date('2026-05-13T10:00:00Z'),
+        createdBy: managerHorizonte.workerId,
+        priority: 3,
+        expiresAt: new Date('2026-06-15T23:59:59Z'),
+        title: sanitizeNoticeTitle('<img src=x onerror=alert(1)> UAT payload bloqueado'),
+        content: sanitizeNoticeContent(
+          '<p>Conteudo permitido</p><img src=x onerror=alert(1)><script>alert(document.cookie)</script>',
+        ),
+      },
+    ],
+  });
+
+  await prisma.cooperativeMaterialMultiplier.createMany({
+    data: [
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        materialId: materialCardboard.materialId,
+        multiplierValue: '1.250',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        materialId: materialPet.materialId,
+        multiplierValue: '1.100',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeLeste.cooperativeId,
+        materialId: materialCardboard.materialId,
+        multiplierValue: '0.950',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+    ],
+  });
+
+  await prisma.cooperativeRandomMultiplier.createMany({
+    data: [
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        multiplierValue: '1.100',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeLeste.cooperativeId,
+        multiplierValue: '0.900',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeNorte.cooperativeId,
+        multiplierValue: '1.000',
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+    ],
+  });
+
+  const [weight50Achievement, days5Achievement] = await Promise.all([
+    prisma.achievementDefinition.findUniqueOrThrow({
+      where: { achievementKey: 'WEIGHT_50KG' },
+    }),
+    prisma.achievementDefinition.findUniqueOrThrow({
+      where: { achievementKey: 'DAYS_5' },
+    }),
+  ]);
+
+  await prisma.achievementXpOverride.create({
+    data: {
+      cooperativeId: cooperativeHorizonte.cooperativeId,
+      achievementId: weight50Achievement.achievementId,
+      xpRewardOverride: 110,
+      updatedBy: managerHorizonte.workerId,
+      updatedAt: new Date('2026-05-13T09:00:00Z'),
+    },
+  });
+
+  await prisma.workerLevel.createMany({
+    data: [
+      {
+        workerId: workerAtivo.workerId,
+        totalXp: 75,
+        currentLevel: 1,
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        workerId: workerSemOperacao.workerId,
+        totalXp: 0,
+        currentLevel: 1,
+        lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+    ],
+  });
+
+  await prisma.workerAchievement.createMany({
+    data: [
+      {
+        workerId: workerAtivo.workerId,
+        achievementId: weight50Achievement.achievementId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        yearMonth: '2026-05',
+        unlockedAt: null,
+        progressValue: '48.10',
+      },
+      {
+        workerId: workerAtivo.workerId,
+        achievementId: days5Achievement.achievementId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        yearMonth: '2026-05',
+        unlockedAt: new Date('2026-05-13T09:00:00Z'),
+        progressValue: '5.00',
+      },
+    ],
+  });
+
+  const leaderboardSnapshot = await prisma.leaderboardSnapshot.create({
+    data: {
+      cooperativeId: cooperativeHorizonte.cooperativeId,
+      yearMonth: '2026-05',
+      weekNumber: 1,
+      computedAt: new Date('2026-05-13T09:00:00Z'),
+    },
+  });
+
+  await prisma.leaderboardEntry.createMany({
+    data: [
+      {
+        snapshotId: leaderboardSnapshot.snapshotId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        rankPosition: 1,
+        workerId: workerAtivo.workerId,
+        workerName: workerAtivo.workerName,
+        rawXp: '210.50',
+        finalXp: '231.55',
+        randomMult: '1.100',
+      },
+      {
+        snapshotId: leaderboardSnapshot.snapshotId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        rankPosition: 2,
+        workerId: workerSemOperacao.workerId,
+        workerName: workerSemOperacao.workerName,
+        rawXp: '0.00',
+        finalXp: '0.00',
+        randomMult: '1.100',
+      },
+    ],
   });
 
   await prisma.measurments.createMany({

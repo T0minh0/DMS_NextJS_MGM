@@ -17,7 +17,7 @@ Esta nota nao implementa codigo. Ela cria o contrato inicial para as ADRs e task
 
 ## Resumo executivo
 
-O repo Java referencia introduz dominios que ainda nao existem no Prisma/Next atual:
+O repo Java referencia introduz dominios que ainda estavam ausentes ou divergentes no Prisma/Next inicial:
 
 - Auth/RBAC com roles `A`, `M`, `W` e escopo por cooperativa.
 - Pesagem de material com `material_bag_state` e update de estoque por delta.
@@ -27,6 +27,8 @@ O repo Java referencia introduz dominios que ainda nao existem no Prisma/Next at
 - Notice board global/cooperativa com sanitizacao.
 - Multiplicadores por material/cooperativa e random multiplier mensal.
 - Achievements, levels e leaderboard com jobs recorrentes.
+
+Atualizacao S1: o schema Prisma ja recebeu lifecycle de vendas/estoque, vendas coletivas, notices, multipliers e a base de gamificacao. APIs, jobs e UI seguem nas tasks S2-S5.
 
 O Next atual ja possui partes de auth, dashboard, materiais, usuarios, estoque e venda, mas com contratos diferentes. Em especial, a venda normal atual baixa estoque no `POST /api/sales`; a referencia Java baixa estoque no `PATCH /api/sales/{saleId}/complete`.
 
@@ -72,9 +74,20 @@ Modelos Prisma atuais:
 | `Stock` | `Stock` | S1-01 adiciona unique formal por cooperativa/material e checks de nao negativo. |
 | `WorkerContributions` | `Worker_contributions` | Usa `Unsupported("daterange")`; manter como ponto de atencao. |
 
-Modelos ausentes no Prisma atual:
+Modelos Prisma adicionados em S1-03:
 
-`notice_board`, `cooperative_material_multiplier`, `cooperative_random_multiplier`, `achievement_definition`, `achievement_xp_override`, `worker_achievement`, `leaderboard_snapshot`, `leaderboard_entry`, `level_definition`, `worker_level`.
+| Modelo Prisma | Tabela | Proximo passo |
+| --- | --- | --- |
+| `NoticeBoard` | `notice_board` | APIs/UI de notices em S4-01/S4-02 |
+| `CooperativeMaterialMultiplier` | `cooperative_material_multiplier` | APIs de multipliers em S4 |
+| `CooperativeRandomMultiplier` | `cooperative_random_multiplier` | Job mensal/upsert em S4/S5 |
+| `AchievementDefinition` | `achievement_definition` | APIs de achievements em S4 |
+| `AchievementXpOverride` | `achievement_xp_override` | Endpoint de ajuste de XP em S4 |
+| `WorkerAchievement` | `worker_achievement` | Job de avaliacao idempotente em S4/S5 |
+| `LeaderboardSnapshot` | `leaderboard_snapshot` | Job/API de leaderboard em S4/S5 |
+| `LeaderboardEntry` | `leaderboard_entry` | Entries recompostas por snapshot |
+| `LevelDefinition` | `level_definition` | API de levels em S4 |
+| `WorkerLevel` | `worker_level` | Recalculo por job em S4/S5 |
 
 ## Mapa de endpoints Java -> Next
 
@@ -385,8 +398,9 @@ Gaps:
 
 Gaps:
 
-- Java usa OWASP HTML Sanitizer; Next precisa biblioteca/politica server-side.
-- Definir se `content` aceita HTML limitado ou texto puro.
+- Sanitizacao server-side ja existe em `src/lib/notices/sanitize.ts`; APIs futuras devem chama-la em create/update.
+- `content` aceita HTML limitado conforme [[ADR/ADR-0005-pdf-sanitizacao-notices]].
+- S1-03 criou persistencia, mas endpoints e UI ainda nao existem.
 
 ### Multipliers
 
@@ -410,7 +424,7 @@ Gaps:
 Gaps:
 
 - Admin write com `cooperativeId` nulo e gap conhecido no Java.
-- Random multiplier mensal precisa job runner.
+- S1-03 criou constraints e seeds; random multiplier mensal ainda precisa job runner/upsert.
 
 ### Gamificacao
 
@@ -477,9 +491,8 @@ GET /api/leaderboard/history?cooperativeId=1&yearMonth=2026-04&weekNumber=2
 
 Gaps:
 
-- Jobs de evaluation e leaderboard devem ser idempotentes.
-- Definir mecanismo de cron antes das APIs finais.
-- Garantir que `ACHIEVEMENTS_COUNT` nao fique impossivel pela quantidade seedada.
+- S1-03 criou constraints unicas e seeds idempotentes; jobs de evaluation e leaderboard ainda devem usar o runtime de [[ADR/ADR-0004-job-runner-cron-feature-flags]].
+- Garantir que `ACHIEVEMENTS_COUNT` nao fique impossivel pela quantidade seedada quando o job real for implementado.
 
 ### Browser routes Java
 
@@ -505,16 +518,16 @@ Gaps:
 | `material_bag_state` | Criado em S1-01 | Portar APIs de pesagem/insertMaterial. |
 | `collective_sale` | Criado em S1-02 | Portar APIs/UX de venda coletiva. |
 | `collective_sale_contribution` | Criado em S1-02 | Portar reserva, leave/cancel e revenue share em S3. |
-| `notice_board` | Ausente | Criar. |
-| `cooperative_material_multiplier` | Ausente | Criar. |
-| `cooperative_random_multiplier` | Ausente | Criar. |
-| `achievement_definition` | Ausente | Criar + seed. |
-| `achievement_xp_override` | Ausente | Criar. |
-| `worker_achievement` | Ausente | Criar. |
-| `leaderboard_snapshot` | Ausente | Criar. |
-| `leaderboard_entry` | Ausente | Criar. |
-| `level_definition` | Ausente | Criar + seed. |
-| `worker_level` | Ausente | Criar. |
+| `notice_board` | Criado em S1-03 | Portar APIs/UI de notices. |
+| `cooperative_material_multiplier` | Criado em S1-03 | Portar APIs de multipliers. |
+| `cooperative_random_multiplier` | Criado em S1-03 | Portar job mensal/upsert. |
+| `achievement_definition` | Criado em S1-03 com seed | Portar APIs de achievements. |
+| `achievement_xp_override` | Criado em S1-03 | Portar ajuste de XP por cooperativa. |
+| `worker_achievement` | Criado em S1-03 | Portar job de avaliacao. |
+| `leaderboard_snapshot` | Criado em S1-03 | Portar job/API de leaderboard. |
+| `leaderboard_entry` | Criado em S1-03 | Recomputar entries por snapshot. |
+| `level_definition` | Criado em S1-03 com seed | Portar API de levels. |
+| `worker_level` | Criado em S1-03 | Portar recalculo de level por worker. |
 
 ## Gaps materiais registrados
 
@@ -525,9 +538,9 @@ Gaps:
 5. **Auth web em evolucao:** proxy ja valida JWT, mas proximas features ainda precisam testes negativos de papel/escopo e pagina role-aware.
 6. **JWT em query no Java:** `?token=` existe na referencia, mas deve ser descartado na portabilidade para evitar vazamento em URL/log.
 7. **RBAC incompleto no Next:** payload atual colapsa `A/M` em `userType: 0`.
-8. **Jobs pendentes:** random multiplier, achievements e leaderboard precisam runtime explicito.
+8. **Jobs pendentes:** random multiplier, achievements e leaderboard ja tem schema/constraints, mas ainda precisam scripts/endpoints conforme ADR-0004.
 9. **PDF runtime pendente:** Next precisa engine e estrategia de teste/render.
-10. **Sanitizacao pendente:** notices precisam politica server-side contra XSS.
+10. **APIs de notices pendentes:** politica server-side contra XSS ja existe; create/update/list/delete ainda precisam aplicar RBAC, scoping e sanitizacao.
 11. **Design pendente:** `.tony/design.md` e mobile-first dark/neon, e Web atual usa verde/vinho.
 12. **Debug/hacks no Next:** endpoints debug e botoes operacionais precisam protecao/remocao antes de producao.
 13. **Docs legadas:** `DOCUMENTATION.md` ainda fala em MongoDB/Mongoose e nao pode guiar implementacao.

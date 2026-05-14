@@ -7,9 +7,11 @@ import {
   UAT_DECLARED_FUTURE_FIXTURE_IDS,
   UAT_DECLARED_PSEUDO_FIXTURE_IDS,
   UAT_FIXTURE_IDENTITIES,
+  UAT_GAMIFICATION_FIXTURES,
   UAT_JOURNEY_FIXTURE_MATRIX,
   UAT_MATERIAL_FIXTURES,
   UAT_NEGATIVE_SCENARIOS,
+  UAT_NOTICE_FIXTURES,
   UAT_SALE_LIFECYCLE_FIXTURES,
 } from '../src/lib/uat/fixtures';
 import { assertSafeSeedTarget } from '../src/lib/uat/seed-safety';
@@ -133,14 +135,20 @@ test('UAT fixture matrix covers material and sale states expected by S0-13', () 
   assert.ok(
     UAT_COLLECTIVE_SALE_FIXTURES.every((sale) => sale.seededInCurrentSchema),
   );
+  assert.ok(UAT_NOTICE_FIXTURES.every((notice) => notice.seededInCurrentSchema));
+  assert.ok(
+    UAT_GAMIFICATION_FIXTURES.every((fixture) => fixture.seededInCurrentSchema),
+  );
 });
 
-test('UAT journey fixture references are declared even when schema support is future work', () => {
+test('UAT journey fixture references are declared with persisted or pseudo support', () => {
   const declaredFixtureIds = new Set<string>([
     ...UAT_FIXTURE_IDENTITIES.map((identity) => identity.id),
     ...UAT_MATERIAL_FIXTURES.map((material) => material.id),
     ...UAT_SALE_LIFECYCLE_FIXTURES.map((sale) => sale.id),
     ...UAT_COLLECTIVE_SALE_FIXTURES.map((sale) => sale.id),
+    ...UAT_NOTICE_FIXTURES.map((notice) => notice.id),
+    ...UAT_GAMIFICATION_FIXTURES.map((fixture) => fixture.id),
     ...UAT_DECLARED_FUTURE_FIXTURE_IDS,
     ...UAT_DECLARED_PSEUDO_FIXTURE_IDS,
   ]);

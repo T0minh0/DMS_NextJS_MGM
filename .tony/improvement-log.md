@@ -14,6 +14,7 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 | 2026-05-13 | security | Auditoria S0-12 apontou enumeração limitada em `/api/user` por diferença entre `403` fora de escopo e `404` inexistente. | Incorporar na S5-05: filtrar consulta por cooperativa para manager ou normalizar fora de escopo para `404`. | aberto |
 | 2026-05-13 | missing_test | QA da S0-09 encontrou respostas 4xx diretas em rotas API tocadas, sem `code`, `requestId` e header `x-request-id`, apesar de `npm run quality` passar. | Adicionado teste estático em `tests/observability.test.ts` bloqueando `NextResponse.json(..., { status: 4xx/5xx })` fora dos helpers de erro. | concluido |
 | 2026-05-14 | security | Peer review da S1-03 encontrou FKs independentes permitindo registros cross-coop em tabelas novas de gamificacao/notices. | Usar FKs compostas de tenant e smoke negativo cross-coop em migrations que combinam `worker_id` e `cooperative_id`. | concluido |
+| 2026-05-14 | missing_test | S1-04 fecha invariantes de estoque na aplicacao, mas o banco ainda nao tem check constraint para `current <= collected - sold`. | Criar task futura de constraint/backfill de estoque antes de permitir mutacoes fora dos helpers canonicos. | aberto |
 
 ## Entradas detalhadas
 
@@ -84,3 +85,17 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 - **Acao sistemica:** convencao
 - **Resolucao:** S1-03 passou a criar `Workers_worker_cooperative_key` e FKs compostas para achievements, leaderboard, notices e XP overrides; smoke Postgres bloqueou inserts cross-coop.
 - **Status:** concluido
+
+### [missing_test] invariante fisica de estoque ainda depende dos helpers
+- **Data:** 2026-05-14
+- **Agente:** qa-reviewer
+- **Task:** 86e136c55
+- **Fonte:** qa_final
+- **Sinal:** PASS com accepted_risk
+- **Descricao:** S1-04 adiciona helpers transacionais canonicos (`addToStock`, `recordSale`, `adjustStock`) com `Prisma.Decimal`, updates condicionais e guards contra estoque negativo/over-release, mas o schema atual ainda nao possui check constraint que garanta `current_stock_kg <= total_collected_kg - total_sold_kg` diretamente no banco.
+- **Causa raiz:** a task foi limitada a helpers de aplicacao, Decimal e documentacao operacional; constraint/backfill de dados fisicos fica fora do escopo desta entrega.
+- **Impacto:** mutacoes futuras que escrevam em `Stock` sem usar `src/lib/stock/ledger.ts` podem reintroduzir corrupcao silenciosa de estoque.
+- **Sugestao:** abrir task futura para backfill/constraint de estoque e exigir em review que novas mutacoes de estoque passem pelos helpers canonicos ate a constraint existir.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de qualquer nova rota ou job que escreva em `Stock`.
+- **Status:** pendente

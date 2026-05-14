@@ -197,6 +197,10 @@ Runbook operacional S1-03: aplicar apos S1-02, rodar `npx prisma migrate deploy`
 
 Validacao descartavel S1-03 observada em Postgres local `dms_uat` na porta `55433`: `npx prisma migrate deploy` aplicou baseline, S1-01, S1-02 e S1-03; `npm run db:seed:uat` concluiu duas vezes; smoke Prisma retornou `cooperatives=3`, `notices=3`, `levelDefinition=10`, `achievementDefinition=14`, `cooperativeMaterialMultiplier=3`, `cooperativeRandomMultiplier=3`, `achievementXpOverride=1`, `workerAchievement=2`, `workerLevel=2`, `leaderboardSnapshot=1`, `leaderboardEntry=2`; consulta de constraints confirmou `Workers_worker_cooperative_key`, `notice_board_created_by_cooperative_fkey`, `achievement_xp_override_updated_by_cooperative_fkey`, `worker_achievement_worker_cooperative_fkey`, `leaderboard_snapshot_snapshot_cooperative_key`, `leaderboard_entry_snapshot_cooperative_fkey` e `leaderboard_entry_worker_cooperative_fkey`. Inserts negativos cross-coop foram bloqueados por essas FKs compostas, incluindo worker achievement, leaderboard worker, leaderboard snapshot, notice author e XP override updater.
 
+Runbook operacional S1-04: para helpers de estoque, rodar `npm run prisma:validate`, `npx prisma generate`, `npm run typecheck`, `npm test`, `npm run quality` e, quando houver Postgres local, um smoke descartavel aplicando migrations e exercitando `addToStock`, `recordSale` e `adjustStock` contra banco real.
+
+Validacao descartavel S1-04 observada em Postgres local na porta `56554`: `npx prisma migrate deploy` aplicou baseline, S1-01, S1-02 e S1-03; smoke Prisma dos helpers retornou `added=10.00`, `soldCurrent=6.00`, `reservedCurrent=4.00`, `releasedCurrent=5.00`, `finalCurrent=5.00`, `finalSold=4.00`, `insufficient=true`, `overRelease=true`; smoke de `ON CONFLICT` em `addToStock` retornou `count=1`, `collected=3.75`, `current=3.75`.
+
 ## Audit
 
 Comando:

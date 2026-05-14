@@ -37,11 +37,20 @@ IDs operacionais como `workerId`, `cooperativeId`, `saleId` e `materialId` podem
 | Sales | `sales.read.*`, `sales.create.*`, `sales.update.*`, `sales.delete.*` |
 | Job | `job.started`, `job.completed`, `job.skipped`, `job.failed` |
 
-## Auth e vendas
+## Auth, vendas e estoque
 
 O login executa comparacao bcrypt contra hash dummy quando o CPF nao existe ou quando a senha armazenada nao e bcrypt. Decisoes de role web (`worker`, tipo invalido) so acontecem apos senha valida, reduzindo enumeracao publica de CPF/role. Ha throttling local por CPF normalizado e bucket global. Bucket por IP so usa headers de proxy quando `DMS_TRUST_PROXY_HEADERS=true`, que deve ser habilitado apenas atras de proxy confiavel; em producao, complementar com rate limit do ingress/plataforma.
 
-Vendas que alteram estoque usam transacao Prisma e `FOR UPDATE` nas linhas de estoque do par cooperativa/material. Se existirem duplicatas de `Stock`, a transacao soma as linhas, atualiza a linha canonica e zera as duplicadas para manter paridade com o que `/api/stock` exibe.
+Mutacoes de estoque devem passar por `src/lib/stock/ledger.ts`. O contrato canonico e:
+
+- `addToStock`: incrementa `total_collected_kg` e `current_stock_kg` com `Decimal`; pode criar a linha unica `(Cooperative, Material)` quando o fluxo permitir.
+- `recordSale`: baixa `current_stock_kg` e incrementa `total_sold_kg` via update condicional atomico `Current_stock_KG >= amount`.
+- `adjustStock`: reserva/libera estoque por delta de contribuicao coletiva, espelhando a referencia Java, e bloqueia over-release acima de `total_collected_kg - total_sold_kg`.
+- `calculateBagStateDelta`: calcula delta de pesagem acumulada a partir de `material_bag_state`.
+
+As rotas legadas de venda ainda usam `FOR UPDATE` para editar/excluir vendas historicas ja consolidadas, mas agora a matematica interna usa `Prisma.Decimal`. Se existirem duplicatas de `Stock`, a transacao soma as linhas, atualiza a linha canonica e zera as duplicadas para manter paridade com o que `/api/stock` exibe. A migracao S1-01 deve impedir novas duplicatas pela unique `(Cooperative, Material)`.
+
+Erros esperados de dominio devem ser tratados como eventos operacionais, nao como falha generica: `STOCK_MISSING`, `INSUFFICIENT_STOCK`, `INVALID_STOCK_DECIMAL` e `STOCK_INVARIANT_VIOLATION`.
 
 ## Onde ver
 

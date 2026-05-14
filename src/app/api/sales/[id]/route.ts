@@ -7,7 +7,12 @@ import {
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { scopedSaleWhere } from '@/lib/auth/scoped-queries';
-import { decimalToNumber } from '@/lib/db-utils';
+import {
+  decimalToJsonNumber,
+  formatDecimal,
+  parseDecimal2,
+  parsePositiveDecimal2,
+} from '@/lib/decimal';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
 import { getLegacyStockMutationGuard } from '@/lib/sales/lifecycle';
 import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
@@ -87,7 +92,7 @@ export async function PUT(
 
     const requiredFields = ['price/kg', 'weight_sold', 'date', 'Buyer'];
     for (const field of requiredFields) {
-      if (!body[field]) {
+      if (body[field] === undefined || body[field] === null || body[field] === '') {
         return apiErrorResponse({
           message: `Campo obrigatório: ${field}`,
           code: 'REQUIRED_FIELD',
@@ -118,19 +123,24 @@ export async function PUT(
       });
     }
 
-    const pricePerKg = Number(body['price/kg']);
-    const weightSold = Number(body.weight_sold);
-    if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) {
+    let pricePerKg: ReturnType<typeof parsePositiveDecimal2>;
+    try {
+      pricePerKg = parsePositiveDecimal2(body['price/kg'], 'price/kg');
+    } catch {
       return apiErrorResponse({
-        message: 'Preço por kg deve ser maior que zero',
+        message: 'Preço por kg deve ser maior que zero e ter no máximo 2 casas decimais',
         code: 'INVALID_PRICE',
         status: 400,
         requestId: context.requestId,
       });
     }
-    if (!Number.isFinite(weightSold) || weightSold <= 0) {
+
+    let weightSold: ReturnType<typeof parsePositiveDecimal2>;
+    try {
+      weightSold = parsePositiveDecimal2(body.weight_sold, 'weight_sold');
+    } catch {
       return apiErrorResponse({
-        message: 'Peso vendido deve ser maior que zero',
+        message: 'Peso vendido deve ser maior que zero e ter no máximo 2 casas decimais',
         code: 'INVALID_WEIGHT',
         status: 400,
         requestId: context.requestId,
@@ -203,11 +213,11 @@ export async function PUT(
         };
       }
 
-      const existingWeight = decimalToNumber(lockedSale.weight) ?? 0;
+      const existingWeight = parseDecimal2(lockedSale.weight, 'existingSaleWeight');
       const currentStock = stockRecord.currentStockKg;
-      const availableStock = currentStock + existingWeight;
+      const availableStock = currentStock.plus(existingWeight);
 
-      if (weightSold > availableStock) {
+      if (weightSold.greaterThan(availableStock)) {
         return {
           status: 'insufficient_stock' as const,
           cooperativeId: lockedSale.cooperativeId,
@@ -223,14 +233,21 @@ export async function PUT(
       }
 
       const updatedTotalSold =
-        stockRecord.totalSoldKg - existingWeight + weightSold;
-      const updatedCurrentStock = availableStock - weightSold;
+        stockRecord.totalSoldKg.minus(existingWeight).plus(weightSold);
+      const updatedCurrentStock = availableStock.minus(weightSold);
+
+      if (updatedTotalSold.lessThan(0) || updatedCurrentStock.lessThan(0)) {
+        return {
+          status: 'stock_invariant_violation' as const,
+          cooperativeId: lockedSale.cooperativeId,
+        };
+      }
 
       await tx.sales.update({
         where: { saleId },
         data: {
-          priceKg: pricePerKg.toFixed(2),
-          weight: weightSold.toFixed(2),
+          priceKg: formatDecimal(pricePerKg),
+          weight: formatDecimal(weightSold),
           date: saleDate,
           expectedSaleDate: saleDate,
           soldAt: lockedSale.soldAt ? saleDate : lockedSale.soldAt,
@@ -296,13 +313,26 @@ export async function PUT(
       logWarn('sales.update.insufficient_stock', context, {
         saleId: saleId.toString(),
         cooperativeId: transactionResult.cooperativeId.toString(),
-        requestedWeight: weightSold,
-        availableWeight: Number(transactionResult.availableStock.toFixed(2)),
+        requestedWeight: decimalToJsonNumber(weightSold),
+        availableWeight: decimalToJsonNumber(transactionResult.availableStock),
       });
       return apiErrorResponse({
-        message: `Estoque insuficiente! Disponível: ${transactionResult.availableStock.toFixed(2)} kg`,
+        message: `Estoque insuficiente! Disponível: ${formatDecimal(transactionResult.availableStock)} kg`,
         code: 'INSUFFICIENT_STOCK',
         status: 400,
+        requestId: context.requestId,
+      });
+    }
+
+    if (transactionResult.status === 'stock_invariant_violation') {
+      logWarn('sales.update.stock_invariant_violation', context, {
+        saleId: saleId.toString(),
+        cooperativeId: transactionResult.cooperativeId.toString(),
+      });
+      return apiErrorResponse({
+        message: 'Inconsistência de estoque detectada para esta venda',
+        code: 'STOCK_INVARIANT_VIOLATION',
+        status: 409,
         requestId: context.requestId,
       });
     }
@@ -311,8 +341,8 @@ export async function PUT(
       role: session.role,
       saleId: saleId.toString(),
       cooperativeId: transactionResult.cooperativeId.toString(),
-      weightSold,
-      updatedCurrentStock: Number(transactionResult.updatedCurrentStock.toFixed(2)),
+      weightSold: decimalToJsonNumber(weightSold),
+      updatedCurrentStock: decimalToJsonNumber(transactionResult.updatedCurrentStock),
       duplicateStockRows: transactionResult.duplicateStockRows,
     });
 
@@ -412,16 +442,23 @@ export async function DELETE(
         };
       }
 
-      const existingWeight = decimalToNumber(lockedSale.weight) ?? 0;
-      const updatedTotalSold = stockRecord.totalSoldKg - existingWeight;
-      const updatedCurrentStock = stockRecord.currentStockKg + existingWeight;
+      const existingWeight = parseDecimal2(lockedSale.weight, 'existingSaleWeight');
+      const updatedTotalSold = stockRecord.totalSoldKg.minus(existingWeight);
+      const updatedCurrentStock = stockRecord.currentStockKg.plus(existingWeight);
+
+      if (updatedTotalSold.lessThan(0)) {
+        return {
+          status: 'stock_invariant_violation' as const,
+          cooperativeId: lockedSale.cooperativeId,
+        };
+      }
 
       await tx.sales.delete({
         where: { saleId },
       });
 
       await updateLockedStockAggregate(tx, stockRecord, {
-        totalSoldKg: Math.max(updatedTotalSold, 0),
+        totalSoldKg: updatedTotalSold,
         currentStockKg: updatedCurrentStock,
       });
 
@@ -466,12 +503,25 @@ export async function DELETE(
       });
     }
 
+    if (transactionResult.status === 'stock_invariant_violation') {
+      logWarn('sales.delete.stock_invariant_violation', context, {
+        saleId: saleId.toString(),
+        cooperativeId: transactionResult.cooperativeId.toString(),
+      });
+      return apiErrorResponse({
+        message: 'Inconsistência de estoque detectada para esta venda',
+        code: 'STOCK_INVARIANT_VIOLATION',
+        status: 409,
+        requestId: context.requestId,
+      });
+    }
+
     logInfo('sales.delete.succeeded', context, {
       role: session.role,
       saleId: saleId.toString(),
       cooperativeId: transactionResult.cooperativeId.toString(),
-      restoredWeight: transactionResult.restoredWeight,
-      updatedCurrentStock: Number(transactionResult.updatedCurrentStock.toFixed(2)),
+      restoredWeight: decimalToJsonNumber(transactionResult.restoredWeight),
+      updatedCurrentStock: decimalToJsonNumber(transactionResult.updatedCurrentStock),
       duplicateStockRows: transactionResult.duplicateStockRows,
     });
 

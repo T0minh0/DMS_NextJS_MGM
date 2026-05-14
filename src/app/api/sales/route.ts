@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import { decimalToJsonNumber, formatDecimal, parsePositiveDecimal2 } from '@/lib/decimal';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
 import { getSaleLifecycleStatus, summarizeSoldSales } from '@/lib/sales/lifecycle';
 import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
 
     const requiredFields = ['material_id', 'price/kg', 'weight_sold', 'date', 'Buyer'];
     for (const field of requiredFields) {
-      if (!body[field]) {
+      if (body[field] === undefined || body[field] === null || body[field] === '') {
         return apiErrorResponse({
           message: `Campo obrigatório: ${field}`,
           code: 'REQUIRED_FIELD',
@@ -200,19 +201,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const pricePerKg = Number(body['price/kg']);
-    const weightSold = Number(body.weight_sold);
-    if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) {
+    let pricePerKg: Prisma.Decimal;
+    try {
+      pricePerKg = parsePositiveDecimal2(body['price/kg'], 'price/kg');
+    } catch {
       return apiErrorResponse({
-        message: 'Preço por kg deve ser maior que zero',
+        message: 'Preço por kg deve ser maior que zero e ter no máximo 2 casas decimais',
         code: 'INVALID_PRICE',
         status: 400,
         requestId: context.requestId,
       });
     }
-    if (!Number.isFinite(weightSold) || weightSold <= 0) {
+
+    let weightSold: Prisma.Decimal;
+    try {
+      weightSold = parsePositiveDecimal2(body.weight_sold, 'weight_sold');
+    } catch {
       return apiErrorResponse({
-        message: 'Peso vendido deve ser maior que zero',
+        message: 'Peso vendido deve ser maior que zero e ter no máximo 2 casas decimais',
         code: 'INVALID_WEIGHT',
         status: 400,
         requestId: context.requestId,
@@ -270,7 +276,7 @@ export async function POST(request: NextRequest) {
       }
 
       const currentStock = stockRecord.currentStockKg;
-      if (weightSold > currentStock) {
+      if (weightSold.greaterThan(currentStock)) {
         return {
           status: 'insufficient_stock' as const,
           currentStock,
@@ -297,8 +303,8 @@ export async function POST(request: NextRequest) {
       const sale = await tx.sales.create({
         data: {
           material: materialId,
-          priceKg: pricePerKg.toFixed(2),
-          weight: weightSold.toFixed(2),
+          priceKg: formatDecimal(pricePerKg),
+          weight: formatDecimal(weightSold),
           date: saleDate,
           buyer: buyer.buyerId,
           responsible: responsibleWorker.workerId,
@@ -308,8 +314,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const totalSold = stockRecord.totalSoldKg + weightSold;
-      const newCurrentStock = currentStock - weightSold;
+      const totalSold = stockRecord.totalSoldKg.plus(weightSold);
+      const newCurrentStock = currentStock.minus(weightSold);
 
       await updateLockedStockAggregate(tx, stockRecord, {
         totalSoldKg: totalSold,
@@ -342,11 +348,11 @@ export async function POST(request: NextRequest) {
       logWarn('sales.create.insufficient_stock', context, {
         cooperativeId: targetCooperativeId,
         materialId: materialId.toString(),
-        requestedWeight: weightSold,
-        availableWeight: Number(transactionResult.currentStock.toFixed(2)),
+        requestedWeight: decimalToJsonNumber(weightSold),
+        availableWeight: decimalToJsonNumber(transactionResult.currentStock),
       });
       return apiErrorResponse({
-        message: `Estoque insuficiente! Disponível: ${transactionResult.currentStock.toFixed(2)} kg`,
+        message: `Estoque insuficiente! Disponível: ${formatDecimal(transactionResult.currentStock)} kg`,
         code: 'INSUFFICIENT_STOCK',
         status: 400,
         requestId: context.requestId,
@@ -358,8 +364,8 @@ export async function POST(request: NextRequest) {
       saleId: transactionResult.sale.saleId.toString(),
       cooperativeId: targetCooperativeId,
       materialId: materialId.toString(),
-      weightSold,
-      newCurrentStock: Number(transactionResult.newCurrentStock.toFixed(2)),
+      weightSold: decimalToJsonNumber(weightSold),
+      newCurrentStock: decimalToJsonNumber(transactionResult.newCurrentStock),
       duplicateStockRows: transactionResult.duplicateStockRows,
     });
 
@@ -372,8 +378,8 @@ export async function POST(request: NextRequest) {
           material_id: transactionResult.sale.material.toString(),
           cooperative_id: targetCooperativeId,
           status: getSaleLifecycleStatus(transactionResult.sale),
-          'price/kg': pricePerKg,
-          weight_sold: weightSold,
+          'price/kg': decimalToJsonNumber(pricePerKg),
+          weight_sold: decimalToJsonNumber(weightSold),
           date: transactionResult.sale.date.toISOString(),
           created_at: transactionResult.sale.createdAt.toISOString(),
           sold_at: transactionResult.sale.soldAt?.toISOString() ?? null,

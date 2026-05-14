@@ -76,6 +76,15 @@ Exclusao:
 
 ## Estoque
 
+Camada canonica: `src/lib/stock/ledger.ts`.
+
+Novas implementacoes de estoque devem usar `Prisma.Decimal` desde a entrada de dominio ate a persistencia. Conversao para `number` fica restrita a JSON legado, logs ou exibicao. O helper transacional possui:
+
+- `addToStock`: entrada positiva com ate 2 casas decimais; incrementa coletado e disponivel.
+- `recordSale`: venda consolidada; executa update condicional atomico e falha sem alterar estoque quando nao ha saldo.
+- `adjustStock`: delta de reserva coletiva; delta positivo reserva, delta negativo libera sem permitir que `current_stock_kg` ultrapasse `total_collected_kg - total_sold_kg`.
+- `calculateBagStateDelta`: porta a regra Java de pesagem acumulada; delta coletado e `max(reportedCurrentKg - previousCurrentKg, 0)` e sacola cheia zera o estado.
+
 Consulta:
 
 - `/api/stock` soma `currentStockKg` por nome de material.

@@ -74,7 +74,7 @@ Modelos Prisma atuais:
 
 Modelos ausentes no Prisma atual:
 
-`notice_board`, `collective_sale`, `collective_sale_contribution`, `cooperative_material_multiplier`, `cooperative_random_multiplier`, `achievement_definition`, `achievement_xp_override`, `worker_achievement`, `leaderboard_snapshot`, `leaderboard_entry`, `level_definition`, `worker_level`.
+`notice_board`, `cooperative_material_multiplier`, `cooperative_random_multiplier`, `achievement_definition`, `achievement_xp_override`, `worker_achievement`, `leaderboard_snapshot`, `leaderboard_entry`, `level_definition`, `worker_level`.
 
 ## Mapa de endpoints Java -> Next
 
@@ -503,8 +503,8 @@ Gaps:
 | `sales` | Existe como `Sales`, lifecycle core em S1-01 | Portar APIs complete/cancel. |
 | `stock` | Existe como `Stock`, constraint formal em S1-01 | Usar helpers transacionais. |
 | `material_bag_state` | Criado em S1-01 | Portar APIs de pesagem/insertMaterial. |
-| `collective_sale` | Ausente | Criar. |
-| `collective_sale_contribution` | Ausente | Criar. |
+| `collective_sale` | Criado em S1-02 | Portar APIs/UX de venda coletiva. |
+| `collective_sale_contribution` | Criado em S1-02 | Portar reserva, leave/cancel e revenue share em S3. |
 | `notice_board` | Ausente | Criar. |
 | `cooperative_material_multiplier` | Ausente | Criar. |
 | `cooperative_random_multiplier` | Ausente | Criar. |

@@ -164,6 +164,12 @@ Cria comprador.
 
 Bloqueia duplicado por comparacao case-insensitive.
 
+## Schema de vendas coletivas
+
+Desde S1-02, o Prisma possui os modelos `CollectiveSale` (`collective_sale`) e `CollectiveSaleContribution` (`collective_sale_contribution`) para suportar a portabilidade Java. A migration e aditiva, usa FKs para `Buyers`, `Materials` e `Cooperative`, e codifica checks de lifecycle, peso, preco, status e unicidade por venda/cooperativa.
+
+Ainda nao ha endpoints Next para venda coletiva. As rotas `/api/collective-sale/*`, reserva/devolucao de estoque por contribuicao, completion/cancel e reports coletivos ficam para S3.
+
 ## Observacoes de consistencia
 
 - `POST /api/sales` ignora `cooperative_id` enviado pelo cliente e usa a cooperativa do gerente autenticado.

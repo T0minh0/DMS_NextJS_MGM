@@ -10,7 +10,7 @@ Matriz de UAT: [[Planejamento/Matriz-fixtures-UAT]].
 O seed comeca truncando as tabelas operacionais abaixo:
 
 ```sql
-TRUNCATE TABLE "Worker_contributions", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;
 ```
 
 Use apenas em banco descartavel de desenvolvimento, preview ou UAT.
@@ -75,6 +75,7 @@ Observacao: `operator` e `viewer` sao personas de produto para UAT. Como o RBAC 
 
 - `Cooperativa UAT Horizonte`
 - `Cooperativa UAT Leste`
+- `Cooperativa UAT Norte`
 
 ### Materiais e estoque
 
@@ -104,12 +105,19 @@ S1-01 adiciona a tabela `material_bag_state` para portar o fluxo Java de pesagem
 - `UAT Aluminio Prensado` em Horizonte com saco iniciado e `10.00 kg`.
 - `UAT Vidro Misto Sem Estoque` em Horizonte com saco vazio e `0.00 kg`.
 
-### Vendas coletivas, avisos e jobs
+### Vendas coletivas
 
-Ainda nao ha tabelas Prisma para venda coletiva, notices persistidos ou ledger persistido de jobs no schema atual. A S0-13 declara esses dados na matriz UAT para que as tasks futuras implementem os seeds reais quando criarem o schema:
+Desde S1-02, o schema possui `collective_sale` e `collective_sale_contribution`. O seed persiste duas vendas coletivas ativas sem reserva de estoque inicial; as APIs de convite, contribuicao, cancelamento e conclusao ficam para S3.
 
-- `collective-open-two-coops`
-- `collective-contribution-pending`
+| Fixture | Estado alvo | Persistido agora | Observacao |
+| --- | --- | --- | --- |
+| `collective-open-two-coops` | convite aberto | Sim | Horizonte criadora/`ACCEPTED`, Leste e Norte `INVITED`; sem reserva ate S3-02 |
+| `collective-contribution-pending` | contribuicao pendente | Sim | Horizonte, Leste e Norte `ACCEPTED` com `0.00 kg`; exercita edicao futura sem reserva inicial |
+
+### Avisos e jobs
+
+Ainda nao ha tabelas Prisma para notices persistidos ou ledger persistido de jobs no schema atual. A S0-13 declara esses dados na matriz UAT para que as tasks futuras implementem os seeds reais quando criarem o schema:
+
 - `notice-global-safe`
 - `notice-coop-horizonte`
 - `notice-xss-blocked`
@@ -135,7 +143,8 @@ npm run quality
 
 Cobertura automatizada:
 
-- `tests/uat-fixtures.test.ts` valida papeis, duas cooperativas, documentos sinteticos, estados de venda, venda coletiva declarada, jornada -> fixture, alvos negativos, scan de documentos realistas e guard contra seed em producao/banco duravel/remoto.
+- `tests/uat-fixtures.test.ts` valida papeis, duas cooperativas com identidades, documentos sinteticos, estados de venda, vendas coletivas persistidas, jornada -> fixture, alvos negativos, scan de documentos realistas e guard contra seed em producao/banco duravel/remoto.
+- `tests/collective-sales-schema.test.ts` valida contratos S1-02 de schema/migration, FKs para tabelas fisicas atuais, checks de lifecycle/decimal/status, seed das vendas coletivas e bloqueio de exclusao de material usado por venda coletiva.
 - `tests/auth-rbac.test.ts` valida escopo RBAC/cooperativa.
 - `tests/schema-migrations.test.ts` valida os contratos S1-01 de lifecycle, `Stock` unico por cooperativa/material, `material_bag_state`, preflights e checks da migration.
 - `tests/observability.test.ts` valida PII/logs, contrato de erro API e estabilidade de IDs nas listagens de usuarios.

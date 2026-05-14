@@ -26,6 +26,19 @@ function formatMaterial(material: MaterialWithGroup) {
   };
 }
 
+function materialDeleteDependencyResponse() {
+  return apiErrorResponse({
+    message:
+      'Este material não pode ser excluído pois está sendo usado em medições, vendas, vendas coletivas, estoque ou contribuições',
+    code: 'MATERIAL_DELETE_HAS_DEPENDENCIES',
+    status: 400,
+  });
+}
+
+function isForeignKeyConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003';
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -159,31 +172,42 @@ export async function DELETE(
       });
     }
 
-    const [measurementUsage, salesUsage, stockUsage, contributionUsage] =
+    const [
+      measurementUsage,
+      salesUsage,
+      stockUsage,
+      contributionUsage,
+      collectiveSaleUsage,
+    ] =
       await Promise.all([
         prisma.measurments.count({ where: { material: id } }),
         prisma.sales.count({ where: { material: id } }),
         prisma.stock.count({ where: { material: id } }),
         prisma.workerContributions.count({ where: { material: id } }),
+        prisma.collectiveSale.count({ where: { materialId: id } }),
       ]);
 
     if (
       measurementUsage > 0 ||
       salesUsage > 0 ||
       stockUsage > 0 ||
-      contributionUsage > 0
+      contributionUsage > 0 ||
+      collectiveSaleUsage > 0
     ) {
-      return apiErrorResponse({
-        message:
-          'Este material não pode ser excluído pois está sendo usado em medições, vendas, estoque ou contribuições',
-        code: 'MATERIAL_DELETE_HAS_DEPENDENCIES',
-        status: 400,
-      });
+      return materialDeleteDependencyResponse();
     }
 
-    await prisma.materials.delete({
-      where: { materialId: id },
-    });
+    try {
+      await prisma.materials.delete({
+        where: { materialId: id },
+      });
+    } catch (error) {
+      if (isForeignKeyConstraintError(error)) {
+        return materialDeleteDependencyResponse();
+      }
+
+      throw error;
+    }
 
     return NextResponse.json({
       success: true,

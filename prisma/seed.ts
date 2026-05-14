@@ -86,15 +86,18 @@ async function main() {
   assertSafeSeedTarget();
 
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Worker_contributions", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
   );
 
-  const [cooperativeHorizonte, cooperativeLeste] = await Promise.all([
+  const [cooperativeHorizonte, cooperativeLeste, cooperativeNorte] = await Promise.all([
     prisma.cooperative.create({
       data: { cooperativeName: 'Cooperativa UAT Horizonte' },
     }),
     prisma.cooperative.create({
       data: { cooperativeName: 'Cooperativa UAT Leste' },
+    }),
+    prisma.cooperative.create({
+      data: { cooperativeName: 'Cooperativa UAT Norte' },
     }),
   ]);
 
@@ -433,6 +436,82 @@ async function main() {
         isBegun: false,
         currentKg: '0.00',
         lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+    ],
+  });
+
+  const [collectiveOpenTwoCoops, collectiveContributionPending] = await Promise.all([
+    prisma.collectiveSale.create({
+      data: {
+        createdAt: new Date('2026-05-10T09:00:00Z'),
+        soldAt: null,
+        cancelledAt: null,
+        buyerId: buyerCollective.buyerId,
+        materialId: materialPet.materialId,
+        totalWeight: null,
+        priceKg: '2.65',
+        expectedSaleDate: new Date('2026-05-20T15:00:00Z'),
+        creatorCooperativeId: cooperativeHorizonte.cooperativeId,
+      },
+    }),
+    prisma.collectiveSale.create({
+      data: {
+        createdAt: new Date('2026-05-11T09:00:00Z'),
+        soldAt: null,
+        cancelledAt: null,
+        buyerId: buyerCollective.buyerId,
+        materialId: materialCardboard.materialId,
+        totalWeight: null,
+        priceKg: '1.50',
+        expectedSaleDate: new Date('2026-05-22T15:00:00Z'),
+        creatorCooperativeId: cooperativeLeste.cooperativeId,
+      },
+    }),
+  ]);
+
+  await prisma.collectiveSaleContribution.createMany({
+    data: [
+      {
+        collectiveSaleId: collectiveOpenTwoCoops.collectiveSaleId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        contributedWeight: null,
+        revenueShare: null,
+        status: 'ACCEPTED',
+      },
+      {
+        collectiveSaleId: collectiveOpenTwoCoops.collectiveSaleId,
+        cooperativeId: cooperativeLeste.cooperativeId,
+        contributedWeight: null,
+        revenueShare: null,
+        status: 'INVITED',
+      },
+      {
+        collectiveSaleId: collectiveOpenTwoCoops.collectiveSaleId,
+        cooperativeId: cooperativeNorte.cooperativeId,
+        contributedWeight: null,
+        revenueShare: null,
+        status: 'INVITED',
+      },
+      {
+        collectiveSaleId: collectiveContributionPending.collectiveSaleId,
+        cooperativeId: cooperativeLeste.cooperativeId,
+        contributedWeight: '0.00',
+        revenueShare: null,
+        status: 'ACCEPTED',
+      },
+      {
+        collectiveSaleId: collectiveContributionPending.collectiveSaleId,
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        contributedWeight: '0.00',
+        revenueShare: null,
+        status: 'ACCEPTED',
+      },
+      {
+        collectiveSaleId: collectiveContributionPending.collectiveSaleId,
+        cooperativeId: cooperativeNorte.cooperativeId,
+        contributedWeight: '0.00',
+        revenueShare: null,
+        status: 'ACCEPTED',
       },
     ],
   });

@@ -8,14 +8,16 @@ datasource db {
 }
 
 model Cooperative {
-  cooperativeId     BigInt                @id @default(autoincrement()) @map("cooperative_id")
-  cooperativeName   String                @map("cooperative_name")
-  devices           Devices[]
-  workers           Workers[]
-  stock             Stock[]
-  contributions     WorkerContributions[]
-  sales             Sales[]
-  materialBagStates MaterialBagState[]
+  cooperativeId               BigInt                       @id @default(autoincrement()) @map("cooperative_id")
+  cooperativeName             String                       @map("cooperative_name")
+  devices                     Devices[]
+  workers                     Workers[]
+  stock                       Stock[]
+  contributions               WorkerContributions[]
+  sales                       Sales[]
+  materialBagStates           MaterialBagState[]
+  collectiveSales             CollectiveSale[]
+  collectiveSaleContributions CollectiveSaleContribution[]
 
   @@map("Cooperative")
 }
@@ -47,14 +49,16 @@ model Materials {
   stock               Stock[]
   workerContributions WorkerContributions[]
   materialBagStates   MaterialBagState[]
+  collectiveSales     CollectiveSale[]
 
   @@map("Materials")
 }
 
 model Buyers {
-  buyerId   BigInt  @id @default(autoincrement()) @map("Buyer_id")
-  buyerName String  @map("Buyer_name")
-  sales     Sales[]
+  buyerId         BigInt           @id @default(autoincrement()) @map("Buyer_id")
+  buyerName       String           @map("Buyer_name")
+  sales           Sales[]
+  collectiveSales CollectiveSale[]
 
   @@map("Buyers")
 }
@@ -162,4 +166,44 @@ model MaterialBagState {
 
   @@unique([cooperativeId, materialId], map: "material_bag_state_cooperative_material_key")
   @@map("material_bag_state")
+}
+
+model CollectiveSale {
+  collectiveSaleId     BigInt                       @id @default(autoincrement()) @map("collective_sale_id")
+  createdAt            DateTime                     @default(now()) @map("created_at") @db.Timestamp(6)
+  soldAt               DateTime?                    @map("sold_at") @db.Timestamp(6)
+  cancelledAt          DateTime?                    @map("cancelled_at") @db.Timestamp(6)
+  buyerId              BigInt                       @map("buyer_id")
+  materialId           BigInt                       @map("material_id")
+  totalWeight          Decimal?                     @map("total_weight") @db.Decimal(10, 2)
+  priceKg              Decimal                      @map("price_kg") @db.Decimal(10, 2)
+  expectedSaleDate     DateTime                     @map("expected_sale_date") @db.Timestamp(6)
+  creatorCooperativeId BigInt                       @map("creator_cooperative_id")
+  buyer                Buyers                       @relation(fields: [buyerId], references: [buyerId], map: "collective_sale_buyer_id_fkey")
+  material             Materials                    @relation(fields: [materialId], references: [materialId], map: "collective_sale_material_id_fkey")
+  creatorCooperative   Cooperative                  @relation(fields: [creatorCooperativeId], references: [cooperativeId], map: "collective_sale_creator_cooperative_id_fkey")
+  contributions        CollectiveSaleContribution[]
+
+  @@index([creatorCooperativeId], map: "collective_sale_creator_cooperative_id_idx")
+  @@index([materialId], map: "collective_sale_material_id_idx")
+  @@index([buyerId], map: "collective_sale_buyer_id_idx")
+  @@index([soldAt], map: "collective_sale_sold_at_idx")
+  @@index([cancelledAt], map: "collective_sale_cancelled_at_idx")
+  @@map("collective_sale")
+}
+
+model CollectiveSaleContribution {
+  contributionId    BigInt         @id @default(autoincrement()) @map("contribution_id")
+  collectiveSaleId  BigInt         @map("collective_sale_id")
+  cooperativeId     BigInt         @map("cooperative_id")
+  contributedWeight Decimal?       @map("contributed_weight") @db.Decimal(10, 2)
+  revenueShare      Decimal?       @map("revenue_share") @db.Decimal(10, 2)
+  status            String         @default("ACCEPTED") @db.VarChar(20)
+  collectiveSale    CollectiveSale @relation(fields: [collectiveSaleId], references: [collectiveSaleId], map: "collective_sale_contribution_sale_id_fkey")
+  cooperative       Cooperative    @relation(fields: [cooperativeId], references: [cooperativeId], map: "collective_sale_contribution_cooperative_id_fkey")
+
+  @@unique([collectiveSaleId, cooperativeId], map: "collective_sale_contribution_sale_cooperative_key")
+  @@index([cooperativeId], map: "collective_sale_contribution_cooperative_id_idx")
+  @@index([status], map: "collective_sale_contribution_status_idx")
+  @@map("collective_sale_contribution")
 }

@@ -120,6 +120,7 @@ A exclusao e bloqueada se houver qualquer vinculo em:
 
 - `Measurments`
 - `Sales`
+- `collective_sale`
 - `Stock`
 - `WorkerContributions`
 

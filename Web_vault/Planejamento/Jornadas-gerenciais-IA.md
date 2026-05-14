@@ -179,7 +179,7 @@ Matriz de dados S0-13: [[Planejamento/Matriz-fixtures-UAT]].
 | Painel do dia | `manager-horizonte`, `cardboard-stocked`, `aluminum-low-stock`, `normal-active-horizonte` | Nenhuma para telas atuais |
 | Estoque critico | `aluminum-low-stock`, `glass-empty-stock`, `leste-cardboard-stocked` | Nenhuma para telas atuais |
 | Venda normal | `normal-active-horizonte`, `normal-completed-horizonte`, `normal-cancelled-horizonte` | S1-01 persiste lifecycle; S2-01 porta complete/cancel na API/UI |
-| Venda coletiva | `collective-open-two-coops`, `collective-contribution-pending` | Persistencia depende de S1-02/S3-01/S3-02 |
+| Venda coletiva | `collective-open-two-coops`, `collective-contribution-pending` | S1-02 persiste schema/seed; APIs/UI dependem de S3-01/S3-02 |
 | Equipe/PII | `manager-horizonte`, `worker-horizonte-active`, `worker-horizonte-empty`, `worker-horizonte-inactive`, `worker-leste` | UX final em S5-05 |
 | Avisos | `notice-global-safe`, `notice-coop-horizonte`, `notice-xss-blocked` | Persistencia depende de S4-01/S4-02 |
 | Relatorio/PDF | `normal-completed-horizonte`, `collective-open-two-coops`, `normal-cancelled-horizonte` | PDF real depende de S3-04/S3-05 |

@@ -206,14 +206,14 @@ export const UAT_COLLECTIVE_SALE_FIXTURES = [
   {
     id: 'collective-open-two-coops',
     state: 'invite-open',
-    seededInCurrentSchema: false,
-    notes: 'Lacuna ate S1-02/S3-01 criarem tabelas e APIs de vendas coletivas.',
+    seededInCurrentSchema: true,
+    notes: 'Venda coletiva ativa com Horizonte como criadora/ACCEPTED e Leste/Norte INVITED; sem reserva de estoque ate S3-02.',
   },
   {
     id: 'collective-contribution-pending',
     state: 'contribution-pending',
-    seededInCurrentSchema: false,
-    notes: 'Usado como contrato de UAT para convite/contribuicao entre Horizonte e Leste.',
+    seededInCurrentSchema: true,
+    notes: 'Venda coletiva ativa com tres cooperativas ACCEPTED e contribuicoes 0.00 para exercitar edicao futura sem reserva inicial.',
   },
 ];
 
@@ -294,7 +294,7 @@ export const UAT_JOURNEY_FIXTURE_MATRIX: Array<{
     title: 'Criar ou participar de venda coletiva',
     routeTargets: ['/sales', '/collective-sales'],
     fixtureIds: ['collective-open-two-coops', 'collective-contribution-pending'],
-    gap: 'Persistencia depende de S1-02/S3-01; fixture fica declarada como contrato de UAT.',
+    gap: 'S1-02 persiste schema/seed; APIs e UI dependem de S3-01/S3-02.',
     negativeScenarioId: 'manager-horizonte-sale-leste-denied',
   },
   {

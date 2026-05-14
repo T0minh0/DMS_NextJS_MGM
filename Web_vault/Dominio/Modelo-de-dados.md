@@ -14,13 +14,18 @@ erDiagram
   Cooperative ||--o{ Stock : possui
   Cooperative ||--o{ MaterialBagState : possui
   Cooperative ||--o{ WorkerContributions : possui
+  Cooperative ||--o{ CollectiveSale : cria
+  Cooperative ||--o{ CollectiveSaleContribution : participa
   Groups ||--o{ Materials : agrupa
   Materials ||--o{ Sales : vendido_em
   Materials ||--o{ Measurments : medido_em
   Materials ||--o{ Stock : estocado_em
   Materials ||--o{ MaterialBagState : estado_de_saco
   Materials ||--o{ WorkerContributions : contribui_em
+  Materials ||--o{ CollectiveSale : vendido_coletivamente
   Buyers ||--o{ Sales : compra
+  Buyers ||--o{ CollectiveSale : compra_coletiva
+  CollectiveSale ||--o{ CollectiveSaleContribution : possui
   Workers ||--o{ Sales : responsavel
   Workers ||--o{ Measurments : catador
   Workers ||--o{ WorkerContributions : catador
@@ -38,7 +43,7 @@ Tabela: `Cooperative`
 | `cooperativeId` | `cooperative_id` | `BigInt` | PK autoincremento |
 | `cooperativeName` | `cooperative_name` | `String` | Nome exibido no app |
 
-Relacionamentos: `devices`, `workers`, `sales`, `stock`, `materialBagStates`, `contributions`.
+Relacionamentos: `devices`, `workers`, `sales`, `stock`, `materialBagStates`, `contributions`, `collectiveSales`, `collectiveSaleContributions`.
 
 ### Devices
 
@@ -72,7 +77,7 @@ Tabela: `Materials`
 | `materialName` | `Material_name` | `String` | Nome do material |
 | `materialGroup` | `Material_group` | `BigInt?` | FK opcional para `Groups` |
 
-Relacionamentos: grupo, vendas, medicoes, estoque, estado fisico de saco e contribuicoes.
+Relacionamentos: grupo, vendas normais, vendas coletivas, medicoes, estoque, estado fisico de saco e contribuicoes.
 
 ### Buyers
 
@@ -83,7 +88,7 @@ Tabela: `Buyers`
 | `buyerId` | `Buyer_id` | `BigInt` | PK autoincremento |
 | `buyerName` | `Buyer_name` | `String` | Nome do comprador |
 
-Relacionamentos: possui `Sales`.
+Relacionamentos: possui `Sales` e `CollectiveSale`.
 
 ### Sales
 
@@ -175,6 +180,40 @@ Tabela: `material_bag_state`
 
 Contrato S1-01: par unico por cooperativa/material, `current_kg >= 0` e saco vazio deve ter `current_kg = 0`.
 
+### CollectiveSale
+
+Tabela: `collective_sale`
+
+| Campo Prisma | Coluna SQL | Tipo | Observacao |
+| --- | --- | --- | --- |
+| `collectiveSaleId` | `collective_sale_id` | `BigInt` | PK autoincremento |
+| `createdAt` | `created_at` | `DateTime` | Criacao do registro |
+| `soldAt` | `sold_at` | `DateTime?` | Preenchido quando a venda coletiva esta concluida |
+| `cancelledAt` | `cancelled_at` | `DateTime?` | Preenchido quando a venda coletiva esta cancelada |
+| `buyerId` | `buyer_id` | `BigInt` | FK para `Buyers` |
+| `materialId` | `material_id` | `BigInt` | FK para `Materials` |
+| `totalWeight` | `total_weight` | `Decimal(10,2)?` | Peso total vendido; obrigatorio quando `sold_at` estiver preenchido |
+| `priceKg` | `price_kg` | `Decimal(10,2)` | Preco por kg; deve ser positivo |
+| `expectedSaleDate` | `expected_sale_date` | `DateTime` | Data operacional esperada |
+| `creatorCooperativeId` | `creator_cooperative_id` | `BigInt` | Cooperativa criadora |
+
+Contrato S1-02: migration aditiva cria a tabela em snake_case, preserva FKs para as tabelas fisicas atuais (`Buyers`, `Materials`, `Cooperative`), impede `sold_at` e `cancelled_at` simultaneos, exige `price_kg > 0`, `total_weight > 0` quando informado e `total_weight` nao nulo para venda concluida.
+
+### CollectiveSaleContribution
+
+Tabela: `collective_sale_contribution`
+
+| Campo Prisma | Coluna SQL | Tipo | Observacao |
+| --- | --- | --- | --- |
+| `contributionId` | `contribution_id` | `BigInt` | PK autoincremento |
+| `collectiveSaleId` | `collective_sale_id` | `BigInt` | FK para `collective_sale` |
+| `cooperativeId` | `cooperative_id` | `BigInt` | Cooperativa participante |
+| `contributedWeight` | `contributed_weight` | `Decimal(10,2)?` | Peso reservado/contribuido pela cooperativa |
+| `revenueShare` | `revenue_share` | `Decimal(10,2)?` | Receita atribuida na conclusao |
+| `status` | `status` | `String @db.VarChar(20)` | `INVITED`, `ACCEPTED` ou `LEFT`; default `ACCEPTED` |
+
+Contrato S1-02: par unico por venda coletiva/cooperativa, peso e receita nao podem ser negativos, convite (`INVITED`) permanece sem peso/receita e `revenue_share` so pode existir com peso positivo. A soma de contribuicoes, reserva de estoque e rateio final ficam para as APIs transacionais S3.
+
 ### WorkerContributions
 
 Tabela: `Worker_contributions`
@@ -194,6 +233,7 @@ Tabela: `Worker_contributions`
 - `prisma/schema.prisma`: schema Prisma atual.
 - `prisma/migrations/00000000000000_baseline/migration.sql`: baseline versionada do schema legado atual.
 - `prisma/migrations/20260513224000_s1_01_core_sales_stock_bag_state/migration.sql`: migration aditiva de lifecycle de vendas, constraints de estoque e `material_bag_state`.
+- `prisma/migrations/20260513233000_s1_02_collective_sales/migration.sql`: migration aditiva de vendas coletivas e contribuicoes coletivas.
 - `New_db_schema.sql`: SQL gerado por pgAdmin com tabelas e FKs. Diverge em algumas precisões numericas, mas expressa a estrutura SQL original.
-- `prisma/seed.ts`: apaga dados por `TRUNCATE ... CASCADE` e recria cooperativas, grupos, materiais, dispositivos, compradores, usuarios, medicoes, vendas, estoque e contribuicoes.
+- `prisma/seed.ts`: apaga dados por `TRUNCATE ... CASCADE` e recria cooperativas, grupos, materiais, dispositivos, compradores, usuarios, medicoes, vendas, vendas coletivas, estoque e contribuicoes.
 - `src/lib/db-utils.ts`: conversao de `Bytes`, limpeza de digitos, `BigInt`, formatacao `WP###`, mapeamento de tipo de usuario e conversao de `Decimal`.

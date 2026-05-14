@@ -130,6 +130,9 @@ test('UAT fixture matrix covers material and sale states expected by S0-13', () 
   assert.ok(
     UAT_COLLECTIVE_SALE_FIXTURES.some((sale) => sale.state === 'contribution-pending'),
   );
+  assert.ok(
+    UAT_COLLECTIVE_SALE_FIXTURES.every((sale) => sale.seededInCurrentSchema),
+  );
 });
 
 test('UAT journey fixture references are declared even when schema support is future work', () => {

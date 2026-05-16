@@ -70,7 +70,7 @@ export async function POST(
         data: {
           collectiveSaleId,
           cooperativeId: invitedCoopId,
-          status: 'PENDING',
+          status: 'INVITED',
         },
         include: { cooperative: { select: { cooperativeName: true } } },
       });

@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const pending = await prisma.collectiveSaleContribution.findMany({
       where: {
         cooperativeId: coopId,
-        status: 'PENDING',
+        status: 'INVITED',
         collectiveSale: { soldAt: null, cancelledAt: null },
       },
       include: {

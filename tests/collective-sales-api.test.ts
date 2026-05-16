@@ -70,9 +70,9 @@ test('invitations list requires manager/admin', () => {
   assert.doesNotMatch(source, /requireAuth\(\)/);
 });
 
-test('invitations list filters PENDING status and open sales only', () => {
+test('invitations list filters INVITED status and open sales only', () => {
   const source = readRoute('src/app/api/collective-sales/invitations/route.ts');
-  assert.match(source, /status.*PENDING/);
+  assert.match(source, /status.*INVITED/);
   assert.match(source, /soldAt.*null/);
   assert.match(source, /cancelledAt.*null/);
 });
@@ -110,10 +110,10 @@ test('invite returns 409 for duplicate invitation via P2002', () => {
   assert.match(source, /INVITE_DUPLICATE/);
 });
 
-test('invite creates contribution with PENDING status', () => {
+test('invite creates contribution with INVITED status', () => {
   const source = readRoute('src/app/api/collective-sales/[id]/invite/route.ts');
   assert.match(source, /collectiveSaleContribution\.create/);
-  assert.match(source, /status.*PENDING/);
+  assert.match(source, /status.*INVITED/);
 });
 
 test('invite blocks inviting into a closed collective sale', () => {
@@ -131,7 +131,7 @@ test('join requires manager/admin with sales.update scope', () => {
   assert.match(source, /'sales',\s*'update'/);
 });
 
-test('join transitions contribution from PENDING to ACCEPTED', () => {
+test('join transitions contribution from INVITED to ACCEPTED', () => {
   const source = readRoute('src/app/api/collective-sales/[id]/join/route.ts');
   assert.match(source, /collectiveSaleContribution\.update/);
   assert.match(source, /status.*ACCEPTED/);

@@ -54,7 +54,7 @@ export async function POST(
       return NextResponse.json({ success: true, message: 'Cooperativa já é participante', status: 'ACCEPTED' });
     }
 
-    if (contribution.status !== 'PENDING') {
+    if (contribution.status !== 'INVITED') {
       return apiErrorResponse({ message: 'Convite não está pendente', code: 'INVITE_NOT_PENDING', status: 409, requestId: context.requestId });
     }
 

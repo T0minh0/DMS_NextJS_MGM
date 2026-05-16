@@ -22,16 +22,18 @@ test('multipliers route uses upsert with composite unique key cooperativeId_mate
   assert.match(source, /cooperativeId_materialId/);
 });
 
-test('multipliers route validates cooperative ownership via determineTargetCooperative', () => {
+test('multipliers route validates cooperative ownership — POST uses reports.manage not reports.read', () => {
   const source = readRoute('src/app/api/multipliers/route.ts');
   assert.match(source, /determineTargetCooperative/);
   assert.match(source, /requireScopedPermission/);
+  assert.match(source, /'reports',\s*'manage'/);
 });
 
-test('multipliers route validates multiplier_value is a positive number', () => {
+test('multipliers route validates multiplier_value — rejects NaN, Infinity and out-of-range', () => {
   const source = readRoute('src/app/api/multipliers/route.ts');
   assert.match(source, /INVALID_MULTIPLIER_VALUE/);
-  assert.match(source, /multiplierRaw <= 0/);
+  assert.match(source, /Number\.isFinite\(multiplierRaw\)/);
+  assert.match(source, /multiplierRaw > 99\.999/);
 });
 
 test('multipliers route returns material_id as BigInt-safe string', () => {
@@ -77,10 +79,13 @@ test('random-multiplier job uses InMemoryJobRunLedger for within-process idempot
   assert.match(source, /ledger/);
 });
 
-test('random-multiplier job upserts CooperativeRandomMultiplier per cooperative', () => {
+test('random-multiplier job skips cooperatives already updated this period (DB-level idempotency)', () => {
   const source = readRoute('src/app/api/jobs/random-multiplier/route.ts');
+  assert.match(source, /cooperativeRandomMultiplier\.findFirst/);
+  assert.match(source, /lastUpdated/);
+  assert.match(source, /gte.*periodStart/);
+  assert.match(source, /skippedCount/);
   assert.match(source, /cooperativeRandomMultiplier\.upsert/);
-  assert.match(source, /cooperative\.findMany/);
 });
 
 test('random-multiplier job returns skipped status when already running', () => {

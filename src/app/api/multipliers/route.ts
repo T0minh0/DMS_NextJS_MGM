@@ -83,14 +83,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (typeof multiplierRaw !== 'number' || multiplierRaw <= 0) {
+    if (
+      typeof multiplierRaw !== 'number' ||
+      !Number.isFinite(multiplierRaw) ||
+      multiplierRaw <= 0 ||
+      multiplierRaw > 99.999
+    ) {
       return apiErrorResponse({
-        message: 'multiplier_value deve ser um número positivo',
+        message: 'multiplier_value deve ser um número positivo menor que 100',
         code: 'INVALID_MULTIPLIER_VALUE',
         status: 400,
         requestId: context.requestId,
       });
     }
+
+    const multiplierValue: number = multiplierRaw;
 
     let cooperativeId: bigint;
     let materialId: bigint;
@@ -120,7 +127,7 @@ export async function POST(request: NextRequest) {
     const targetCooperativeId = determineTargetCooperative(session, cooperativeId, {
       required: true,
     });
-    requireScopedPermission(session, 'reports', 'read', 'cooperative');
+    requireScopedPermission(session, 'reports', 'manage', 'cooperative');
 
     if (targetCooperativeId !== cooperativeId.toString()) {
       return apiErrorResponse({
@@ -131,22 +138,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const row = await prisma.cooperativeMaterialMultiplier.upsert({
-      where: {
-        cooperativeId_materialId: { cooperativeId, materialId },
-      },
-      create: { cooperativeId, materialId, multiplierValue: multiplierRaw },
-      update: { multiplierValue: multiplierRaw },
+    await prisma.cooperativeMaterialMultiplier.upsert({
+      where: { cooperativeId_materialId: { cooperativeId, materialId } },
+      create: { cooperativeId, materialId, multiplierValue },
+      update: { multiplierValue },
+    });
+
+    const row = await prisma.cooperativeMaterialMultiplier.findUnique({
+      where: { cooperativeId_materialId: { cooperativeId, materialId } },
       include: { material: { select: { materialName: true } } },
     });
 
     return NextResponse.json(
       {
-        _id: row.cooperativeMaterialMultiplierId,
-        cooperative_id: row.cooperativeId.toString(),
-        material_id: row.materialId.toString(),
-        material_name: row.material.materialName,
-        multiplier_value: Number(decimalToNumber(row.multiplierValue)?.toFixed(3) ?? '1.000'),
+        _id: row!.cooperativeMaterialMultiplierId,
+        cooperative_id: row!.cooperativeId.toString(),
+        material_id: row!.materialId.toString(),
+        material_name: row!.material.materialName,
+        multiplier_value: Number(decimalToNumber(row!.multiplierValue)?.toFixed(3) ?? '1.000'),
       },
       { status: 201 },
     );

@@ -104,6 +104,7 @@ export const RBAC_MATRIX: Record<RbacResource, ResourceRule> = {
   },
   reports: {
     read: { admin: ['global', 'cooperative'], manager: ['cooperative'], worker: ['self'] },
+    manage: { admin: ['global', 'cooperative'], manager: ['cooperative'] },
     recalculate: { admin: ['global'] },
   },
   gamification: {

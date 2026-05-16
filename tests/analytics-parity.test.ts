@@ -23,10 +23,12 @@ test('revenue route uses SOLD_SALE_WHERE for concluded-sale semantics', () => {
   assert.match(source, /from '@\/lib\/sales\/lifecycle'/);
 });
 
-test('revenue route validates start_date and end_date filters', () => {
+test('revenue route validates start_date and end_date filters and normalizes date-only end_date', () => {
   const source = readRoute('src/app/api/revenue/route.ts');
   assert.match(source, /INVALID_START_DATE/);
   assert.match(source, /INVALID_END_DATE/);
+  assert.match(source, /setUTCHours\(23, 59, 59, 999\)/);
+  assert.match(source, /includes\('T'\)/);
 });
 
 test('revenue route validates material_id filter and handles group_ prefix', () => {
@@ -68,6 +70,18 @@ test('cooperative/materials route returns stock_kg from Stock table', () => {
   const source = readRoute('src/app/api/cooperative/materials/route.ts');
   assert.match(source, /stock_kg/);
   assert.match(source, /currentStockKg/);
+});
+
+test('cooperative/materials route has hard ceiling to prevent full-table dumps', () => {
+  const source = readRoute('src/app/api/cooperative/materials/route.ts');
+  assert.match(source, /MATERIALS_QUERY_CEILING/);
+  assert.match(source, /take:\s*MATERIALS_QUERY_CEILING/);
+});
+
+test('revenue route returns consistent zeros without noData flag for empty results', () => {
+  const source = readRoute('src/app/api/revenue/route.ts');
+  assert.doesNotMatch(source, /noData:\s*true/);
+  assert.match(source, /salesCount:\s*0/);
 });
 
 test('existing analytics routes (earnings-comparison, price-fluctuation) use SOLD_SALE_WHERE', () => {

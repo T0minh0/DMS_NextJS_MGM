@@ -10,12 +10,19 @@ import { apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 import { createLogContext } from '@/lib/observability/logger';
 
+const MATERIALS_QUERY_CEILING = 500;
+
 export async function GET(request: NextRequest) {
   const context = createLogContext(request, { domain: 'stock' });
 
   try {
     const session = await requireManagerOrAdmin();
-    const targetCooperativeId = determineTargetCooperative(session);
+    const { searchParams } = new URL(request.url);
+    const cooperativeIdParam = searchParams.get('cooperative_id');
+    const targetCooperativeId = determineTargetCooperative(
+      session,
+      cooperativeIdParam ?? undefined,
+    );
     requireScopedPermission(
       session,
       'reports',
@@ -25,6 +32,7 @@ export async function GET(request: NextRequest) {
 
     const stockRows = await prisma.stock.findMany({
       where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
+      take: MATERIALS_QUERY_CEILING,
       include: {
         materialRef: {
           include: { group: true },

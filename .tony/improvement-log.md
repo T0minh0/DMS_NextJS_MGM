@@ -15,6 +15,8 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 | 2026-05-13 | missing_test | QA da S0-09 encontrou respostas 4xx diretas em rotas API tocadas, sem `code`, `requestId` e header `x-request-id`, apesar de `npm run quality` passar. | Adicionado teste estático em `tests/observability.test.ts` bloqueando `NextResponse.json(..., { status: 4xx/5xx })` fora dos helpers de erro. | concluido |
 | 2026-05-14 | security | Peer review da S1-03 encontrou FKs independentes permitindo registros cross-coop em tabelas novas de gamificacao/notices. | Usar FKs compostas de tenant e smoke negativo cross-coop em migrations que combinam `worker_id` e `cooperative_id`. | concluido |
 | 2026-05-14 | missing_test | S1-04 fecha invariantes de estoque na aplicacao, mas o banco ainda nao tem check constraint para `current <= collected - sold`. | Criar task futura de constraint/backfill de estoque antes de permitir mutacoes fora dos helpers canonicos. | aberto |
+| 2026-05-16 | bug_pattern | P2002 capturado sem verificar `e.meta.target` pode silenciar constraint errada em endpoints de buyers. | Sempre checar `meta.target` antes de emitir resposta 409 de negocio; pattern canonico adicionado como convencao. | pendente |
+| 2026-05-16 | accepted_risk | `/api/buyers` retorna todos os buyers sem filtro por cooperativa — catálogo global consistente com legado, mas pode ser problema se buyers forem scopados no futuro. | Criar task futura para avaliar scoping de buyers por cooperativa. | pendente |
 
 ## Entradas detalhadas
 
@@ -85,6 +87,35 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 - **Acao sistemica:** convencao
 - **Resolucao:** S1-03 passou a criar `Workers_worker_cooperative_key` e FKs compostas para achievements, leaderboard, notices e XP overrides; smoke Postgres bloqueou inserts cross-coop.
 - **Status:** concluido
+
+### [bug_pattern] P2002 sem meta.target check silencia constraint errada
+
+- **Data:** 2026-05-16
+- **Agente:** codex-peer-reviewer + qa-reviewer
+- **Task:** 86e136c5j (S2-02)
+- **Fonte:** peer_review
+- **Sinal:** PASS com correccao previa ao QA
+- **Descricao:** Os endpoints `/api/buyers` e `/api/sales/buyers` capturavam `P2002` sem verificar `e.meta.target`, o que poderia engolir silenciosamente violacoes de outras constraints no mesmo modelo (ex: futuro unique em email/cpf), retornando 409 enganoso.
+- **Causa raiz:** pattern comum de `catch(P2002)` sem discriminar qual constraint disparou; peer review encontrou antes da producao.
+- **Impacto:** Silenciar constraints erradas mascara bugs de dados e impede debugging correto de violacoes de integridade.
+- **Sugestao:** Ao tratar P2002, sempre checar `e.meta?.target` e fazer match contra o nome da constraint esperada antes de emitir resposta de negocio. Pattern padrao: `String(e.meta?.target ?? '').toLowerCase().includes('nome_da_coluna')`.
+- **Acao sistemica:** convencao — revisao de todos os handlers P2002 existentes no projeto para verificar se ha outros sem meta.target check.
+- **Status:** pendente
+
+### [accepted_risk] RBAC scope de buyers nao filtra por cooperativa
+
+- **Data:** 2026-05-16
+- **Agente:** qa-reviewer
+- **Task:** 86e136c5j (S2-02)
+- **Fonte:** peer_review (MEDIO — deferido ao backlog)
+- **Sinal:** PASS com risco aceito
+- **Descricao:** `/api/buyers` e `/api/sales/buyers` autenticam com `requireManagerOrAdmin` + `requireScopedPermission('sales','read','cooperative')`, mas retornam TODOS os buyers sem filtrar por cooperativa do usuario. Buyers sao catálogo global no dominio atual, o que e consistente com o comportamento pre-existente de `/api/sales/buyers`.
+- **Causa raiz:** buyers foram modelados como lista global compartilhada entre cooperativas; scoping por cooperativa exigiria redesign do modelo e migracao de dados.
+- **Impacto:** Manager de cooperativa A ve buyers registrados por cooperativa B. Para o modelo de negocio atual (catalogo compartilhado), esto e esperado — mas pode tornar-se problema se buyers forem associados a contratos especificos.
+- **Sugestao:** Criar task futura para avaliar se buyers devem ser scopados por cooperativa ou manter catalogo global; se scopados, adicionar campo `cooperativeId` ao modelo e migracao.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de multi-tenant buyers.
+- **Status:** pendente
 
 ### [missing_test] invariante fisica de estoque ainda depende dos helpers
 - **Data:** 2026-05-14

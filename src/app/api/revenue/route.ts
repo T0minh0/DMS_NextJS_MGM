@@ -54,6 +54,11 @@ export async function GET(request: NextRequest) {
           requestId: context.requestId,
         });
       }
+      // Normalize date-only strings (YYYY-MM-DD) to end of day to include all sales on that date.
+      // new Date("YYYY-MM-DD") parses as midnight UTC, silently excluding same-day soldAt timestamps.
+      if (!endDateParam.includes('T')) {
+        endDate.setUTCHours(23, 59, 59, 999);
+      }
     }
 
     let materialIds: bigint[] | undefined;
@@ -65,7 +70,7 @@ export async function GET(request: NextRequest) {
           select: { materialId: true },
         });
         if (groupMaterials.length === 0) {
-          return NextResponse.json({ totalRevenue: 0, totalWeight: 0, salesCount: 0, avgPriceKg: 0, noData: true });
+          return NextResponse.json({ totalRevenue: 0, totalWeight: 0, salesCount: 0, avgPriceKg: 0 });
         }
         materialIds = groupMaterials.map((m) => m.materialId);
       } else {
@@ -95,13 +100,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (sales.length === 0) {
-      return NextResponse.json({
-        totalRevenue: 0,
-        totalWeight: 0,
-        salesCount: 0,
-        avgPriceKg: 0,
-        noData: true,
-      });
+      return NextResponse.json({ totalRevenue: 0, totalWeight: 0, salesCount: 0, avgPriceKg: 0 });
     }
 
     let totalRevenue = 0;

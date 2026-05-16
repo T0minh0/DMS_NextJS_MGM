@@ -13,7 +13,6 @@ import { decimalToNumber } from '@/lib/db-utils';
 import { decimalToJsonNumber, formatDecimal, parsePositiveDecimal2 } from '@/lib/decimal';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
 import { getSaleLifecycleStatus, summarizeSoldSales } from '@/lib/sales/lifecycle';
-import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
 
 export async function GET(request: NextRequest) {
   const context = createLogContext(request, { domain: 'sales' });
@@ -25,6 +24,7 @@ export async function GET(request: NextRequest) {
     const cooperativeId = searchParams.get('cooperative_id');
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
+    const statusFilter = searchParams.get('status');
     const limit = Number.parseInt(searchParams.get('limit') || '100', 10);
 
     const where: Prisma.SalesWhereInput = {};
@@ -51,6 +51,21 @@ export async function GET(request: NextRequest) {
 
     if (targetCooperativeId) {
       where.cooperativeId = BigInt(targetCooperativeId);
+    }
+
+    if (statusFilter === 'ACTIVE') {
+      where.soldAt = null;
+      where.cancelledAt = null;
+    } else if (statusFilter === 'HISTORY') {
+      where.soldAt = { not: null };
+      where.cancelledAt = null;
+    } else if (statusFilter !== null && statusFilter !== undefined && statusFilter !== '') {
+      return apiErrorResponse({
+        message: 'Status inválido. Use ACTIVE ou HISTORY',
+        code: 'INVALID_STATUS_FILTER',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     if (startDate || endDate) {
@@ -264,25 +279,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const transactionResult = await prisma.$transaction(async (tx) => {
-      const stockRecord = await lockStockAggregateForUpdate(
-        tx,
-        targetCooperativeBigInt,
-        materialId,
-      );
-
-      if (!stockRecord) {
-        return { status: 'stock_missing' as const };
-      }
-
-      const currentStock = stockRecord.currentStockKg;
-      if (weightSold.greaterThan(currentStock)) {
-        return {
-          status: 'insufficient_stock' as const,
-          currentStock,
-        };
-      }
-
+    const sale = await prisma.$transaction(async (tx) => {
       let buyer = await tx.buyers.findFirst({
         where: {
           buyerName: {
@@ -293,14 +290,10 @@ export async function POST(request: NextRequest) {
       });
 
       if (!buyer) {
-        buyer = await tx.buyers.create({
-          data: {
-            buyerName,
-          },
-        });
+        buyer = await tx.buyers.create({ data: { buyerName } });
       }
 
-      const sale = await tx.sales.create({
+      return tx.sales.create({
         data: {
           material: materialId,
           priceKg: formatDecimal(pricePerKg),
@@ -310,82 +303,37 @@ export async function POST(request: NextRequest) {
           responsible: responsibleWorker.workerId,
           cooperativeId: targetCooperativeBigInt,
           expectedSaleDate: saleDate,
-          soldAt: saleDate,
         },
+        include: { buyerRef: true },
       });
-
-      const totalSold = stockRecord.totalSoldKg.plus(weightSold);
-      const newCurrentStock = currentStock.minus(weightSold);
-
-      await updateLockedStockAggregate(tx, stockRecord, {
-        totalSoldKg: totalSold,
-        currentStockKg: newCurrentStock,
-      });
-
-      return {
-        status: 'created' as const,
-        sale,
-        buyerName: buyer.buyerName,
-        newCurrentStock,
-        duplicateStockRows: stockRecord.duplicateStockIds.length,
-      };
     });
-
-    if (transactionResult.status === 'stock_missing') {
-      logWarn('sales.create.stock_missing', context, {
-        cooperativeId: targetCooperativeId,
-        materialId: materialId.toString(),
-      });
-      return apiErrorResponse({
-        message: 'Não há estoque registrado para este material nesta cooperativa',
-        code: 'STOCK_MISSING',
-        status: 400,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'insufficient_stock') {
-      logWarn('sales.create.insufficient_stock', context, {
-        cooperativeId: targetCooperativeId,
-        materialId: materialId.toString(),
-        requestedWeight: decimalToJsonNumber(weightSold),
-        availableWeight: decimalToJsonNumber(transactionResult.currentStock),
-      });
-      return apiErrorResponse({
-        message: `Estoque insuficiente! Disponível: ${formatDecimal(transactionResult.currentStock)} kg`,
-        code: 'INSUFFICIENT_STOCK',
-        status: 400,
-        requestId: context.requestId,
-      });
-    }
 
     logInfo('sales.create.succeeded', context, {
       role: session.role,
-      saleId: transactionResult.sale.saleId.toString(),
+      saleId: sale.saleId.toString(),
       cooperativeId: targetCooperativeId,
       materialId: materialId.toString(),
       weightSold: decimalToJsonNumber(weightSold),
-      newCurrentStock: decimalToJsonNumber(transactionResult.newCurrentStock),
-      duplicateStockRows: transactionResult.duplicateStockRows,
+      status: 'ACTIVE',
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Venda registrada com sucesso',
+        message: 'Venda criada com sucesso',
         sale: {
-          _id: transactionResult.sale.saleId.toString(),
-          material_id: transactionResult.sale.material.toString(),
+          _id: sale.saleId.toString(),
+          material_id: sale.material.toString(),
           cooperative_id: targetCooperativeId,
-          status: getSaleLifecycleStatus(transactionResult.sale),
+          status: getSaleLifecycleStatus(sale),
           'price/kg': decimalToJsonNumber(pricePerKg),
           weight_sold: decimalToJsonNumber(weightSold),
-          date: transactionResult.sale.date.toISOString(),
-          created_at: transactionResult.sale.createdAt.toISOString(),
-          sold_at: transactionResult.sale.soldAt?.toISOString() ?? null,
-          cancelled_at: transactionResult.sale.cancelledAt?.toISOString() ?? null,
-          expected_sale_date: transactionResult.sale.expectedSaleDate.toISOString(),
-          Buyer: transactionResult.buyerName,
+          date: sale.date.toISOString(),
+          created_at: sale.createdAt.toISOString(),
+          sold_at: sale.soldAt?.toISOString() ?? null,
+          cancelled_at: sale.cancelledAt?.toISOString() ?? null,
+          expected_sale_date: sale.expectedSaleDate.toISOString(),
+          Buyer: sale.buyerRef.buyerName,
         },
       },
       { status: 201 },

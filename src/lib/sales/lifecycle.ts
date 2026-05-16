@@ -50,6 +50,15 @@ export function getLegacyStockMutationGuard(sale: SaleLifecycleDates) {
   };
 }
 
+export function getActiveSaleMutationGuard(sale: SaleLifecycleDates) {
+  const status = getSaleLifecycleStatus(sale);
+
+  return {
+    allowed: status === 'ACTIVE',
+    status,
+  };
+}
+
 export function summarizeSoldSales(sales: SaleSummaryInput[]) {
   const soldSales = sales.filter(isSaleStockConsolidated);
   const totalWeight = soldSales.reduce((sum, sale) => sum + sale.weight_sold, 0);

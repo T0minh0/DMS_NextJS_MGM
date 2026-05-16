@@ -10,12 +10,10 @@ import { scopedSaleWhere } from '@/lib/auth/scoped-queries';
 import {
   decimalToJsonNumber,
   formatDecimal,
-  parseDecimal2,
   parsePositiveDecimal2,
 } from '@/lib/decimal';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
-import { getLegacyStockMutationGuard } from '@/lib/sales/lifecycle';
-import { lockStockAggregateForUpdate, updateLockedStockAggregate } from '@/lib/stock/ledger';
+import { getActiveSaleMutationGuard } from '@/lib/sales/lifecycle';
 
 type SaleLockRow = {
   saleId: bigint;
@@ -176,9 +174,7 @@ export async function PUT(
 
       const lockedSale = await tx.sales.findFirst({
         where: scopedSaleWhere(session, saleId),
-        include: {
-          buyerRef: true,
-        },
+        include: { buyerRef: true },
       });
 
       if (!lockedSale) {
@@ -191,37 +187,11 @@ export async function PUT(
         return { status: 'material_immutable' as const };
       }
 
-      const lifecycleGuard = getLegacyStockMutationGuard(lockedSale);
+      const lifecycleGuard = getActiveSaleMutationGuard(lockedSale);
       if (!lifecycleGuard.allowed) {
         return {
           status: 'lifecycle_locked' as const,
           lifecycleStatus: lifecycleGuard.status,
-        };
-      }
-
-      const stockRecord = await lockStockAggregateForUpdate(
-        tx,
-        lockedSale.cooperativeId,
-        lockedSale.material,
-      );
-
-      if (!stockRecord) {
-        return {
-          status: 'stock_missing' as const,
-          cooperativeId: lockedSale.cooperativeId,
-          materialId: lockedSale.material,
-        };
-      }
-
-      const existingWeight = parseDecimal2(lockedSale.weight, 'existingSaleWeight');
-      const currentStock = stockRecord.currentStockKg;
-      const availableStock = currentStock.plus(existingWeight);
-
-      if (weightSold.greaterThan(availableStock)) {
-        return {
-          status: 'insufficient_stock' as const,
-          cooperativeId: lockedSale.cooperativeId,
-          availableStock,
         };
       }
 
@@ -232,17 +202,6 @@ export async function PUT(
         })) || (await tx.buyers.create({ data: { buyerName } }));
       }
 
-      const updatedTotalSold =
-        stockRecord.totalSoldKg.minus(existingWeight).plus(weightSold);
-      const updatedCurrentStock = availableStock.minus(weightSold);
-
-      if (updatedTotalSold.lessThan(0) || updatedCurrentStock.lessThan(0)) {
-        return {
-          status: 'stock_invariant_violation' as const,
-          cooperativeId: lockedSale.cooperativeId,
-        };
-      }
-
       await tx.sales.update({
         where: { saleId },
         data: {
@@ -250,21 +209,13 @@ export async function PUT(
           weight: formatDecimal(weightSold),
           date: saleDate,
           expectedSaleDate: saleDate,
-          soldAt: lockedSale.soldAt ? saleDate : lockedSale.soldAt,
           buyer: buyer.buyerId,
         },
-      });
-
-      await updateLockedStockAggregate(tx, stockRecord, {
-        totalSoldKg: updatedTotalSold,
-        currentStockKg: updatedCurrentStock,
       });
 
       return {
         status: 'updated' as const,
         cooperativeId: lockedSale.cooperativeId,
-        updatedCurrentStock,
-        duplicateStockRows: stockRecord.duplicateStockIds.length,
       };
     });
 
@@ -288,50 +239,8 @@ export async function PUT(
 
     if (transactionResult.status === 'lifecycle_locked') {
       return apiErrorResponse({
-        message: 'Venda ativa ou cancelada deve ser alterada pelos endpoints de lifecycle',
+        message: 'Apenas vendas ativas podem ser editadas. Use /complete ou /cancel para concluir ou cancelar.',
         code: 'SALE_LIFECYCLE_LOCKED',
-        status: 409,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'stock_missing') {
-      logWarn('sales.update.stock_missing', context, {
-        saleId: saleId.toString(),
-        cooperativeId: transactionResult.cooperativeId.toString(),
-        materialId: transactionResult.materialId.toString(),
-      });
-      return apiErrorResponse({
-        message: 'Não há estoque registrado para este material nesta cooperativa',
-        code: 'STOCK_MISSING',
-        status: 400,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'insufficient_stock') {
-      logWarn('sales.update.insufficient_stock', context, {
-        saleId: saleId.toString(),
-        cooperativeId: transactionResult.cooperativeId.toString(),
-        requestedWeight: decimalToJsonNumber(weightSold),
-        availableWeight: decimalToJsonNumber(transactionResult.availableStock),
-      });
-      return apiErrorResponse({
-        message: `Estoque insuficiente! Disponível: ${formatDecimal(transactionResult.availableStock)} kg`,
-        code: 'INSUFFICIENT_STOCK',
-        status: 400,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'stock_invariant_violation') {
-      logWarn('sales.update.stock_invariant_violation', context, {
-        saleId: saleId.toString(),
-        cooperativeId: transactionResult.cooperativeId.toString(),
-      });
-      return apiErrorResponse({
-        message: 'Inconsistência de estoque detectada para esta venda',
-        code: 'STOCK_INVARIANT_VIOLATION',
         status: 409,
         requestId: context.requestId,
       });
@@ -342,8 +251,6 @@ export async function PUT(
       saleId: saleId.toString(),
       cooperativeId: transactionResult.cooperativeId.toString(),
       weightSold: decimalToJsonNumber(weightSold),
-      updatedCurrentStock: decimalToJsonNumber(transactionResult.updatedCurrentStock),
-      duplicateStockRows: transactionResult.duplicateStockRows,
     });
 
     return NextResponse.json({
@@ -368,179 +275,15 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  _ctx: { params: Promise<{ id: string }> },
 ) {
   const context = createLogContext(request, { domain: 'sales' });
-
-  try {
-    const session = await requireManagerOrAdmin();
-
-    const { id: idParam } = await params;
-    let saleId: bigint;
-    try {
-      saleId = BigInt(idParam);
-    } catch {
-      return apiErrorResponse({
-        message: 'ID de venda inválido',
-        code: 'INVALID_SALE_ID',
-        status: 400,
-        requestId: context.requestId,
-      });
-    }
-
-    const existingSale = await prisma.sales.findFirst({
-      where: scopedSaleWhere(session, saleId),
-    });
-
-    if (!existingSale) {
-      return apiErrorResponse({
-        message: 'Venda não encontrada',
-        code: 'SALE_NOT_FOUND',
-        status: 404,
-        requestId: context.requestId,
-      });
-    }
-
-    requireScopedPermission(session, 'sales', 'delete', 'cooperative');
-
-    const transactionResult = await prisma.$transaction(async (tx) => {
-      const locked = await lockScopedSaleForUpdate(tx, session, saleId);
-
-      if (!locked) {
-        return { status: 'not_found' as const };
-      }
-
-      const lockedSale = await tx.sales.findFirst({
-        where: scopedSaleWhere(session, saleId),
-      });
-
-      if (!lockedSale) {
-        return { status: 'not_found' as const };
-      }
-
-      requireScopedPermission(session, 'sales', 'delete', 'cooperative');
-
-      const lifecycleGuard = getLegacyStockMutationGuard(lockedSale);
-      if (!lifecycleGuard.allowed) {
-        return {
-          status: 'lifecycle_locked' as const,
-          lifecycleStatus: lifecycleGuard.status,
-        };
-      }
-
-      const stockRecord = await lockStockAggregateForUpdate(
-        tx,
-        lockedSale.cooperativeId,
-        lockedSale.material,
-      );
-
-      if (!stockRecord) {
-        return {
-          status: 'stock_missing' as const,
-          cooperativeId: lockedSale.cooperativeId,
-          materialId: lockedSale.material,
-        };
-      }
-
-      const existingWeight = parseDecimal2(lockedSale.weight, 'existingSaleWeight');
-      const updatedTotalSold = stockRecord.totalSoldKg.minus(existingWeight);
-      const updatedCurrentStock = stockRecord.currentStockKg.plus(existingWeight);
-
-      if (updatedTotalSold.lessThan(0)) {
-        return {
-          status: 'stock_invariant_violation' as const,
-          cooperativeId: lockedSale.cooperativeId,
-        };
-      }
-
-      await tx.sales.delete({
-        where: { saleId },
-      });
-
-      await updateLockedStockAggregate(tx, stockRecord, {
-        totalSoldKg: updatedTotalSold,
-        currentStockKg: updatedCurrentStock,
-      });
-
-      return {
-        status: 'deleted' as const,
-        cooperativeId: lockedSale.cooperativeId,
-        restoredWeight: existingWeight,
-        updatedCurrentStock,
-        duplicateStockRows: stockRecord.duplicateStockIds.length,
-      };
-    });
-
-    if (transactionResult.status === 'not_found') {
-      return apiErrorResponse({
-        message: 'Venda não encontrada',
-        code: 'SALE_NOT_FOUND',
-        status: 404,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'lifecycle_locked') {
-      return apiErrorResponse({
-        message: 'Venda ativa ou cancelada deve ser alterada pelos endpoints de lifecycle',
-        code: 'SALE_LIFECYCLE_LOCKED',
-        status: 409,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'stock_missing') {
-      logWarn('sales.delete.stock_missing', context, {
-        saleId: saleId.toString(),
-        cooperativeId: transactionResult.cooperativeId.toString(),
-        materialId: transactionResult.materialId.toString(),
-      });
-      return apiErrorResponse({
-        message: 'Não há estoque registrado para este material nesta cooperativa',
-        code: 'STOCK_MISSING',
-        status: 400,
-        requestId: context.requestId,
-      });
-    }
-
-    if (transactionResult.status === 'stock_invariant_violation') {
-      logWarn('sales.delete.stock_invariant_violation', context, {
-        saleId: saleId.toString(),
-        cooperativeId: transactionResult.cooperativeId.toString(),
-      });
-      return apiErrorResponse({
-        message: 'Inconsistência de estoque detectada para esta venda',
-        code: 'STOCK_INVARIANT_VIOLATION',
-        status: 409,
-        requestId: context.requestId,
-      });
-    }
-
-    logInfo('sales.delete.succeeded', context, {
-      role: session.role,
-      saleId: saleId.toString(),
-      cooperativeId: transactionResult.cooperativeId.toString(),
-      restoredWeight: decimalToJsonNumber(transactionResult.restoredWeight),
-      updatedCurrentStock: decimalToJsonNumber(transactionResult.updatedCurrentStock),
-      duplicateStockRows: transactionResult.duplicateStockRows,
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Venda excluída com sucesso',
-    });
-  } catch (error) {
-    const authResponse = authErrorResponse(error, context);
-    if (authResponse) {
-      return authResponse;
-    }
-
-    return apiInternalErrorResponse({
-      message: 'Erro ao excluir venda',
-      code: 'SALES_DELETE_FAILED',
-      context,
-      event: 'sales.delete.failed',
-      error,
-    });
-  }
+  const response = apiErrorResponse({
+    message: 'Exclusão destrutiva de vendas foi removida. Use PATCH /api/sales/{id}/cancel para cancelar.',
+    code: 'METHOD_NOT_ALLOWED',
+    status: 405,
+    requestId: context.requestId,
+  });
+  response.headers.set('Allow', 'GET, PUT, PATCH');
+  return response;
 }

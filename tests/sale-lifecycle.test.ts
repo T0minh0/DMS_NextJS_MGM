@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  getActiveSaleMutationGuard,
   getLegacyStockMutationGuard,
   getSaleLifecycleStatus,
   isSaleStockConsolidated,
@@ -86,10 +87,36 @@ test('analytics routes use sold sales and direct cooperative scope', () => {
   }
 });
 
-test('legacy sale update and delete routes block non-sold lifecycle states before stock mutation', () => {
-  const source = readFileSync(path.resolve('src/app/api/sales/[id]/route.ts'), 'utf8');
+test('active sale mutation guard allows only ACTIVE sales for update', () => {
+  assert.deepEqual(
+    getActiveSaleMutationGuard({ soldAt: null, cancelledAt: null }),
+    { allowed: true, status: 'ACTIVE' },
+  );
+  assert.deepEqual(
+    getActiveSaleMutationGuard({ soldAt: new Date(), cancelledAt: null }),
+    { allowed: false, status: 'SOLD' },
+  );
+  assert.deepEqual(
+    getActiveSaleMutationGuard({ soldAt: null, cancelledAt: new Date() }),
+    { allowed: false, status: 'CANCELLED' },
+  );
+});
 
-  assert.match(source, /getLegacyStockMutationGuard/);
-  assert.match(source, /SALE_LIFECYCLE_LOCKED/);
-  assert.match(source, /status:\s*409/);
+test('sale update route uses active guard and complete/cancel routes expose idempotent lifecycle transitions', () => {
+  const updateRoute = readFileSync(path.resolve('src/app/api/sales/[id]/route.ts'), 'utf8');
+  const completeRoute = readFileSync(path.resolve('src/app/api/sales/[id]/complete/route.ts'), 'utf8');
+  const cancelRoute = readFileSync(path.resolve('src/app/api/sales/[id]/cancel/route.ts'), 'utf8');
+
+  assert.match(updateRoute, /getActiveSaleMutationGuard/);
+  assert.match(updateRoute, /SALE_LIFECYCLE_LOCKED/);
+  assert.match(updateRoute, /status:\s*409/);
+
+  assert.match(completeRoute, /export async function PATCH/);
+  assert.match(completeRoute, /recordSale/);
+  assert.match(completeRoute, /already_completed/);
+  assert.match(completeRoute, /INSUFFICIENT_STOCK/);
+
+  assert.match(cancelRoute, /export async function PATCH/);
+  assert.match(cancelRoute, /already_cancelled/);
+  assert.match(cancelRoute, /SALE_ALREADY_SOLD/);
 });

@@ -611,6 +611,8 @@ test('transactional stock ledger exposes conditional helpers for production muta
   assert.match(source, /"Current_stock_KG" >= \$\{amountKg\}/);
   assert.match(source, /ON CONFLICT \("Cooperative", "Material"\)/);
   assert.match(salesRoute, /parsePositiveDecimal2\(body\.weight_sold/);
-  assert.match(saleDetailRoute, /parseDecimal2\(lockedSale\.weight/);
-  assert.doesNotMatch(saleDetailRoute, /Math\.max\(updatedTotalSold/);
+  // complete route debits stock via recordSale; PUT no longer mutates stock
+  const completeRoute = readFileSync(path.resolve('src/app/api/sales/[id]/complete/route.ts'), 'utf8');
+  assert.match(completeRoute, /recordSale/);
+  assert.doesNotMatch(saleDetailRoute, /lockStockAggregateForUpdate/);
 });

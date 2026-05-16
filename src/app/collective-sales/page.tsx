@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import Layout from '@/components/Layout';
 import {
   FaPlus,
@@ -491,9 +491,8 @@ export default function CollectiveSalesPage() {
               const active = sale.status === 'ACTIVE';
 
               return (
-                <>
+                <Fragment key={sale._id}>
                   <tr
-                    key={sale._id}
                     className={`hover:bg-gray-50 ${expanded ? 'bg-blue-50' : ''}`}
                   >
                     <td className="px-4 py-4 text-sm font-medium text-gray-900">{sale.material_name}</td>
@@ -601,7 +600,7 @@ export default function CollectiveSalesPage() {
                   </tr>
 
                   {expanded && (
-                    <tr key={`${sale._id}-expanded`} className="bg-blue-50">
+                    <tr className="bg-blue-50">
                       <td colSpan={9} className="px-4 py-4">
                         <div className="text-sm font-medium text-gray-700 mb-2">Participantes</div>
                         {sale.participants.length === 0 ? (
@@ -642,7 +641,7 @@ export default function CollectiveSalesPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

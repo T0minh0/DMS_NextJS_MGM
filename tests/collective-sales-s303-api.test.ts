@@ -19,10 +19,14 @@ test('complete requires manager/admin with sales.update scope', () => {
   assert.match(source, /'sales',\s*'update'/);
 });
 
-test('complete enforces creator-only rule', () => {
+test('complete enforces creator-only rule before the idempotent soldAt path', () => {
   const source = readRoute(ROUTE);
   assert.match(source, /COMPLETE_FORBIDDEN/);
   assert.match(source, /creatorCooperativeId/);
+  // Auth check must appear before the soldAt != null idempotent return
+  const authIdx = source.indexOf('COMPLETE_FORBIDDEN');
+  const idempotentIdx = source.indexOf('já concluída');
+  assert.ok(authIdx < idempotentIdx, 'auth check must precede the idempotent soldAt return');
 });
 
 test('complete blocks completion of a cancelled sale', () => {
@@ -31,10 +35,11 @@ test('complete blocks completion of a cancelled sale', () => {
   assert.match(source, /cancelledAt/);
 });
 
-test('complete blocks when no weight contributions exist', () => {
+test('complete blocks when no weight contributions exist via NoContributionsError sentinel', () => {
   const source = readRoute(ROUTE);
   assert.match(source, /NO_CONTRIBUTIONS/);
-  assert.match(source, /totalWeight.*isZero/);
+  assert.match(source, /NoContributionsError/);
+  assert.match(source, /throw new NoContributionsError/);
 });
 
 // ── Idempotency ───────────────────────────────────────────────────────────────
@@ -79,6 +84,11 @@ test('complete revenue shares sum to totalWeight * price/kg', () => {
 });
 
 // ── Stock finalization ────────────────────────────────────────────────────────
+
+test('complete uses cooperativeId ordering for deadlock-safe lock acquisition', () => {
+  const source = readRoute(ROUTE);
+  assert.match(source, /cooperativeId.*asc/);
+});
 
 test('complete calls lockStockAggregateForUpdate per contribution before finalizing stock', () => {
   const source = readRoute(ROUTE);
@@ -140,6 +150,9 @@ function distributeRevenue(
     let share: Prisma.Decimal;
     if (i === N - 1) {
       share = totalRevenue.minus(runningSum);
+      if (share.lessThan(0)) {
+        throw new Error('Revenue distribution produced negative last share');
+      }
     } else {
       share = c.contributedWeight.times(priceKg).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
       runningSum = runningSum.plus(share);
@@ -158,7 +171,7 @@ test('distributeRevenue: single contribution receives full revenue', () => {
   const shares = distributeRevenue(contribs, new Prisma.Decimal('0.50'), new Prisma.Decimal('100'));
   const total = [...shares.values()].reduce((s, v) => s.plus(v), new Prisma.Decimal(0));
   assert.equal(total.toFixed(2), '50.00');
-  assert.equal(shares.get(1n)!.toFixed(2), '50.00');
+  assert.equal(shares.get(BigInt(1))!.toFixed(2), '50.00');
 });
 
 test('distributeRevenue: two equal contributions split revenue evenly', () => {
@@ -166,8 +179,8 @@ test('distributeRevenue: two equal contributions split revenue evenly', () => {
   const shares = distributeRevenue(contribs, new Prisma.Decimal('1.00'), new Prisma.Decimal('100'));
   const total = [...shares.values()].reduce((s, v) => s.plus(v), new Prisma.Decimal(0));
   assert.equal(total.toFixed(2), '100.00');
-  assert.equal(shares.get(1n)!.toFixed(2), '50.00');
-  assert.equal(shares.get(2n)!.toFixed(2), '50.00');
+  assert.equal(shares.get(BigInt(1))!.toFixed(2), '50.00');
+  assert.equal(shares.get(BigInt(2))!.toFixed(2), '50.00');
 });
 
 test('distributeRevenue: three contributions — last absorbs rounding, sum is exact', () => {
@@ -180,9 +193,7 @@ test('distributeRevenue: three contributions — last absorbs rounding, sum is e
 });
 
 test('distributeRevenue: rounding case — last remainder absorbs discrepancy', () => {
-  // 3 contributions: 1kg, 1kg, 1kg; price/kg = 0.10 → total 0.30
-  // Individual: 0.10, 0.10, 0.10 — happens to be exact
-  // Harder case: 2 contributions of 1kg, price 0.005 → total rounds to 0.01
+  // 2 contributions of 1kg, price 0.005 → total rounds to 0.01
   const contribs = [makeContrib(1, '1'), makeContrib(2, '1')];
   const priceKg = new Prisma.Decimal('0.005');
   const totalWeight = new Prisma.Decimal('2');
@@ -190,4 +201,14 @@ test('distributeRevenue: rounding case — last remainder absorbs discrepancy', 
   const totalRevenue = totalWeight.times(priceKg).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   const sum = [...shares.values()].reduce((s, v) => s.plus(v), new Prisma.Decimal(0));
   assert.equal(sum.toFixed(2), totalRevenue.toFixed(2), 'sum must equal totalRevenue exactly');
+});
+
+test('distributeRevenue: throws RevenueShareArithmeticError when last share would be negative', () => {
+  // 5 contributions of 1kg each, price 0.006/kg → totalRevenue = 0.03
+  // First 4 each round to 0.01 → runningSum = 0.04 > 0.03 → last share = -0.01
+  const contribs = [1, 2, 3, 4, 5].map((i) => makeContrib(i, '1'));
+  assert.throws(
+    () => distributeRevenue(contribs, new Prisma.Decimal('0.006'), new Prisma.Decimal('5')),
+    (err: unknown) => err instanceof Error && err.message.includes('negative last share'),
+  );
 });

@@ -18,12 +18,20 @@ import {
 } from '@/lib/decimal';
 import { createLogContext, logInfo } from '@/lib/observability/logger';
 
-// Thrown inside $transaction when the sale is already completed or concurrently
-// completed by another caller — forces rollback without touching stock.
 class AlreadyCompletedError extends Error {}
+class NoContributionsError extends Error {}
+// Thrown when the last revenue-share calculation produces a negative value,
+// indicating that intermediate rounding (ROUND_HALF_UP) exceeded totalRevenue.
+class RevenueShareArithmeticError extends Error {
+  constructor(public readonly detail: object) {
+    super('Revenue distribution produced negative last share');
+  }
+}
 
 // Distributes revenue to N contributions using the "last remainder" method so
 // that sum(revenueShare) == totalRevenue exactly (2 dp, ROUND_HALF_UP).
+// Contributions must be ordered consistently (e.g. cooperativeId asc) before
+// calling; the last entry absorbs any rounding residual.
 function distributeRevenue(
   contributions: { contributionId: bigint; cooperativeId: bigint; contributedWeight: Prisma.Decimal }[],
   priceKg: Prisma.Decimal,
@@ -42,6 +50,14 @@ function distributeRevenue(
     let share: Prisma.Decimal;
     if (i === N - 1) {
       share = totalRevenue.minus(runningSum);
+      if (share.lessThan(0)) {
+        throw new RevenueShareArithmeticError({
+          totalRevenue: totalRevenue.toFixed(2),
+          runningSum: runningSum.toFixed(2),
+          N,
+          priceKg: priceKg.toString(),
+        });
+      }
     } else {
       share = c.contributedWeight
         .times(priceKg)
@@ -103,6 +119,13 @@ export async function POST(
       return apiErrorResponse({ message: 'Venda coletiva cancelada não pode ser concluída', code: 'COLLECTIVE_SALE_CANCELLED', status: 409, requestId: context.requestId });
     }
 
+    // Auth check before the idempotent path — the soldAt payload includes
+    // financial data (revenue_share, contributed_weight) from all cooperatives,
+    // which must not leak to unauthorized callers.
+    if (sale.creatorCooperativeId.toString() !== session.cooperativeId && session.role !== 'admin') {
+      return apiErrorResponse({ message: 'Apenas o criador pode concluir a venda coletiva', code: 'COMPLETE_FORBIDDEN', status: 403, requestId: context.requestId });
+    }
+
     if (sale.soldAt != null) {
       return NextResponse.json({
         success: true,
@@ -122,15 +145,13 @@ export async function POST(
       });
     }
 
-    if (sale.creatorCooperativeId.toString() !== session.cooperativeId && session.role !== 'admin') {
-      return apiErrorResponse({ message: 'Apenas o criador pode concluir a venda coletiva', code: 'COMPLETE_FORBIDDEN', status: 403, requestId: context.requestId });
-    }
-
     const priceKg = sale.priceKg;
     const materialId = sale.materialId;
 
     await prisma.$transaction(async (tx) => {
-      // Read contributions inside the tx for maximum freshness.
+      // orderBy cooperativeId for deterministic stock-lock ordering across
+      // concurrent completions — prevents deadlock when multiple sales share
+      // some of the same cooperative participants.
       const contributions = await tx.collectiveSaleContribution.findMany({
         where: {
           collectiveSaleId,
@@ -138,7 +159,7 @@ export async function POST(
           contributedWeight: { not: null, gt: 0 },
         },
         select: { contributionId: true, cooperativeId: true, contributedWeight: true },
-        orderBy: { contributionId: 'asc' },
+        orderBy: { cooperativeId: 'asc' },
       });
 
       const totalWeight = contributions.reduce(
@@ -147,10 +168,10 @@ export async function POST(
       );
 
       if (totalWeight.isZero()) {
-        return apiErrorResponse({ message: 'Nenhuma contribuição de peso registrada', code: 'NO_CONTRIBUTIONS', status: 409, requestId: context.requestId });
+        throw new NoContributionsError();
       }
 
-      // Atomically claim completion — concurrent callers get count=0 and rollback.
+      // Atomically claim completion — concurrent callers get count=0 → AlreadyCompletedError.
       const claimed = await tx.collectiveSale.updateMany({
         where: { collectiveSaleId, soldAt: null, cancelledAt: null },
         data: {
@@ -179,8 +200,8 @@ export async function POST(
 
         // Finalize stock: reservation → sold.
         // adjustStock(+weight) already decremented currentStockKg at contribution time.
-        // Here we increment totalSoldKg without touching currentStockKg, preserving the
-        // invariant: currentStockKg <= totalCollectedKg - totalSoldKg.
+        // Incrementing totalSoldKg without touching currentStockKg preserves:
+        //   currentStockKg <= totalCollectedKg - totalSoldKg
         const locked = await lockStockAggregateForUpdate(tx, c.cooperativeId, materialId);
         if (!locked) {
           throw new StockDomainError('STOCK_MISSING', 'Estoque não encontrado', {
@@ -238,6 +259,21 @@ export async function POST(
   } catch (error) {
     if (error instanceof AlreadyCompletedError) {
       return NextResponse.json({ success: true, message: 'Venda coletiva já concluída', status: 'SOLD' });
+    }
+
+    if (error instanceof NoContributionsError) {
+      return apiErrorResponse({ message: 'Nenhuma contribuição de peso registrada', code: 'NO_CONTRIBUTIONS', status: 409, requestId: context.requestId });
+    }
+
+    if (error instanceof RevenueShareArithmeticError) {
+      return apiInternalErrorResponse({
+        message: 'Erro no cálculo de distribuição de receita',
+        code: 'REVENUE_SHARE_ARITHMETIC_ERROR',
+        context,
+        event: 'collective-sales.complete.revenue-arithmetic-error',
+        error,
+        metadata: error.detail as Record<string, unknown>,
+      });
     }
 
     const authResponse = authErrorResponse(error, context);

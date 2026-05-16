@@ -11,6 +11,8 @@ import { apiErrorResponse, apiInternalErrorResponse, readJsonBody } from '@/lib/
 import { decimalToJsonNumber, formatDecimal, parsePositiveDecimal2, type DecimalInput } from '@/lib/decimal';
 import { createLogContext, logInfo } from '@/lib/observability/logger';
 
+class MaterialNotFoundError extends Error {}
+
 function formatSale(
   sale: {
     collectiveSaleId: bigint;
@@ -228,6 +230,11 @@ export async function POST(request: NextRequest) {
           },
         },
         include: INCLUDE_FULL,
+      }).catch((e: unknown) => {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+          throw new MaterialNotFoundError();
+        }
+        throw e;
       });
 
       return created;
@@ -245,6 +252,10 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof MaterialNotFoundError) {
+      return apiErrorResponse({ message: 'Material não encontrado', code: 'MATERIAL_NOT_FOUND', status: 404, requestId: context.requestId });
+    }
+
     const authResponse = authErrorResponse(error, context);
     if (authResponse) return authResponse;
 

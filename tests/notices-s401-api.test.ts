@@ -1,9 +1,12 @@
-// Static-analysis smoke checks for S4-01 notices API.
+// Static-analysis smoke checks and unit tests for S4-01 notices API.
 // Verifies CRUD endpoints, RBAC scoping, sanitization hooks, and expiry filtering.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { sanitizeNoticeTitle, sanitizeNoticeContent } from '../src/lib/notices/sanitize';
+import { buildScopeWhere, buildActiveWhere } from '../src/app/api/notices/_shared';
+import type { AuthSession } from '../src/lib/auth/shared';
 
 function readSource(filePath: string) {
   return readFileSync(path.resolve(filePath), 'utf8');
@@ -197,4 +200,92 @@ test('XSS: sanitize-html import present in POST route', () => {
 test('XSS: sanitize-html import present in PATCH route', () => {
   const source = readSource(ID_ROUTE);
   assert.match(source, /sanitize/);
+});
+
+// ── Executable unit tests: sanitize functions ─────────────────────────────────
+
+test('sanitizeNoticeTitle strips script tag and returns plain text', () => {
+  const result = sanitizeNoticeTitle('<script>alert(1)</script>Aviso');
+  assert.doesNotMatch(result, /<script/i);
+  assert.match(result, /Aviso/);
+});
+
+test('sanitizeNoticeTitle strips img onerror XSS vector', () => {
+  const result = sanitizeNoticeTitle('<img src=x onerror="alert(1)">Título');
+  assert.doesNotMatch(result, /onerror/i);
+  assert.doesNotMatch(result, /<img/i);
+});
+
+test('sanitizeNoticeTitle strips svg onload XSS vector', () => {
+  const result = sanitizeNoticeTitle('<svg onload="alert(1)">x</svg>Título');
+  assert.doesNotMatch(result, /onload/i);
+  assert.doesNotMatch(result, /<svg/i);
+});
+
+test('sanitizeNoticeTitle strips anchor with javascript: href', () => {
+  const result = sanitizeNoticeTitle('<a href="javascript:void(0)">click</a>');
+  assert.doesNotMatch(result, /javascript:/i);
+  assert.doesNotMatch(result, /<a/i);
+});
+
+test('sanitizeNoticeTitle returns empty string for script-only input', () => {
+  const result = sanitizeNoticeTitle('<script>alert(1)</script>');
+  assert.equal(result, '');
+});
+
+test('sanitizeNoticeContent allows safe tags', () => {
+  const result = sanitizeNoticeContent('<p>Ola <strong>mundo</strong></p>');
+  assert.match(result, /<p>/);
+  assert.match(result, /<strong>/);
+});
+
+test('sanitizeNoticeContent strips onclick attribute', () => {
+  const result = sanitizeNoticeContent('<p onclick="alert(1)">texto</p>');
+  assert.doesNotMatch(result, /onclick/i);
+});
+
+test('sanitizeNoticeContent strips style attribute', () => {
+  const result = sanitizeNoticeContent('<p style="color:red">texto</p>');
+  assert.doesNotMatch(result, /style=/i);
+});
+
+test('sanitizeNoticeContent strips script XSS payload', () => {
+  const result = sanitizeNoticeContent('<p>texto</p><script>alert(1)</script>');
+  assert.doesNotMatch(result, /<script/i);
+  assert.match(result, /texto/);
+});
+
+test('sanitizeNoticeContent strips img onerror', () => {
+  const result = sanitizeNoticeContent('<img src=x onerror="alert(1)">');
+  assert.doesNotMatch(result, /onerror/i);
+  assert.doesNotMatch(result, /<img/i);
+});
+
+// ── Executable unit tests: buildScopeWhere / buildActiveWhere ─────────────────
+
+test('buildScopeWhere returns empty object for admin', () => {
+  const session = { role: 'admin', cooperativeId: '1', workerId: '1', name: 'Admin' } as AuthSession;
+  const result = buildScopeWhere(session);
+  assert.deepEqual(result, {});
+});
+
+test('buildScopeWhere returns OR filter for manager including null coop', () => {
+  const session = { role: 'manager', cooperativeId: '42', workerId: '1', name: 'Manager' } as AuthSession;
+  const result = buildScopeWhere(session);
+  assert.ok('OR' in result, 'Should have OR key');
+  const orClauses = (result as { OR: Record<string, unknown>[] }).OR;
+  const hasNull = orClauses.some((c) => c.cooperativeId === null);
+  const hasCoop = orClauses.some((c) => c.cooperativeId === BigInt('42'));
+  assert.ok(hasNull, 'Should include null cooperativeId clause');
+  assert.ok(hasCoop, 'Should include own cooperativeId clause');
+});
+
+test('buildActiveWhere returns OR with null and gt now', () => {
+  const result = buildActiveWhere();
+  assert.ok('OR' in result, 'Should have OR key');
+  const orClauses = (result as { OR: unknown[] }).OR;
+  assert.equal(orClauses.length, 2);
+  const asStr = JSON.stringify(orClauses);
+  assert.match(asStr, /null/);
+  assert.match(asStr, /gt/);
 });

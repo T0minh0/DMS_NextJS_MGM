@@ -99,7 +99,12 @@ export async function POST(request: NextRequest) {
       cooperativeId = null;
     } else {
       requireScopedPermission(session, 'notices', 'create', 'cooperative');
-      const requestedCoopId = BigInt(cooperative_id as string);
+      let requestedCoopId: bigint;
+      try {
+        requestedCoopId = BigInt(cooperative_id as string);
+      } catch {
+        return apiErrorResponse({ message: 'ID de cooperativa inválido', code: 'INVALID_COOPERATIVE_ID', status: 400, requestId: context.requestId });
+      }
       if (session.role !== 'admin' && requestedCoopId !== BigInt(session.cooperativeId)) {
         return apiErrorResponse({ message: 'Sem permissão para criar aviso nesta cooperativa', code: 'FORBIDDEN', status: 403, requestId: context.requestId });
       }

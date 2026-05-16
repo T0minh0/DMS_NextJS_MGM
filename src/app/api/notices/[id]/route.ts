@@ -139,9 +139,15 @@ export async function PATCH(
       if (patch.expires_at === null) {
         data.expiresAt = null;
       } else {
-        const d = new Date(patch.expires_at as string);
+        if (typeof patch.expires_at !== 'string') {
+          return apiErrorResponse({ message: 'Data de expiração deve ser string ISO', code: 'INVALID_EXPIRES_AT', status: 400, requestId: context.requestId });
+        }
+        const d = new Date(patch.expires_at);
         if (isNaN(d.getTime())) {
           return apiErrorResponse({ message: 'Data de expiração inválida', code: 'INVALID_EXPIRES_AT', status: 400, requestId: context.requestId });
+        }
+        if (d <= new Date()) {
+          return apiErrorResponse({ message: 'Data de expiração deve ser no futuro', code: 'EXPIRES_AT_NOT_FUTURE', status: 400, requestId: context.requestId });
         }
         data.expiresAt = d;
       }

@@ -17,7 +17,7 @@ import {
 
 interface Material {
   _id: string;
-  material_id: number;
+  material_id: string;
   material: string;
   group: string;
 }

@@ -19,7 +19,7 @@ function parseMaterialId(id: string) {
 function formatMaterial(material: MaterialWithGroup) {
   return {
     _id: material.materialId.toString(),
-    material_id: Number(material.materialId),
+    material_id: material.materialId.toString(),
     material: material.materialName,
     name: material.materialName,
     group: material.group?.groupName ?? '',

@@ -8,6 +8,7 @@ import {
   FaBox,
   FaChartBar,
   FaHome,
+  FaHandshake,
   FaRecycle,
   FaShoppingCart,
   FaSignInAlt,
@@ -40,6 +41,7 @@ const navItems = [
   { href: '/materials', icon: FaBox, label: 'Materiais' },
   { href: '/manage-workers', icon: FaUsers, label: 'Usuários' },
   { href: '/sales', icon: FaShoppingCart, label: 'Vendas' },
+  { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas' },
   { href: '/profile', icon: FaUser, label: 'Meu Perfil' },
 ];
 

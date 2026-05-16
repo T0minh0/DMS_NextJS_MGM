@@ -622,6 +622,42 @@ test('manual stock add creates missing rows and increments existing rows through
   assert.ok(store.calls.some((sql) => /ON CONFLICT \("Cooperative", "Material"\)/.test(sql)));
 });
 
+test('insertMaterial rejects measuredAt in the future to prevent bag-state DoS', () => {
+  const farFuture = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  assert.throws(
+    () =>
+      parseInsertMaterialRequest(
+        {
+          materialId: 7,
+          amount: '5.00',
+          bagFull: false,
+          measuredAt: farFuture,
+          deviceId: 3,
+        },
+        workerSession,
+      ),
+    (error) =>
+      error instanceof MaterialDomainError &&
+      error.code === 'INVALID_MATERIAL_MEASUREMENT' &&
+      error.status === 400,
+  );
+
+  // timestamp within the 5-minute tolerance window should be accepted
+  const nearFuture = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+  const parsed = parseInsertMaterialRequest(
+    {
+      materialId: 7,
+      amount: '5.00',
+      bagFull: false,
+      measuredAt: nearFuture,
+      deviceId: 3,
+    },
+    workerSession,
+  );
+  assert.ok(parsed.measuredAt instanceof Date);
+});
+
 test('material and stock route source exposes expected API and concurrency contracts', () => {
   const insertRoute = readFileSync(path.resolve('src/app/api/insertMaterial/route.ts'), 'utf8');
   const stockRoute = readFileSync(path.resolve('src/app/api/stock/route.ts'), 'utf8');

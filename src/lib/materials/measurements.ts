@@ -147,6 +147,19 @@ function parseMeasurementTimestamp(value: unknown) {
     );
   }
 
+  // Reject future timestamps: a worker could set measuredAt far in the future,
+  // which permanently blocks all weighings for that (cooperative, material) pair
+  // because calculateBagStateDelta rejects readings older than lastUpdated.
+  const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+  if (date.getTime() > Date.now() + FUTURE_TOLERANCE_MS) {
+    throw new MaterialDomainError(
+      'INVALID_MATERIAL_MEASUREMENT',
+      'measuredAt não pode ser no futuro',
+      400,
+      { field: 'measuredAt' },
+    );
+  }
+
   return date;
 }
 

@@ -172,6 +172,9 @@ test('RBAC matrix covers required domains and scopes roles correctly', () => {
   assert.equal(canAccess('admin', 'sales', 'read', 'global'), true);
   assert.equal(canAccess('manager', 'sales', 'read', 'cooperative'), true);
   assert.equal(canAccess('manager', 'sales', 'read', 'global'), false);
+  assert.equal(canAccess('worker', 'stock', 'create', 'self'), true);
+  assert.equal(canAccess('worker', 'stock', 'create', 'cooperative'), false);
+  assert.equal(canAccess('manager', 'stock', 'manage', 'cooperative'), true);
   assert.equal(canAccess('manager', 'cooperatives', 'read', 'cooperative'), true);
   assert.equal(canAccess('manager', 'cooperatives', 'read', 'global'), false);
   assert.equal(canAccess('manager', 'users', 'update', 'cooperative'), true);

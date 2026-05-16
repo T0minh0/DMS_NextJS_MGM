@@ -1,9 +1,72 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
-import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
+import {
+  apiErrorResponse,
+  apiInternalErrorResponse,
+  apiRequestErrorResponse,
+  readJsonBody,
+} from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import {
+  addManualStock,
+  MaterialDomainError,
+  serializeManualStockResult,
+} from '@/lib/materials/measurements';
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
+import { StockDomainError } from '@/lib/stock/ledger';
+
+type StockMutationBody = {
+  cooperative_id?: string | number | bigint | null;
+  cooperativeId?: string | number | bigint | null;
+  materialId?: unknown;
+  material_id?: unknown;
+  amount?: unknown;
+};
+
+function parseMaterialId(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    throw new MaterialDomainError(
+      'INVALID_MATERIAL_MEASUREMENT',
+      'materialId é obrigatório',
+      400,
+      { field: 'materialId' },
+    );
+  }
+
+  try {
+    return BigInt(String(value));
+  } catch {
+    throw new MaterialDomainError(
+      'INVALID_MATERIAL_MEASUREMENT',
+      'materialId deve ser um ID válido',
+      400,
+      { field: 'materialId' },
+    );
+  }
+}
+
+function stockMutationErrorResponse(error: unknown, requestId: string) {
+  if (error instanceof MaterialDomainError) {
+    return apiErrorResponse({
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      requestId,
+    });
+  }
+
+  if (error instanceof StockDomainError) {
+    return apiErrorResponse({
+      message: error.message,
+      code: error.code,
+      status: error.code === 'INVALID_STOCK_DECIMAL' ? 400 : 422,
+      requestId,
+    });
+  }
+
+  return null;
+}
 
 export async function GET(request: Request) {
   const context = createLogContext(request, { domain: 'stock' });
@@ -121,6 +184,80 @@ export async function GET(request: Request) {
       code: 'STOCK_READ_FAILED',
       context,
       event: 'stock.read.failed',
+      error,
+    });
+  }
+}
+
+export async function POST(request: Request) {
+  const context = createLogContext(request, { domain: 'stock', route: '/api/stock' });
+
+  try {
+    const session = await requireManagerOrAdmin();
+    const body = await readJsonBody(request) as StockMutationBody;
+    const targetCooperativeId = determineTargetCooperative(
+      session,
+      body.cooperative_id ?? body.cooperativeId ?? session.cooperativeId,
+      { required: true },
+    );
+    requireScopedPermission(session, 'stock', 'manage', 'cooperative');
+
+    const cooperativeId = BigInt(targetCooperativeId);
+    const materialId = parseMaterialId(body.materialId ?? body.material_id);
+
+    const result = await prisma.$transaction((tx) =>
+      addManualStock(tx, {
+        cooperativeId,
+        materialId,
+        amountKg: body.amount,
+      }),
+    );
+
+    logInfo('stock.create.succeeded', context, {
+      role: session.role,
+      cooperativeId: cooperativeId.toString(),
+      materialId: materialId.toString(),
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Estoque atualizado com sucesso',
+        ...serializeManualStockResult(result),
+      },
+      { status: 200 },
+    );
+  } catch (error) {
+    const authResponse = authErrorResponse(error, context);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    const domainResponse = stockMutationErrorResponse(error, context.requestId);
+    if (domainResponse) {
+      logWarn('stock.create.rejected', context, {
+        code: error instanceof MaterialDomainError || error instanceof StockDomainError
+          ? error.code
+          : 'UNKNOWN_DOMAIN_ERROR',
+        status: domainResponse.status,
+      });
+      return domainResponse;
+    }
+
+    const requestResponse = apiRequestErrorResponse(error, context.requestId);
+    if (requestResponse) {
+      logWarn('stock.create.rejected', context, {
+        code: 'INVALID_JSON_BODY',
+        status: requestResponse.status,
+      });
+      return requestResponse;
+    }
+
+    return apiInternalErrorResponse({
+      message: 'Erro ao adicionar estoque',
+      code: 'STOCK_CREATE_FAILED',
+      context,
+      event: 'stock.create.failed',
       error,
     });
   }

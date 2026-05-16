@@ -38,6 +38,49 @@ Sem dados, retorna:
 - Material invalido retorna `400`.
 - `admin` visualiza estoque global; `manager` visualiza apenas a propria cooperativa.
 
+## `POST /api/stock`
+
+Arquivo: `src/app/api/stock/route.ts`
+
+Adiciona estoque manualmente para a cooperativa alvo. Requer `manager` ou `admin` e permissao `stock:manage:cooperative`.
+
+### Body
+
+| Campo | Obrigatorio | Observacao |
+| --- | --- | --- |
+| `materialId` ou `material_id` | Sim | BigInt |
+| `amount` | Sim | Decimal positivo com ate 2 casas |
+| `cooperative_id` | Admin opcional | Manager fica limitado a propria cooperativa |
+
+### Efeitos
+
+- Valida cooperativa e material.
+- Usa `addToStock` com `ON CONFLICT ("Cooperative", "Material")`.
+- Cria linha de `Stock` quando nao existe.
+- Incrementa `totalCollectedKg` e `currentStockKg` quando a linha ja existe.
+
+### Retorno
+
+```json
+{
+  "success": true,
+  "message": "Estoque atualizado com sucesso",
+  "stock": {
+    "id": "1",
+    "total_collected_kg": 3.75,
+    "total_sold_kg": 0,
+    "current_stock_kg": 3.75
+  }
+}
+```
+
+### Erros
+
+- `400`: JSON invalido ou nao-objeto, material ou amount invalido.
+- `403`: gestor tentando atuar fora do escopo.
+- `422`: cooperativa/material inexistente ou invariant de estoque violada.
+- `500`: falha inesperada, logada como `stock.create.failed`.
+
 ## `GET /api/sales`
 
 Arquivo: `src/app/api/sales/route.ts`

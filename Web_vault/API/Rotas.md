@@ -23,7 +23,9 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 | Materiais | `POST` | `/api/materials` | [[API/Materiais-e-cooperativas]] |
 | Materiais | `PUT` | `/api/materials/[id]` | [[API/Materiais-e-cooperativas]] |
 | Materiais | `DELETE` | `/api/materials/[id]` | [[API/Materiais-e-cooperativas]] |
+| Materiais | `POST` | `/api/insertMaterial` | [[API/Materiais-e-cooperativas]] |
 | Estoque | `GET` | `/api/stock` | [[API/Vendas-e-estoque]] |
+| Estoque | `POST` | `/api/stock` | [[API/Vendas-e-estoque]] |
 | Vendas | `GET` | `/api/sales` | [[API/Vendas-e-estoque]] |
 | Vendas | `POST` | `/api/sales` | [[API/Vendas-e-estoque]] |
 | Vendas | `PUT` | `/api/sales/[id]` | [[API/Vendas-e-estoque]] |
@@ -47,6 +49,7 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 - `Decimal` Prisma e convertido para `number` com `decimalToNumber`.
 - Documentos pessoais (`CPF`, `PIS`, `RG`) sao guardados como `Bytes`; listagens de usuarios retornam valores mascarados e detalhes autorizados usam `decodeBytes`.
 - Mutacoes de usuario/material/venda retornam mensagens em pt-BR.
+- POSTs novos que usam `readJsonBody` rejeitam JSON malformado, `null` e arrays com `400 INVALID_JSON_BODY`.
 - Erros de validacao usam status `400`; conflitos de CPF usam `409`; nao encontrado usa `404`; falhas internas usam `500`.
 
 ## Proxy

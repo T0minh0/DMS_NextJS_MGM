@@ -18,6 +18,17 @@ interface ApiInternalErrorResponseOptions {
   metadata?: Record<string, unknown>;
 }
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 export function apiErrorResponse({
   message,
   code,
@@ -38,6 +49,35 @@ export function apiErrorResponse({
       },
     },
   );
+}
+
+export async function readJsonBody(request: Request) {
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    throw new ApiRequestError('Corpo JSON inválido', 'INVALID_JSON_BODY', 400);
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ApiRequestError('Corpo JSON deve ser um objeto', 'INVALID_JSON_BODY', 400);
+  }
+
+  return body as Record<string, unknown>;
+}
+
+export function apiRequestErrorResponse(error: unknown, requestId?: string) {
+  if (!(error instanceof ApiRequestError)) {
+    return null;
+  }
+
+  return apiErrorResponse({
+    message: error.message,
+    code: error.code,
+    status: error.status,
+    requestId,
+  });
 }
 
 export function apiInternalErrorResponse({

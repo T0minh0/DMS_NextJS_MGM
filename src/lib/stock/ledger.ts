@@ -36,6 +36,7 @@ export type StockDomainErrorCode =
   | 'STOCK_MISSING'
   | 'INSUFFICIENT_STOCK'
   | 'INVALID_STOCK_DECIMAL'
+  | 'INVALID_BAG_READING'
   | 'STOCK_INVARIANT_VIOLATION';
 
 export class StockDomainError extends Error {
@@ -69,9 +70,13 @@ export type AdjustStockInput = {
   deltaKg: DecimalInput;
 };
 
+export type ReadingTimestampInput = Date | string | number;
+
 export type BagStateDeltaInput = {
   previousCurrentKg: DecimalInput;
   reportedCurrentKg: DecimalInput;
+  previousUpdatedAt: ReadingTimestampInput;
+  reportedAt: ReadingTimestampInput;
   bagFull: boolean;
 };
 
@@ -101,6 +106,20 @@ function parsePositiveStockDecimal2(value: DecimalInput, field: string) {
 
 function parseNonNegativeStockDecimal2(value: DecimalInput, field: string) {
   return parseStockDecimal(() => parseNonNegativeDecimal2(value, field));
+}
+
+function parseReadingTimestamp(value: ReadingTimestampInput, field: string) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new StockDomainError(
+      'INVALID_BAG_READING',
+      `${field} deve ser uma data válida`,
+      { field },
+    );
+  }
+
+  return date;
 }
 
 function sumDecimalRows(
@@ -447,6 +466,34 @@ export function calculateBagStateDelta(input: BagStateDeltaInput) {
     input.reportedCurrentKg,
     'reportedCurrentKg',
   );
+  const previousUpdatedAt = parseReadingTimestamp(
+    input.previousUpdatedAt,
+    'previousUpdatedAt',
+  );
+  const reportedAt = parseReadingTimestamp(input.reportedAt, 'reportedAt');
+
+  if (reportedAt.getTime() <= previousUpdatedAt.getTime()) {
+    throw new StockDomainError(
+      'INVALID_BAG_READING',
+      'Leitura do saco deve ser posterior à última leitura aceita',
+      {
+        previousUpdatedAt: previousUpdatedAt.toISOString(),
+        reportedAt: reportedAt.toISOString(),
+      },
+    );
+  }
+
+  if (!input.bagFull && reportedCurrentKg.lessThan(previousCurrentKg)) {
+    throw new StockDomainError(
+      'INVALID_BAG_READING',
+      'Leitura acumulada não pode ser menor que o estado atual do saco sem reset',
+      {
+        previousCurrentKg,
+        reportedCurrentKg,
+      },
+    );
+  }
+
   const collectedDeltaKg = Prisma.Decimal.max(
     reportedCurrentKg.minus(previousCurrentKg),
     ZERO,

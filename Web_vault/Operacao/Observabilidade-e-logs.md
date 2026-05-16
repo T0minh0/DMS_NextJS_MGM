@@ -33,7 +33,7 @@ IDs operacionais como `workerId`, `cooperativeId`, `saleId` e `materialId` podem
 | Dominio | Eventos |
 | --- | --- |
 | Auth | `auth.login.*`, `auth.proxy.*`, `auth.rejected` |
-| Stock | `stock.read.succeeded`, `stock.read.no_data`, `stock.read.invalid_filter`, `stock.read.failed` |
+| Stock | `stock.read.succeeded`, `stock.read.no_data`, `stock.read.invalid_filter`, `stock.read.failed`, `stock.create.succeeded`, `stock.create.rejected`, `stock.create.failed`, `material.insert.succeeded`, `material.insert.rejected`, `material.insert.failed` |
 | Sales | `sales.read.*`, `sales.create.*`, `sales.update.*`, `sales.delete.*` |
 | Job | `job.started`, `job.completed`, `job.skipped`, `job.failed` |
 
@@ -46,7 +46,9 @@ Mutacoes de estoque devem passar por `src/lib/stock/ledger.ts`. O contrato canon
 - `addToStock`: incrementa `total_collected_kg` e `current_stock_kg` com `Decimal`; pode criar a linha unica `(Cooperative, Material)` quando o fluxo permitir.
 - `recordSale`: baixa `current_stock_kg` e incrementa `total_sold_kg` via update condicional atomico `Current_stock_KG >= amount`.
 - `adjustStock`: reserva/libera estoque por delta de contribuicao coletiva, espelhando a referencia Java, e bloqueia over-release acima de `total_collected_kg - total_sold_kg`.
-- `calculateBagStateDelta`: calcula delta de pesagem acumulada a partir de `material_bag_state`.
+- `calculateBagStateDelta`: calcula delta de pesagem acumulada a partir de `material_bag_state` e rejeita leituras fora de ordem pelo timestamp de captura.
+
+`/api/insertMaterial` bloqueia `material_bag_state` com `FOR UPDATE` antes de calcular delta, cria medicao mesmo quando o delta e zero e rejeita leitura regressiva sem reset explicito. A rota tambem exige `measuredAt` e rejeita leituras capturadas antes ou no mesmo instante da ultima leitura aceita, fechando a brecha de leitura stale apos reset de saco cheio. `/api/stock` usa `ON CONFLICT` para criar ou incrementar a linha unica de estoque por cooperativa/material. JSON invalido ou nao-objeto nos POSTs e mapeado para `400 INVALID_JSON_BODY`, nao para erro interno.
 
 As rotas legadas de venda ainda usam `FOR UPDATE` para editar/excluir vendas historicas ja consolidadas, mas agora a matematica interna usa `Prisma.Decimal`. Se existirem duplicatas de `Stock`, a transacao soma as linhas, atualiza a linha canonica e zera as duplicadas para manter paridade com o que `/api/stock` exibe. A migracao S1-01 deve impedir novas duplicatas pela unique `(Cooperative, Material)`.
 

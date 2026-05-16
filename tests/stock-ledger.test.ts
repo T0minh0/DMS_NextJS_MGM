@@ -241,6 +241,8 @@ test('bag state delta mirrors the Java accumulated measurement rule', () => {
   const inProgress = calculateBagStateDelta({
     previousCurrentKg: '4.25',
     reportedCurrentKg: '5.75',
+    previousUpdatedAt: '2026-05-13T09:00:00Z',
+    reportedAt: '2026-05-13T09:10:00Z',
     bagFull: false,
   });
 
@@ -251,6 +253,8 @@ test('bag state delta mirrors the Java accumulated measurement rule', () => {
   const completed = calculateBagStateDelta({
     previousCurrentKg: '5.75',
     reportedCurrentKg: '8.00',
+    previousUpdatedAt: '2026-05-13T09:10:00Z',
+    reportedAt: '2026-05-13T09:20:00Z',
     bagFull: true,
   });
 
@@ -258,14 +262,45 @@ test('bag state delta mirrors the Java accumulated measurement rule', () => {
   assert.equal(formatDecimal(completed.nextCurrentKg), '0.00');
   assert.equal(completed.isBegun, false);
 
-  const lowerReading = calculateBagStateDelta({
+  assert.throws(
+    () =>
+      calculateBagStateDelta({
+        previousCurrentKg: '8.00',
+        reportedCurrentKg: '7.50',
+        previousUpdatedAt: '2026-05-13T09:20:00Z',
+        reportedAt: '2026-05-13T09:30:00Z',
+        bagFull: false,
+      }),
+    (error) =>
+      error instanceof StockDomainError &&
+      error.code === 'INVALID_BAG_READING',
+  );
+
+  const resetFromLowerReading = calculateBagStateDelta({
     previousCurrentKg: '8.00',
     reportedCurrentKg: '7.50',
-    bagFull: false,
+    previousUpdatedAt: '2026-05-13T09:20:00Z',
+    reportedAt: '2026-05-13T09:30:00Z',
+    bagFull: true,
   });
 
-  assert.equal(formatDecimal(lowerReading.collectedDeltaKg), '0.00');
-  assert.equal(formatDecimal(lowerReading.nextCurrentKg), '7.50');
+  assert.equal(formatDecimal(resetFromLowerReading.collectedDeltaKg), '0.00');
+  assert.equal(formatDecimal(resetFromLowerReading.nextCurrentKg), '0.00');
+  assert.equal(resetFromLowerReading.isBegun, false);
+
+  assert.throws(
+    () =>
+      calculateBagStateDelta({
+        previousCurrentKg: '0.00',
+        reportedCurrentKg: '6.00',
+        previousUpdatedAt: '2026-05-13T09:20:00Z',
+        reportedAt: '2026-05-13T09:19:59Z',
+        bagFull: false,
+      }),
+    (error) =>
+      error instanceof StockDomainError &&
+      error.code === 'INVALID_BAG_READING',
+  );
 });
 
 test('stock snapshot deltas block concurrent-style double sale debits', () => {

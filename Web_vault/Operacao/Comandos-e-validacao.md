@@ -104,7 +104,7 @@ npm test
 
 Resultado observado:
 
-- 65 testes passaram.
+- 83 testes passaram.
 - Cobre assinatura/verificacao JWT server-side.
 - Cobre rejeicao de token adulterado e expirado no verificador Edge usado pelo proxy.
 - Cobre que rotas `/api/*.json` continuam protegidas e nao sao tratadas como assets publicos.
@@ -119,6 +119,7 @@ Resultado observado:
 - Cobre contratos S1-02 de schema/migration: `collective_sale`, `collective_sale_contribution`, FKs para tabelas fisicas atuais, checks de lifecycle/decimal/status, seed coletivo e bloqueio de exclusao de material usado por venda coletiva.
 - Cobre contratos S1-03 de schema/migration: `notice_board`, multipliers, achievements, levels, leaderboard, FKs para tabelas fisicas atuais, FKs compostas de tenant, unique/check constraints, seeds idempotentes e fixtures UAT persistidas.
 - Cobre helpers de lifecycle para bloquear mutacoes legadas de estoque em vendas `ACTIVE`/`CANCELLED`, analytics apenas sobre vendas `SOLD` e escopo direto por `Sales.cooperative_id`.
+- Cobre S1-05: parser/RBAC de `/api/insertMaterial`, delta e reset de `material_bag_state`, rejeicao de leitura regressiva sem reset, JSON invalido como `400`, rejeicao de device fora de escopo, `STOCK_MISSING`, `POST /api/stock` criando/incrementando com `ON CONFLICT`, e contrato de `FOR UPDATE`.
 - Cobre bloqueio de transferencia de cooperativa para usuarios com vendas, medicoes ou contribuicoes associadas.
 - Cobre matriz de fixtures UAT gerenciais, documentos sinteticos, jornadas -> dados, estados de venda, vendas coletivas persistidas e guard contra seed em banco de producao/remoto por padrao.
 
@@ -200,6 +201,10 @@ Validacao descartavel S1-03 observada em Postgres local `dms_uat` na porta `5543
 Runbook operacional S1-04: para helpers de estoque, rodar `npm run prisma:validate`, `npx prisma generate`, `npm run typecheck`, `npm test`, `npm run quality` e, quando houver Postgres local, um smoke descartavel aplicando migrations e exercitando `addToStock`, `recordSale` e `adjustStock` contra banco real.
 
 Validacao descartavel S1-04 observada em Postgres local na porta `56554`: `npx prisma migrate deploy` aplicou baseline, S1-01, S1-02 e S1-03; smoke Prisma dos helpers retornou `added=10.00`, `soldCurrent=6.00`, `reservedCurrent=4.00`, `releasedCurrent=5.00`, `finalCurrent=5.00`, `finalSold=4.00`, `insufficient=true`, `overRelease=true`; smoke de `ON CONFLICT` em `addToStock` retornou `count=1`, `collected=3.75`, `current=3.75`.
+
+Runbook operacional S1-05: para APIs de pesagem e estoque manual, rodar `npm run typecheck`, `npm test`, `npm run prisma:validate`, `npx prisma generate`, `npm run quality` e, quando houver Postgres local, smoke descartavel aplicando migrations e exercitando duas pesagens concorrentes no mesmo `material_bag_state` mais `addManualStock` criando linha ausente.
+
+Validacao descartavel S1-05 observada em Postgres temporario na porta `56555`: `npx prisma migrate deploy` aplicou baseline, S1-01, S1-02 e S1-03; duas chamadas concorrentes de `recordMaterialWeighing` retornaram deltas `["0.00","2.00"]`; leitura regressiva sem reset foi rejeitada (`regressiveRejected=true`) sem alterar estado; `Stock.currentStockKg=12.00`, `Stock.totalCollectedKg=12.00`, `material_bag_state.currentKg=6.00`, medicoes `["2.00","0.00"]`; `addManualStock` criou linha ausente com `currentStockKg=3.75`.
 
 ## Audit
 

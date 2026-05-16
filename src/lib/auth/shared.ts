@@ -65,6 +65,7 @@ export const RBAC_MATRIX: Record<RbacResource, ResourceRule> = {
   },
   stock: {
     read: { admin: ['global', 'cooperative'], manager: ['cooperative'], worker: ['self'] },
+    create: { admin: ['global', 'cooperative'], manager: ['cooperative'], worker: ['self'] },
     update: { admin: ['global', 'cooperative'], manager: ['cooperative'] },
     manage: { admin: ['global', 'cooperative'], manager: ['cooperative'] },
   },

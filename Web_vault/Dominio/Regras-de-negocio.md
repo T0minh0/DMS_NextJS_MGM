@@ -83,13 +83,29 @@ Novas implementacoes de estoque devem usar `Prisma.Decimal` desde a entrada de d
 - `addToStock`: entrada positiva com ate 2 casas decimais; incrementa coletado e disponivel.
 - `recordSale`: venda consolidada; executa update condicional atomico e falha sem alterar estoque quando nao ha saldo.
 - `adjustStock`: delta de reserva coletiva; delta positivo reserva, delta negativo libera sem permitir que `current_stock_kg` ultrapasse `total_collected_kg - total_sold_kg`.
-- `calculateBagStateDelta`: porta a regra Java de pesagem acumulada; delta coletado e `max(reportedCurrentKg - previousCurrentKg, 0)` e sacola cheia zera o estado.
+- `calculateBagStateDelta`: porta a regra Java de pesagem acumulada; delta coletado e `max(reportedCurrentKg - previousCurrentKg, 0)`, leitura precisa ser posterior ao `lastUpdated` do estado bloqueado e sacola cheia zera o estado.
+
+Pesagem:
+
+- `/api/insertMaterial` requer role `worker` e ignora tentativa de registrar coleta para outro worker.
+- Valida material, worker e dispositivo; worker e dispositivo precisam pertencer a cooperativa da sessao.
+- Bloqueia a linha `material_bag_state` com `FOR UPDATE` antes de calcular o delta, evitando dupla contagem em chamadas concorrentes.
+- Leitura acumulada menor que o estado atual sem `bagFull=true` e rejeitada com `422`, para impedir que o estado do saco recue e gere dupla contagem em leitura posterior.
+- `measuredAt` e obrigatorio e precisa ser posterior a `material_bag_state.last_updated`; leituras capturadas antes ou no mesmo instante da ultima leitura aceita sao rejeitadas com `422`, inclusive o caso de leitura antiga chegando depois de um reset `bagFull=true`.
+- Linha de `Stock` precisa existir para a cooperativa/material; ausencia retorna `422 STOCK_MISSING`.
+- Delta zero ainda gera medicao, mas nao incrementa estoque.
 
 Consulta:
 
 - `/api/stock` soma `currentStockKg` por nome de material.
 - Filtro `material_id` aceita id direto ou valor `group_{nome}`.
 - Se nao houver dados, retorna `{ noData: true, message }`.
+
+Adicao manual:
+
+- `POST /api/stock` requer `manager` ou `admin`.
+- Manager so atua na propria cooperativa; admin pode informar `cooperative_id`.
+- Usa upsert atomico de estoque por `(Cooperative, Material)` e cria linha quando ainda nao existe.
 
 Venda:
 

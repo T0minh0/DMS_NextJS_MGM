@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import {
   FaPlus,
@@ -17,7 +17,8 @@ import {
   FaBan,
 } from 'react-icons/fa';
 
-type SaleStatus = 'ACTIVE' | 'HISTORY' | 'CANCELLED';
+// Backend getSaleLifecycleStatus returns 'SOLD' (not 'HISTORY') — type must match
+type SaleStatus = 'ACTIVE' | 'SOLD' | 'CANCELLED';
 type LifecycleTab = 'ACTIVE' | 'HISTORY' | 'CANCELLED';
 
 interface Material {
@@ -61,13 +62,13 @@ interface SaleFormData {
 
 const STATUS_LABELS: Record<SaleStatus, string> = {
   ACTIVE: 'Ativa',
-  HISTORY: 'Concluída',
+  SOLD: 'Concluída',
   CANCELLED: 'Cancelada',
 };
 
 const STATUS_CLASSES: Record<SaleStatus, string> = {
   ACTIVE: 'bg-blue-100 text-blue-800',
-  HISTORY: 'bg-green-100 text-green-800',
+  SOLD: 'bg-green-100 text-green-800',
   CANCELLED: 'bg-red-100 text-red-800',
 };
 
@@ -110,6 +111,12 @@ export default function SalesPage() {
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [savingForm, setSavingForm] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Ref keeps activeTab current inside async handlers (avoids stale closure)
+  const activeTabRef = useRef(activeTab);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -249,7 +256,7 @@ export default function SalesPage() {
         return;
       }
 
-      await fetchSales(activeTab);
+      await fetchSales(activeTabRef.current);
       await fetchStock();
       resetForm();
     } catch {
@@ -272,7 +279,7 @@ export default function SalesPage() {
         });
         return;
       }
-      await fetchSales(activeTab);
+      await fetchSales(activeTabRef.current);
       await fetchStock();
     } catch {
       setActionError({ id: sale._id, message: 'Erro ao concluir venda' });
@@ -294,7 +301,7 @@ export default function SalesPage() {
         });
         return;
       }
-      await fetchSales(activeTab);
+      await fetchSales(activeTabRef.current);
     } catch {
       setActionError({ id: sale._id, message: 'Erro ao cancelar venda' });
     } finally {
@@ -308,7 +315,7 @@ export default function SalesPage() {
       material_id: sale.material_id,
       price_per_kg: sale['price/kg'],
       weight_sold: sale.weight_sold,
-      date: new Date(sale.date).toISOString().split('T')[0],
+      date: sale.date.split('T')[0],
       buyer: sale.Buyer,
     });
     setFormError(null);
@@ -370,7 +377,11 @@ export default function SalesPage() {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-  const formatDate = (s: string) => new Date(s).toLocaleDateString('pt-BR');
+  const formatDate = (s: string) => {
+    // Parse as UTC to avoid off-by-one day in UTC-3 (Brazil)
+    const [year, month, day] = s.split('T')[0].split('-');
+    return `${day}/${month}/${year}`;
+  };
 
   return (
     <Layout activePath="/sales">
@@ -554,7 +565,11 @@ export default function SalesPage() {
                               title="Cancelar"
                               className="text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
                             >
-                              <FaBan />
+                              {actionLoading === sale._id ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-500" />
+                              ) : (
+                                <FaBan />
+                              )}
                             </button>
                           </div>
                         ) : (
@@ -768,7 +783,7 @@ export default function SalesPage() {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-[#7a1c44]">Adicionar Comprador</h3>
                 <button
-                  onClick={() => setShowBuyerForm(false)}
+                  onClick={() => { setBuyerFormError(null); setShowBuyerForm(false); }}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   <FaTimes />
@@ -799,7 +814,7 @@ export default function SalesPage() {
                 </div>
                 <div className="flex justify-end space-x-4">
                   <button
-                    onClick={() => setShowBuyerForm(false)}
+                    onClick={() => { setBuyerFormError(null); setShowBuyerForm(false); }}
                     className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Cancelar

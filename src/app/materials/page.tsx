@@ -62,7 +62,7 @@ export default function MaterialsPage() {
       const data = await response.json();
 
       // Filter out groups and get only materials
-      const materialsOnly = data.filter((item: { material_id?: number; isGroup?: boolean }) => item.material_id && !item.isGroup);
+      const materialsOnly = data.filter((item: { material_id?: string; isGroup?: boolean }) => item.material_id && !item.isGroup);
       const uniqueGroups = Array.from(new Set(materialsOnly.map((m: Material) => m.group))) as string[];
 
       setMaterials(materialsOnly);

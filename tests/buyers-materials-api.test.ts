@@ -1,3 +1,7 @@
+// Static-analysis smoke checks — same pattern as sale-lifecycle.test.ts and observability.test.ts.
+// These verify structural invariants (BigInt-safe IDs, P2002 handling, RBAC calls) by reading
+// source files, not by invoking the handlers at runtime. Behavioral integration tests would
+// require a live DB; these checks are the established trade-off in this project.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -33,16 +37,19 @@ test('buyers canonical route exposes structured objects with _id and name', () =
   assert.match(source, /name:\s*b\.buyerName/);
 });
 
-test('buyers canonical route handles P2002 race condition on create', () => {
+test('buyers canonical route handles P2002 on the correct constraint (meta.target check)', () => {
   const source = readRoute('src/app/api/buyers/route.ts');
   assert.match(source, /P2002/);
   assert.match(source, /PrismaClientKnownRequestError/);
   assert.match(source, /BUYER_NAME_CONFLICT/);
+  assert.match(source, /meta\?\.target/);
+  assert.match(source, /buyer_name/);
 });
 
-test('sales/buyers legacy route handles P2002 and returns 409 on duplicate', () => {
+test('sales/buyers legacy route handles P2002 on the correct constraint and returns 409', () => {
   const source = readRoute('src/app/api/sales/buyers/route.ts');
   assert.match(source, /P2002/);
+  assert.match(source, /meta\?\.target/);
   assert.match(source, /status:\s*409/);
   assert.match(source, /BUYER_NAME_CONFLICT/);
 });

@@ -72,7 +72,11 @@ export async function POST(request: NextRequest) {
     try {
       await prisma.buyers.create({ data: { buyerName } });
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      const isNameConflict =
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002' &&
+        String(e.meta?.target ?? '').toLowerCase().includes('buyer_name');
+      if (isNameConflict) {
         return apiErrorResponse({
           message: 'Este comprador já existe na lista',
           code: 'BUYER_NAME_CONFLICT',

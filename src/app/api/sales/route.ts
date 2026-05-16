@@ -59,9 +59,12 @@ export async function GET(request: NextRequest) {
     } else if (statusFilter === 'HISTORY') {
       where.soldAt = { not: null };
       where.cancelledAt = null;
+    } else if (statusFilter === 'CANCELLED') {
+      where.soldAt = null;
+      where.cancelledAt = { not: null };
     } else if (statusFilter !== null && statusFilter !== undefined && statusFilter !== '') {
       return apiErrorResponse({
-        message: 'Status inválido. Use ACTIVE ou HISTORY',
+        message: 'Status inválido. Use ACTIVE, HISTORY ou CANCELLED',
         code: 'INVALID_STATUS_FILTER',
         status: 400,
         requestId: context.requestId,
@@ -281,16 +284,22 @@ export async function POST(request: NextRequest) {
 
     const sale = await prisma.$transaction(async (tx) => {
       let buyer = await tx.buyers.findFirst({
-        where: {
-          buyerName: {
-            equals: buyerName,
-            mode: 'insensitive',
-          },
-        },
+        where: { buyerName: { equals: buyerName, mode: 'insensitive' } },
       });
 
       if (!buyer) {
-        buyer = await tx.buyers.create({ data: { buyerName } });
+        try {
+          buyer = await tx.buyers.create({ data: { buyerName } });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+            buyer = await tx.buyers.findFirst({
+              where: { buyerName: { equals: buyerName, mode: 'insensitive' } },
+            });
+            if (!buyer) throw e;
+          } else {
+            throw e;
+          }
+        }
       }
 
       return tx.sales.create({

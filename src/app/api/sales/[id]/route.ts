@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import {
   authErrorResponse,
@@ -197,9 +198,26 @@ export async function PUT(
 
       let buyer = lockedSale.buyerRef;
       if (buyerName.toLowerCase() !== lockedSale.buyerRef.buyerName.toLowerCase()) {
-        buyer = (await tx.buyers.findFirst({
+        const existing = await tx.buyers.findFirst({
           where: { buyerName: { equals: buyerName, mode: 'insensitive' } },
-        })) || (await tx.buyers.create({ data: { buyerName } }));
+        });
+        if (existing) {
+          buyer = existing;
+        } else {
+          try {
+            buyer = await tx.buyers.create({ data: { buyerName } });
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+              const raced = await tx.buyers.findFirst({
+                where: { buyerName: { equals: buyerName, mode: 'insensitive' } },
+              });
+              if (!raced) throw e;
+              buyer = raced;
+            } else {
+              throw e;
+            }
+          }
+        }
       }
 
       await tx.sales.update({

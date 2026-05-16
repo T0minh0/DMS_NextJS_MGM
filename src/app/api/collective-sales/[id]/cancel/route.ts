@@ -6,8 +6,12 @@ import {
   requireScopedPermission,
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
-import { adjustStock } from '@/lib/stock/ledger';
+import { adjustStock, lockStockAggregateForUpdate } from '@/lib/stock/ledger';
 import { createLogContext, logInfo } from '@/lib/observability/logger';
+
+// Thrown inside $transaction to signal already-cancelled (causes rollback,
+// preventing any spurious stock adjustments on a second concurrent cancel).
+class AlreadyCancelledError extends Error {}
 
 export async function POST(
   request: NextRequest,
@@ -29,16 +33,7 @@ export async function POST(
 
     const sale = await prisma.collectiveSale.findUnique({
       where: { collectiveSaleId },
-      select: {
-        creatorCooperativeId: true,
-        soldAt: true,
-        cancelledAt: true,
-        materialId: true,
-        contributions: {
-          where: { status: 'ACCEPTED', contributedWeight: { not: null, gt: 0 } },
-          select: { cooperativeId: true, contributedWeight: true },
-        },
-      },
+      select: { creatorCooperativeId: true, soldAt: true, cancelledAt: true, materialId: true },
     });
 
     if (!sale) {
@@ -58,32 +53,52 @@ export async function POST(
     }
 
     const materialId = sale.materialId;
-    const contributions = sale.contributions;
 
     await prisma.$transaction(async (tx) => {
+      // Atomically claim the cancellation before touching any stock.
+      // If two concurrent callers race past the outer guard, only one
+      // will find cancelledAt=null here; the second gets count=0 and
+      // throws AlreadyCancelledError, rolling back without touching stock.
+      const claimed = await tx.collectiveSale.updateMany({
+        where: { collectiveSaleId, cancelledAt: null, soldAt: null },
+        data: { cancelledAt: new Date() },
+      });
+
+      if (claimed.count === 0) {
+        throw new AlreadyCancelledError();
+      }
+
+      const contributions = await tx.collectiveSaleContribution.findMany({
+        where: {
+          collectiveSaleId,
+          status: 'ACCEPTED',
+          contributedWeight: { not: null, gt: 0 },
+        },
+        select: { cooperativeId: true, contributedWeight: true },
+      });
+
       for (const c of contributions) {
+        await lockStockAggregateForUpdate(tx, c.cooperativeId, materialId);
         await adjustStock(tx, {
           cooperativeId: c.cooperativeId,
           materialId,
           deltaKg: c.contributedWeight!.negated(),
         });
       }
-
-      await tx.collectiveSale.update({
-        where: { collectiveSaleId },
-        data: { cancelledAt: new Date() },
-      });
     });
 
     logInfo('collective-sales.cancel.succeeded', context, {
       role: session.role,
       collectiveSaleId: collectiveSaleId.toString(),
       cooperativeId: session.cooperativeId,
-      stockReturned: contributions.length,
     });
 
     return NextResponse.json({ success: true, message: 'Venda coletiva cancelada com sucesso' });
   } catch (error) {
+    if (error instanceof AlreadyCancelledError) {
+      return NextResponse.json({ success: true, message: 'Venda coletiva já cancelada', status: 'CANCELLED' });
+    }
+
     const authResponse = authErrorResponse(error, context);
     if (authResponse) return authResponse;
 

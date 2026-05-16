@@ -6,7 +6,7 @@ import {
   requireScopedPermission,
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
-import { adjustStock } from '@/lib/stock/ledger';
+import { adjustStock, lockStockAggregateForUpdate } from '@/lib/stock/ledger';
 import { createLogContext, logInfo } from '@/lib/observability/logger';
 
 export async function POST(
@@ -46,25 +46,28 @@ export async function POST(
       return apiErrorResponse({ message: 'O criador não pode sair da venda coletiva — use o cancelamento', code: 'LEAVE_CREATOR_FORBIDDEN', status: 403, requestId: context.requestId });
     }
 
-    const contribution = await prisma.collectiveSaleContribution.findUnique({
-      where: { collectiveSaleId_cooperativeId: { collectiveSaleId, cooperativeId: coopId } },
-    });
-
-    if (!contribution) {
-      return apiErrorResponse({ message: 'Cooperativa não é participante desta venda coletiva', code: 'NOT_A_PARTICIPANT', status: 404, requestId: context.requestId });
-    }
-
-    if (contribution.status === 'LEFT') {
-      return NextResponse.json({ success: true, message: 'Cooperativa já saiu da venda coletiva', status: 'LEFT' });
-    }
-
-    if (contribution.status !== 'ACCEPTED') {
-      return apiErrorResponse({ message: 'Apenas participantes aceitos podem sair', code: 'CONTRIBUTION_NOT_ACCEPTED', status: 409, requestId: context.requestId });
-    }
-
     const materialId = sale.materialId;
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      // Lock stock first to prevent TOCTOU race with concurrent contribution PATCH
+      await lockStockAggregateForUpdate(tx, coopId, materialId);
+
+      const contribution = await tx.collectiveSaleContribution.findUnique({
+        where: { collectiveSaleId_cooperativeId: { collectiveSaleId, cooperativeId: coopId } },
+      });
+
+      if (!contribution) {
+        return apiErrorResponse({ message: 'Cooperativa não é participante desta venda coletiva', code: 'NOT_A_PARTICIPANT', status: 404, requestId: context.requestId });
+      }
+
+      if (contribution.status === 'LEFT') {
+        return { idempotent: true as const };
+      }
+
+      if (contribution.status !== 'ACCEPTED') {
+        return apiErrorResponse({ message: 'Apenas participantes aceitos podem sair', code: 'CONTRIBUTION_NOT_ACCEPTED', status: 409, requestId: context.requestId });
+      }
+
       if (contribution.contributedWeight != null && contribution.contributedWeight.greaterThan(0)) {
         await adjustStock(tx, {
           cooperativeId: coopId,
@@ -73,11 +76,17 @@ export async function POST(
         });
       }
 
-      await tx.collectiveSaleContribution.update({
+      return tx.collectiveSaleContribution.update({
         where: { collectiveSaleId_cooperativeId: { collectiveSaleId, cooperativeId: coopId } },
         data: { status: 'LEFT' },
       });
     });
+
+    if (result instanceof Response) return result;
+
+    if ('idempotent' in result) {
+      return NextResponse.json({ success: true, message: 'Cooperativa já saiu da venda coletiva', status: 'LEFT' });
+    }
 
     logInfo('collective-sales.leave.succeeded', context, {
       role: session.role,

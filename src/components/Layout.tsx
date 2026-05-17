@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isGamificationUiEnabled } from '@/lib/features/gamification';
 import {
-  FaBars,
   FaBell,
   FaBox,
   FaChartBar,
@@ -52,12 +51,12 @@ const navItems: Array<{
   roles?: UserRole[];
   enabled?: boolean;
 }> = [
-  { href: '/', icon: FaHome, label: 'Dashboard' },
-  { href: '/worker-productivity', icon: FaChartBar, label: 'Produtividade' },
-  { href: '/materials', icon: FaBox, label: 'Materiais' },
-  { href: '/manage-workers', icon: FaUsers, label: 'Usuários' },
-  { href: '/sales', icon: FaShoppingCart, label: 'Vendas' },
-  { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas' },
+  { href: '/', icon: FaHome, label: 'Visão geral', roles: MANAGER_NAV_ROLES },
+  { href: '/materials', icon: FaBox, label: 'Materiais e estoque', roles: MANAGER_NAV_ROLES },
+  { href: '/sales', icon: FaShoppingCart, label: 'Vendas', roles: MANAGER_NAV_ROLES },
+  { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas', roles: MANAGER_NAV_ROLES },
+  { href: '/manage-workers', icon: FaUsers, label: 'Equipe', roles: MANAGER_NAV_ROLES },
+  { href: '/worker-productivity', icon: FaChartBar, label: 'Produtividade', roles: MANAGER_NAV_ROLES },
   {
     href: '/gamification',
     icon: FaTrophy,
@@ -65,18 +64,16 @@ const navItems: Array<{
     roles: MANAGER_NAV_ROLES,
     enabled: gamificationUiEnabled,
   },
-  { href: '/notices', icon: FaBell, label: 'Avisos' },
-  { href: '/profile', icon: FaUser, label: 'Meu Perfil' },
+  { href: '/notices', icon: FaBell, label: 'Avisos', roles: MANAGER_NAV_ROLES },
+  { href: '/profile', icon: FaUser, label: 'Meu perfil', roles: MANAGER_NAV_ROLES },
 ];
 
 const navItemBaseClass =
   'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-foreground/88 hover:bg-surface-elevated hover:text-foreground focus-visible:outline-none';
 
 const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
-  const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const fabRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const userRole = user?.role ?? (user?.userType === 1 ? 'worker' : user ? 'manager' : null);
@@ -87,73 +84,31 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
   });
 
   useEffect(() => {
-    const persistUser = (nextUser: User) => {
-      setUser(nextUser);
-      localStorage.setItem('user', JSON.stringify(nextUser));
-    };
-
-    const userData = localStorage.getItem('user');
-
-    if (!userData) {
-      setLoading(false);
-      return;
-    }
-
-    let parsedUser: User;
-    try {
-      parsedUser = JSON.parse(userData);
-    } catch (error) {
-      console.error('Failed to parse user data:', error);
-      localStorage.removeItem('user');
-      setLoading(false);
-      return;
-    }
-
-    const fetchRealUserData = async () => {
+    const fetchSession = async () => {
       try {
-	        const response = await fetch(`/api/user?id=${parsedUser.id}`);
-
-	        if (response.ok) {
-	          const realUserData = await response.json();
-
-	          persistUser({
-	            ...parsedUser,
-	            full_name: realUserData.full_name || parsedUser.full_name || parsedUser.name || 'Usuario',
-	            name: realUserData.name || parsedUser.name,
-	            role: realUserData.role || parsedUser.role,
-	            cooperative_id: realUserData.cooperative_id,
-	            cooperative_name: realUserData.cooperative_name,
-	          });
-	        } else {
-	          persistUser({
-	            ...parsedUser,
-	            full_name: parsedUser.full_name || parsedUser.name || 'Usuario',
-	            notFound: true,
-	            cooperative_id: parsedUser.cooperative_id,
-	            cooperative_name: parsedUser.cooperative_name,
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching real user data:', error);
-
-	        persistUser({
-	          ...parsedUser,
-	          full_name: parsedUser.full_name || parsedUser.name || 'Usuario',
-	          notFound: true,
-	          cooperative_id: parsedUser.cooperative_id,
-	          cooperative_name: parsedUser.cooperative_name,
+        const response = await fetch('/api/auth/session', {
+          credentials: 'same-origin',
         });
+
+        if (!response.ok) {
+          localStorage.removeItem('user');
+          setUser(null);
+          return;
+        }
+
+        const sessionUser = await response.json() as User;
+        setUser(sessionUser);
+        localStorage.setItem('user', JSON.stringify(sessionUser));
+      } catch {
+        localStorage.removeItem('user');
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
 
-    void fetchRealUserData();
+    void fetchSession();
   }, []);
-
-  const toggleFabMenu = () => {
-    setFabMenuOpen((current) => !current);
-  };
 
   const handleLogout = async () => {
     try {
@@ -169,23 +124,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
         setUser(null);
         router.push('/login');
       }
-    } catch (error) {
-      console.error('Logout failed:', error);
+    } catch {
+      // Keep logout failures local; the next session fetch will clear invalid cookies.
     }
   };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (fabRef.current && !fabRef.current.contains(event.target as Node)) {
-        setFabMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   if (loading) {
     return (
@@ -259,63 +201,54 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
               </Link>
             )}
           </div>
+
+          {visibleNavItems.length > 0 ? (
+            <>
+              <div className="hidden flex-wrap gap-2 sm:flex">
+                {visibleNavItems.map((item) => {
+                  const isActive = activePath === item.href;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`${navItemBaseClass} border ${isActive ? 'border-primary/35 bg-primary/14 text-primary' : 'border-outline/70 bg-surface/70'}`}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="block sm:hidden">
+                <label
+                  htmlFor="mobileNavigation"
+                  className="mb-2 block text-xs font-semibold uppercase text-text-secondary"
+                >
+                  Navegação
+                </label>
+                <select
+                  id="mobileNavigation"
+                  value={activePath}
+                  onChange={(event) => router.push(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-outline bg-surface px-3 text-sm font-semibold text-foreground focus:border-primary focus:ring-0"
+                >
+                  {visibleNavItems.map((item) => (
+                    <option key={item.href} value={item.href}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : null}
         </div>
       </nav>
-
-      <div className="border-b border-outline/70 bg-background/95 px-4 py-3 sm:hidden">
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {visibleNavItems.map((item) => {
-            const isActive = activePath === item.href;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${isActive ? 'border-primary/35 bg-primary/14 text-primary' : 'border-outline/70 bg-surface text-foreground/88'}`}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 px-4 py-6 pb-28 sm:px-6 lg:px-8">
         <div className="w-full min-w-0">{children}</div>
       </main>
-
-      <div ref={fabRef} className="fixed bottom-6 right-6 z-50 hidden sm:block">
-        <button
-          onClick={toggleFabMenu}
-          className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/40 bg-primary text-background shadow-glow hover:scale-[1.03] hover:shadow-glow-hover"
-          aria-haspopup="true"
-          aria-expanded={fabMenuOpen}
-          aria-label={fabMenuOpen ? 'Fechar navegação rápida' : 'Abrir navegação rápida'}
-        >
-          <FaBars className="h-5 w-5" />
-        </button>
-
-        {fabMenuOpen ? (
-          <div className="surface-panel absolute bottom-16 right-0 mb-2 flex max-h-[min(65vh,28rem)] w-[min(18rem,calc(100vw-2rem))] flex-col gap-1 overflow-y-auto rounded-2xl p-2">
-            {visibleNavItems.map((item) => {
-              const isActive = activePath === item.href;
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`${navItemBaseClass} ${isActive ? 'border border-primary/35 bg-primary/14 text-primary' : 'border border-transparent'}`}
-                  onClick={() => setFabMenuOpen(false)}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
 
       <footer className="border-t border-outline/80 bg-surface/72">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-4 text-center text-xs text-text-secondary sm:px-6 lg:px-8 sm:flex-row sm:items-center sm:justify-between sm:text-left">

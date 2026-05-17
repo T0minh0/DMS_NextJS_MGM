@@ -8,6 +8,7 @@ import { getJwtSecret } from '../src/lib/auth/secret';
 import { getDebugRouteDisabledResponse } from '../src/lib/debug-routes';
 import { proxy } from '../src/proxy';
 import {
+  AUTH_COOKIE_NAME,
   AUTH_TOKEN_AUDIENCE,
   AUTH_TOKEN_ISSUER,
   RBAC_MATRIX,
@@ -120,6 +121,39 @@ test('proxy does not treat API paths with public file extensions as public asset
   assert.equal(body.message, 'Unauthorized');
   assert.equal(body.code, 'UNAUTHORIZED');
   assert.equal(typeof body.requestId, 'string');
+});
+
+test('proxy blocks worker direct access to every managerial page and clears web cookie', async () => {
+  const token = signAuthToken({
+    workerId: workerSession.workerId,
+    cooperativeId: workerSession.cooperativeId,
+    role: workerSession.role,
+    userType: workerSession.userType,
+    name: workerSession.name,
+  });
+  const managerPages = [
+    '/',
+    '/materials',
+    '/manage-workers',
+    '/worker-productivity',
+    '/sales',
+    '/collective-sales',
+    '/notices',
+    '/gamification',
+    '/profile',
+  ];
+
+  for (const pagePath of managerPages) {
+    const response = await proxy(new NextRequest(`http://localhost${pagePath}`, {
+      headers: {
+        cookie: `${AUTH_COOKIE_NAME}=${token}`,
+      },
+    }));
+
+    assert.equal(response.status, 307, pagePath);
+    assert.equal(response.headers.get('location'), 'http://localhost/login?reason=web-role-denied', pagePath);
+    assert.match(response.headers.get('set-cookie') ?? '', /auth_token=/, pagePath);
+  }
 });
 
 test('production runtime refuses JWT secret fallback', () => {

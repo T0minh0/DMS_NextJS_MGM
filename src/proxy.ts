@@ -6,6 +6,17 @@ import { createLogContext, logWarn } from '@/lib/observability/logger';
 
 const PUBLIC_AUTH_PATHS = ['/login', '/api/auth/login'];
 const PUBLIC_FILE_PATTERN = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json|woff2?)$/i;
+const MANAGER_PAGE_PATHS = [
+  '/',
+  '/materials',
+  '/manage-workers',
+  '/worker-productivity',
+  '/sales',
+  '/collective-sales',
+  '/notices',
+  '/gamification',
+  '/profile',
+];
 
 function clearAuthCookie(response: NextResponse) {
   response.cookies.delete(AUTH_COOKIE_NAME);
@@ -23,6 +34,12 @@ function isPublicPath(pathname: string) {
     pathname === '/favicon.ico' ||
     PUBLIC_FILE_PATTERN.test(pathname)
   );
+}
+
+function isManagerPagePath(pathname: string) {
+  return MANAGER_PAGE_PATHS.some((path) => (
+    pathname === path || (path !== '/' && pathname.startsWith(`${path}/`))
+  ));
 }
 
 export async function proxy(request: NextRequest) {
@@ -65,6 +82,14 @@ export async function proxy(request: NextRequest) {
     }
 
     return clearAuthCookie(NextResponse.redirect(new URL('/login', request.url)));
+  }
+
+  if (!isApiRoute && session.role === 'worker' && isManagerPagePath(pathname)) {
+    logWarn('auth.proxy.worker_page_denied', context, {
+      workerId: session.workerId,
+    });
+
+    return clearAuthCookie(NextResponse.redirect(new URL('/login?reason=web-role-denied', request.url)));
   }
 
   return NextResponse.next();

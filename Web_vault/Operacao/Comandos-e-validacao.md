@@ -172,7 +172,7 @@ Backup/cutover deve usar URL de ferramentas PostgreSQL sem `?schema=public`:
 ```bash
 export PG_TOOLS_URL='postgresql://app_user:secret@db-host:5432/dms'
 pg_dump "$PG_TOOLS_URL" --schema=public --format=custom --file backup-before-dms-portability.dump
-pg_restore --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-dms-portability.dump
+pg_restore --single-transaction --exit-on-error --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-dms-portability.dump
 ```
 
 Smoke minimo apos migration:
@@ -205,6 +205,42 @@ Validacao descartavel S1-04 observada em Postgres local na porta `56554`: `npx p
 Runbook operacional S1-05: para APIs de pesagem e estoque manual, rodar `npm run typecheck`, `npm test`, `npm run prisma:validate`, `npx prisma generate`, `npm run quality` e, quando houver Postgres local, smoke descartavel aplicando migrations e exercitando duas pesagens concorrentes no mesmo `material_bag_state` mais `addManualStock` criando linha ausente.
 
 Validacao descartavel S1-05 observada em Postgres temporario na porta `56555`: `npx prisma migrate deploy` aplicou baseline, S1-01, S1-02 e S1-03; duas chamadas concorrentes de `recordMaterialWeighing` retornaram deltas `["0.00","2.00"]`; leitura regressiva sem reset foi rejeitada (`regressiveRejected=true`) sem alterar estado; `Stock.currentStockKg=12.00`, `Stock.totalCollectedKg=12.00`, `material_bag_state.currentKg=6.00`, medicoes `["2.00","0.00"]`; `addManualStock` criou linha ausente com `currentStockKg=3.75`.
+
+## Runbook final S5-04
+
+Documento canonico: [[Operacao/Runbook-final-migracao-e-handoff]].
+
+Preflight minimo antes de cutover:
+
+```bash
+npm run quality
+npm audit --audit-level=high --json
+npm audit --omit=dev --audit-level=high --json
+npx --yes @google/design.md lint .tony/design.md
+npx tsx --test tests/deprecation-parity-s507.test.ts tests/security-performance-concurrency-s503.test.ts tests/uat-s502-evidence.test.ts
+```
+
+Dry-run de banco e UAT:
+
+```bash
+npx prisma migrate deploy
+npx prisma migrate status
+npm run prisma:validate
+npm run db:seed:uat
+npm run dev -- --port 3106
+NODE_PATH=/tmp/codex-playwright-s505/node_modules DMS_UAT_BASE_URL=http://localhost:3106 node scripts/run-s5-02-uat.mjs
+```
+
+O UAT S5-02 usa mocks para as chamadas `**/api/**`; para cutover ele deve ser acompanhado por smoke nao mockado de login, sessao, estoque, materiais, vendas, coletivas e reports contra o ambiente staging/preview.
+
+Backup e restore check:
+
+```bash
+pg_dump "$PG_TOOLS_URL" --schema=public --format=custom --file backup-before-dms-cutover.dump
+pg_restore --single-transaction --exit-on-error --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-dms-cutover.dump
+```
+
+Stop conditions centrais: quality/audit/design falhando, drift em `npx prisma migrate status`, restore check falhando, UAT S5-02 nao reproduzivel, smoke nao mockado falhando ou integracao externa ainda dependente de rota Java retirada.
 
 ## Audit
 

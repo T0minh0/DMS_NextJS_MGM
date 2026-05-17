@@ -91,12 +91,14 @@ Flags definidas em `src/lib/jobs/config.ts`:
 
 | Flag | Env | Default | Libera |
 | --- | --- | --- | --- |
-| `collectiveSales` | `DMS_FEATURE_COLLECTIVE_SALES` | `false` | APIs/UI/jobs de venda coletiva |
-| `gamification` | `DMS_FEATURE_GAMIFICATION` | `false` | multipliers, achievements, levels e leaderboard |
-| `notices` | `DMS_FEATURE_NOTICES` | `false` | mural de avisos |
-| `reports` | `DMS_FEATURE_REPORTS` | `false` | reports JSON/PDF novos |
+| `collectiveSales` | `DMS_FEATURE_COLLECTIVE_SALES` | `false` | Flag de migracao/job runtime; nao bloqueia sozinha todas as rotas/UI coletivas atuais |
+| `gamification` | `DMS_FEATURE_GAMIFICATION` | `false` | Jobs/runtime de gamificacao; UI publica usa `NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION*` |
+| `notices` | `DMS_FEATURE_NOTICES` | `false` | Flag de migracao/job runtime; `/notices` atual depende de RBAC/deploy controlado |
+| `reports` | `DMS_FEATURE_REPORTS` | `false` | Flag de migracao/job runtime; reports atuais precisam de smoke real |
 
 Valores aceitos: `true/false`, `1/0`, `on/off`, `yes/no`, `enabled/disabled`.
+
+Nota S5-04: estas envs existem no runtime de jobs/configuracao e nao devem ser tratadas como kill switches universais. Qualquer release que precise ocultar uma superficie deve confirmar o gate no codigo, usar flag UI especifica quando existir, controlar trafego/deploy ou implementar um bloqueio explicito com teste.
 
 `DMS_JOB_RUNNER` aceita:
 

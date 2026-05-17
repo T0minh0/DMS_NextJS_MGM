@@ -28,7 +28,7 @@ Decisao de performance: a serializacao por venda coletiva reduz paralelismo dent
 | Concorrencia de estoque | `src/lib/stock/ledger.ts`, vendas normais, pesagem, coletivas | `FOR UPDATE`, updates condicionais, `tests/stock-ledger.test.ts`, `tests/material-stock-api.test.ts`, `tests/sale-lifecycle.test.ts`, `tests/security-performance-concurrency-s503.test.ts` | Mitigacao S5-03 fecha as corridas coletivas conhecidas; helpers atomicos continuam canonicos. |
 | Performance operacional | Build, testes, rotas auditadas, locks | `npm run quality`, testes dirigidos S5-03 | Sem degradacao de contrato esperada; lock por venda coletiva e tradeoff deliberado. |
 | Jobs/async | Random multiplier, achievements, leaderboard snapshots | `tests/jobs-runtime.test.ts`, `Web_vault/Operacao/Jobs-e-feature-flags.md` | Idempotencia e feature flags preservadas; sem mudanca nesta task. |
-| Deprecacao Java | Checklist final do legado | `Web_vault/Operacao/Deprecacao-network-management-system.md` | S5-03 remove o blocker de security/performance/concurrency; S5-04 ainda bloqueia desligamento definitivo. |
+| Deprecacao Java | Checklist final do legado | `Web_vault/Operacao/Deprecacao-network-management-system.md`, `Web_vault/Operacao/Runbook-final-migracao-e-handoff.md` | S5-03 remove o blocker de security/performance/concurrency; S5-04 define cutover, rollback e handoff. |
 
 ## Riscos residuais aceitos
 

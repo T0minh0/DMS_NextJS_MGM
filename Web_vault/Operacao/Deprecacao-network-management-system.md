@@ -13,14 +13,14 @@ Repositorios:
 
 O `DMS_NextJS_MGM` e o alvo canonico para operacao. O `network_management_system` deve ser tratado como referencia historica e congelado, nao como fonte ativa de novas alteracoes.
 
-Status de deprecacao: **GO condicional para freeze operacional, NO-GO para desligamento definitivo ate S5-04**.
+Status de deprecacao: **GO para handoff e cutover supervisionado pelo runbook S5-04; NO-GO para apagar historico Java**.
 
 Motivo:
 
 - S5-02 ja validou UAT integrado, regressao visual e contratos RBAC/report por `scripts/run-s5-02-uat.mjs`.
 - S5-07 fecha a matriz de paridade funcional e a checklist de deprecacao.
 - S5-03 revisa seguranca, performance e concorrencia e mitiga a corrida de lifecycle/estoque em vendas coletivas.
-- S5-04 ainda precisa consolidar runbook final de migracao, operacao e handoff.
+- S5-04 consolida o runbook final de migracao, operacao, rollback e handoff em [[Operacao/Runbook-final-migracao-e-handoff]].
 
 Regra operacional: nao apagar, arquivar ou reescrever o repo Java nesta task. A acao segura agora e congelar writes e documentar o caminho de desligamento.
 
@@ -34,6 +34,7 @@ Regra operacional: nao apagar, arquivar ou reescrever o repo Java nesta task. A 
 | Schema e migrations Next | `prisma/schema.prisma`, `prisma/migrations/*` |
 | Rotas Next | `src/app/api/**/route.ts` |
 | Jornadas browser | `Web_vault/Operacao/UAT-S5-02.md`, `output/playwright/s5-02/s5-02-uat-evidence.json` |
+| Runbook final | `Web_vault/Operacao/Runbook-final-migracao-e-handoff.md` |
 | Contratos automatizados | `tests/**/*.test.ts`, especialmente auth/RBAC, estoque, vendas, coletivas, reports, notices, gamificacao e UAT |
 
 ## Matriz de paridade final
@@ -49,8 +50,8 @@ Regra operacional: nao apagar, arquivar ou reescrever o repo Java nesta task. A 
 | Completion coletiva existente no Java | Portado/adaptado | Java: `PATCH /api/collective-sale/{saleId}/complete`; Next: `POST /api/collective-sales/[id]/complete`, `tests/collective-sales-s303-api.test.ts` | Usar contrato Next plural. Ele preserva a conclusao coletiva e explicita resposta, idempotencia, locks de estoque e `revenue_share`. |
 | Reports JSON/PDF | Portado | `src/app/api/reports/sales/**`, `src/app/api/reports/pdf/**`, `src/lib/reports/pdf.tsx`, `tests/reports-sales-s304-api.test.ts`, `tests/reports-sales-s305-api.test.ts` | Usar Next. PDF deve manter `application/pdf`, `%PDF` e `Cache-Control: no-store`. |
 | Notices | Portado com sanitizacao server-side | `src/app/api/notices/**`, `src/app/notices/page.tsx`, `src/lib/notices/sanitize.ts`, `tests/notices-s401-api.test.ts`, `tests/notices-s402-ui.test.ts` | Usar Next. Conteudo HTML limitado e filtrado; escopo global/cooperativa mantido. |
-| Multipliers e random multiplier | Portado | `src/app/api/multipliers/**`, `src/app/api/jobs/random-multiplier/route.ts`, `tests/multipliers.test.ts`, `tests/jobs-runtime.test.ts` | Usar Next atras de `DMS_FEATURE_GAMIFICATION` e job secret. |
-| Achievements, levels e leaderboard | Portado | `src/app/api/achievements/**`, `src/app/api/levels/**`, `src/app/api/leaderboard/**`, `src/app/api/jobs/achievement-evaluation/route.ts`, `src/app/api/jobs/leaderboard-snapshot-*`, `tests/achievements-s403-api.test.ts`, `tests/levels-s404-api.test.ts`, `tests/leaderboard-s405-api.test.ts`, `tests/gamification-s406-ui.test.ts` | Usar Next atras de feature flag; jobs externos curtos conforme ADR-0004. |
+| Multipliers e random multiplier | Portado | `src/app/api/multipliers/**`, `src/app/api/jobs/random-multiplier/route.ts`, `tests/multipliers.test.ts`, `tests/jobs-runtime.test.ts` | Usar Next com auth/RBAC; jobs usam `DMS_FEATURE_GAMIFICATION` e job secret. A flag nao e kill switch global das rotas. |
+| Achievements, levels e leaderboard | Portado | `src/app/api/achievements/**`, `src/app/api/levels/**`, `src/app/api/leaderboard/**`, `src/app/api/jobs/achievement-evaluation/route.ts`, `src/app/api/jobs/leaderboard-snapshot-*`, `tests/achievements-s403-api.test.ts`, `tests/levels-s404-api.test.ts`, `tests/leaderboard-s405-api.test.ts`, `tests/gamification-s406-ui.test.ts` | Usar Next com auth/RBAC; UI publica segue `NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION*` e jobs externos seguem ADR-0004. |
 | Browser routes Java `/frontend`, `/normal-sale`, `/collective-sale` | Substituido | `/`, `/sales`, `/collective-sales`, `/materials`, `/manage-workers`, `/worker-productivity`, `/profile`, `/notices`, `/gamification`, S5-02 screenshots | Usar App Router Next; nenhuma rota Thymeleaf deve ser mantida como destino de usuario. |
 | Banco e migrations | Portado/aditivo | `prisma/migrations/00000000000000_baseline`, S1-01, S1-02, S1-03; `Web_vault/ADR/ADR-0001-*` | Usar Prisma Migrate. Nao criar dual-write nem renomear tabelas legadas nesta reforma. |
 | Observabilidade e debug | Portado com guard | `src/lib/observability/logger.ts`, `src/lib/debug-routes.ts`, `tests/observability.test.ts` | Debug em producao permanece bloqueado salvo `DMS_DEBUG_ENDPOINTS_ENABLED=true` e aprovacao operacional. |
@@ -104,7 +105,7 @@ Antes do freeze, qualquer cliente externo do legado deve ser reconciliado contra
 | `POST /api/notices` | manter em `POST /api/notices` | Sanitiza titulo/conteudo. |
 | `PUT /api/notices/{noticeId}` | substituir por `PATCH /api/notices/[id]` | Metodo Next aceita update parcial. |
 | `DELETE /api/notices/{noticeId}` | manter em `DELETE /api/notices/[id]` | Escopo de escrita preservado. |
-| `POST /api/multipliers` | manter em `POST /api/multipliers` | Atras de feature flag quando aplicavel. |
+| `POST /api/multipliers` | manter em `POST /api/multipliers` | Protegido por auth/RBAC; rollout de jobs/visibilidade segue flags documentadas quando aplicavel. |
 | `GET /api/multipliers` | manter em `GET /api/multipliers` | Default `1.0` quando ausente. |
 | `GET /api/multipliers/single` | manter em `GET /api/multipliers/single` | Busca por cooperativa/material. |
 | `GET /api/achievements` | manter em `GET /api/achievements` | XP efetivo com override por cooperativa. |
@@ -127,11 +128,11 @@ Antes do freeze, qualquer cliente externo do legado deve ser reconciliado contra
 | Java possuia frontend Thymeleaf/static tester | Substituido por telas Next versionadas e UAT Playwright. |
 | Java continha secrets/config em `application.properties` | Next exige env, guards de segredo e sweep S5-03 registrado em [[Operacao/Revisao-S5-03-seguranca-performance-concorrencia]]. |
 | Nomes fisicos mistos no banco | Aceito pela ADR-0001 para evitar migracao destrutiva; limpeza de casing e epic futuro. |
-| S5-02 usou API mockada no browser | Aceito para regressao UI; contratos backend reais foram rodados por testes. Banco real de cutover ainda exige S5-04. |
+| S5-02 usou API mockada no browser | Aceito para regressao UI; contratos backend reais foram rodados por testes. Banco real de cutover deve seguir [[Operacao/Runbook-final-migracao-e-handoff]]. |
 
 ## Checklist de freeze do legado
 
-| Item | Status S5-07 | Evidencia/acao |
+| Item | Status atual | Evidencia/acao |
 | --- | --- | --- |
 | Branch Next da task criada | Feito | `codex/86e1c9ezk-s5-07-deprecation-parity` |
 | Repo Java mantido somente leitura | Feito | Nenhuma edicao deve ser feita em `../network_management_system` |
@@ -139,12 +140,12 @@ Antes do freeze, qualquer cliente externo do legado deve ser reconciliado contra
 | Rotas coletivas Next documentadas como canonicas | Feito | `Web_vault/API/Vendas-e-estoque.md`, `Web_vault/API/Rotas.md` |
 | UAT integrado disponivel | Feito | `Web_vault/Operacao/UAT-S5-02.md` |
 | Security/performance/concurrency sweep | Feito | [[Operacao/Revisao-S5-03-seguranca-performance-concorrencia]] e `tests/security-performance-concurrency-s503.test.ts` |
-| Runbook final de operacao/cutover | Pendente | S5-04 e blocker para handoff final |
-| Status ClickUp final desta task | Pendente ate QA | So mudar para `Completo e aprovado` apos peer review, QA PASS, commit local e releitura do ClickUp |
+| Runbook final de operacao/cutover | Feito | [[Operacao/Runbook-final-migracao-e-handoff]] |
+| Status ClickUp final S5-04 | Fonte externa | Confirmar no tracker; o vault documenta gates e evidencias, nao substitui o estado final relido no ClickUp |
 
 ## Checklist de desligamento futuro
 
-Executar apenas depois de S5-03 e S5-04:
+Executar seguindo [[Operacao/Runbook-final-migracao-e-handoff]]:
 
 1. Confirmar que `npm run quality` passa no branch de release.
 2. Confirmar `npx tsx --test tests/deprecation-parity-s507.test.ts` passa.
@@ -162,7 +163,7 @@ npm run db:seed:uat
 
 ```bash
 pg_dump "$PG_TOOLS_URL" --schema=public --format=custom --file backup-before-java-deprecation.dump
-pg_restore --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-java-deprecation.dump
+pg_restore --single-transaction --exit-on-error --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-java-deprecation.dump
 ```
 
 7. Rodar UAT integrado:
@@ -183,7 +184,7 @@ Regra Tony: nao executar `git push` durante este loop.
 Nao concluir deprecacao definitiva se qualquer item abaixo ocorrer:
 
 - Revisao de seguranca/performance/concorrencia encontrar vulnerabilidade, degradacao ou risco sem mitigacao.
-- S5-04 nao tiver runbook aprovado para cutover, rollback e suporte.
+- Runbook S5-04 nao tiver QA aprovado, commit local e status ClickUp final confirmado.
 - `npm run quality` falhar.
 - S5-02 UAT nao puder ser reproduzido em staging ou equivalente.
 - `npx prisma migrate status` indicar drift ou migrations pendentes nao explicadas.

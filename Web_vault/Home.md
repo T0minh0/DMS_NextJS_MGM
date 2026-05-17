@@ -28,6 +28,7 @@ Vault operacional do projeto DMS Web. Esta documentacao reflete o codigo observa
 - [[Operacao/Qualidade-e-riscos]]: riscos tecnicos observados.
 - [[Operacao/Revisao-S5-03-seguranca-performance-concorrencia]]: sweep final de seguranca, performance e concorrencia.
 - [[Operacao/Deprecacao-network-management-system]]: matriz final de paridade e checklist para congelar/deprecar o repo Java legado.
+- [[Operacao/Runbook-final-migracao-e-handoff]]: cutover, backup, migrations, UAT, rollback e handoff final da migracao.
 - [[Planejamento/Tony]]: configuracao ClickUp, agentes e runtime.
 - [[Planejamento/Jornadas-gerenciais-IA]]: papeis de produto, jornadas gerenciais, IA alvo e evidencias browser para UI.
 - [[Planejamento/Matriz-fixtures-UAT]]: fixtures sinteticos por papel, jornada, material, venda e negativos cross-coop.

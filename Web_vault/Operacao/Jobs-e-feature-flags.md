@@ -9,10 +9,10 @@ Referencia: [[ADR/ADR-0004-job-runner-cron-feature-flags]].
 | `DMS_JOB_RUNNER` | `disabled` | `railway-cron`, `http-cron`, `manual` ou `disabled` |
 | `DMS_JOB_SECRET` | ausente | Segredo bearer para endpoints internos de job |
 | `CRON_SECRET` | ausente | Fallback compativel com Vercel Cron |
-| `DMS_FEATURE_COLLECTIVE_SALES` | `false` | Liga vendas coletivas |
-| `DMS_FEATURE_GAMIFICATION` | `false` | Liga multipliers, achievements, levels e leaderboard |
-| `DMS_FEATURE_NOTICES` | `false` | Liga mural de avisos |
-| `DMS_FEATURE_REPORTS` | `false` | Liga reports novos |
+| `DMS_FEATURE_COLLECTIVE_SALES` | `false` | Flag de migracao lida por `src/lib/jobs/config.ts`; nao e kill switch global de rotas/UI coletivas atuais |
+| `DMS_FEATURE_GAMIFICATION` | `false` | Liga runtime/jobs de gamificacao; UI usa tambem `NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION*` |
+| `DMS_FEATURE_NOTICES` | `false` | Flag de migracao lida por `src/lib/jobs/config.ts`; nao substitui RBAC nem deploy controlado de `/notices` |
+| `DMS_FEATURE_REPORTS` | `false` | Flag de migracao lida por `src/lib/jobs/config.ts`; reports atuais devem ser validados por smoke real |
 
 Em producao, `DMS_JOB_SECRET` ou `CRON_SECRET` precisa ter 32+ caracteres quando endpoints ou jobs internos forem ativados.
 
@@ -75,3 +75,5 @@ Testes atuais cobrem:
 - rejeicao de segredo fraco em producao;
 - bearer token de job;
 - reexecucao idempotente por periodo/cooperativa.
+
+Observacao operacional: estas flags nao bloqueiam automaticamente todas as rotas de cada dominio. Antes de usar uma flag como controle de rollout, confirmar no codigo se a superficie especifica consulta a flag; caso contrario, usar controle de trafego/deploy ou implementar gate explicito com teste.

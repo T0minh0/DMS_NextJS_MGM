@@ -100,7 +100,7 @@ pg_dump "$PG_TOOLS_URL" --schema=public --format=custom --file backup-before-dms
 
 ```bash
 createdb "$RESTORE_CHECK_DB"
-pg_restore --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-dms-portability.dump
+pg_restore --single-transaction --exit-on-error --dbname="$RESTORE_CHECK_URL" --clean --if-exists backup-before-dms-portability.dump
 ```
 
 4. Executar `npx prisma migrate status` no ambiente alvo.

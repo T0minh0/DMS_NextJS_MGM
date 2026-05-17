@@ -131,8 +131,8 @@ test('S5-07 deprecation checklist documents go/no-go gates and evidence commands
   const doc = readSource(DEPRECATION_DOC);
 
   assert.match(doc, /Task ClickUp: `86e1c9ezk`/);
-  assert.match(doc, /GO condicional para freeze operacional/);
-  assert.match(doc, /NO-GO para desligamento definitivo ate S5-04/);
+  assert.match(doc, /GO para handoff e cutover supervisionado pelo runbook S5-04/);
+  assert.match(doc, /Runbook-final-migracao-e-handoff/);
   assert.match(doc, /Revisao-S5-03-seguranca-performance-concorrencia/);
   assert.match(doc, /network_management_system/);
   assert.match(doc, /DMS_NextJS_MGM/);

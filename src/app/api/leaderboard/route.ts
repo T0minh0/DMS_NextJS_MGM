@@ -6,6 +6,7 @@ import {
   requireScopedPermission,
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
+import { isGamificationManagerView } from '@/lib/features/gamification';
 import { createLogContext } from '@/lib/observability/logger';
 import { getCurrentLeaderboard, LeaderboardDomainError } from '@/lib/leaderboard';
 
@@ -15,21 +16,23 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireAuth();
     const { searchParams } = new URL(request.url);
+    const managerView = isGamificationManagerView(searchParams);
     const targetCooperativeId = determineTargetCooperative(
       session,
       searchParams.get('cooperativeId') ?? searchParams.get('cooperative_id') ?? undefined,
       { required: true },
     );
+    const readScope = managerView
+      ? 'cooperative'
+      : session.role === 'worker'
+        ? 'self'
+        : 'cooperative';
 
     requireScopedPermission(
       session,
       'gamification',
       'read',
-      session.role === 'admin'
-        ? 'cooperative'
-        : session.role === 'worker'
-          ? 'self'
-          : 'cooperative',
+      readScope,
     );
 
     const leaderboard = await getCurrentLeaderboard({

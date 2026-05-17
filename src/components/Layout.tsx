@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { isGamificationUiEnabled } from '@/lib/features/gamification';
 import {
   FaBars,
   FaBell,
@@ -14,6 +15,7 @@ import {
   FaShoppingCart,
   FaSignInAlt,
   FaSignOutAlt,
+  FaTrophy,
   FaUser,
   FaUsers,
 } from 'react-icons/fa';
@@ -36,13 +38,33 @@ interface User {
   cooperative_name?: string | null;
 }
 
-const navItems = [
+const gamificationUiEnabled = isGamificationUiEnabled({
+  NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION_UI: process.env.NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION_UI,
+  NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION: process.env.NEXT_PUBLIC_DMS_FEATURE_GAMIFICATION,
+});
+
+const MANAGER_NAV_ROLES: UserRole[] = ['admin', 'manager'];
+
+const navItems: Array<{
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  roles?: UserRole[];
+  enabled?: boolean;
+}> = [
   { href: '/', icon: FaHome, label: 'Dashboard' },
   { href: '/worker-productivity', icon: FaChartBar, label: 'Produtividade' },
   { href: '/materials', icon: FaBox, label: 'Materiais' },
   { href: '/manage-workers', icon: FaUsers, label: 'Usuários' },
   { href: '/sales', icon: FaShoppingCart, label: 'Vendas' },
   { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas' },
+  {
+    href: '/gamification',
+    icon: FaTrophy,
+    label: 'Gamificação',
+    roles: MANAGER_NAV_ROLES,
+    enabled: gamificationUiEnabled,
+  },
   { href: '/notices', icon: FaBell, label: 'Avisos' },
   { href: '/profile', icon: FaUser, label: 'Meu Perfil' },
 ];
@@ -56,6 +78,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
   const [loading, setLoading] = useState(true);
   const fabRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  const userRole = user?.role ?? (user?.userType === 1 ? 'worker' : user ? 'manager' : null);
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.enabled === false) return false;
+    if (!item.roles) return true;
+    return Boolean(userRole && item.roles.includes(userRole));
+  });
 
   useEffect(() => {
     const persistUser = (nextUser: User) => {
@@ -235,7 +264,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
 
       <div className="border-b border-outline/70 bg-background/95 px-4 py-3 sm:hidden">
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = activePath === item.href;
 
             return (
@@ -269,7 +298,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
 
         {fabMenuOpen ? (
           <div className="surface-panel absolute bottom-16 right-0 mb-2 flex max-h-[min(65vh,28rem)] w-[min(18rem,calc(100vw-2rem))] flex-col gap-1 overflow-y-auto rounded-2xl p-2">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = activePath === item.href;
 
               return (

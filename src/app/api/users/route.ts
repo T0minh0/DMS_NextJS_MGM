@@ -12,6 +12,8 @@ import { maskCpf, maskPis, maskRg } from '@/lib/privacy/pii';
 export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
+    const { searchParams } = new URL(request.url);
+    const gamificationView = searchParams.get('view') === 'gamification';
     const targetCooperativeId = determineTargetCooperative(session);
     const workers = await prisma.workers.findMany({
       where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
@@ -22,6 +24,22 @@ export async function GET(request: Request) {
     const formattedWorkers = workers
       .filter((worker) => mapUserType(worker.userType) === 1)
       .map((worker) => {
+        if (gamificationView) {
+          return {
+            _id: worker.workerId.toString(),
+            id: worker.workerId.toString(),
+            wastepicker_id: formatWorkerId(worker.workerId),
+            worker_id: Number(worker.workerId),
+            user_id: Number(worker.workerId),
+            user_type: 1,
+            full_name: worker.workerName,
+            worker_name: worker.workerName,
+            cooperative: worker.cooperative.toString(),
+            cooperative_id: worker.cooperative.toString(),
+            cooperative_name: worker.cooperativeRef?.cooperativeName ?? null,
+          };
+        }
+
         const cpf = maskCpf(decodeBytes(worker.cpf));
         const pis = decodeBytes(worker.pis);
         const rg = decodeBytes(worker.rg);

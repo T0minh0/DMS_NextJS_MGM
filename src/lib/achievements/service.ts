@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { decimalToJsonNumber, formatDecimal } from '@/lib/decimal';
+import { recalculateWorkerLevel } from '@/lib/levels';
 
 export const ACHIEVEMENT_TIME_ZONE = 'America/Sao_Paulo';
 
@@ -601,16 +602,29 @@ export async function evaluateAchievementsForCooperative({
   ]);
 
   let updatedProgressCount = 0;
+  let recalculatedLevelCount = 0;
   for (const worker of workers) {
-    updatedProgressCount += await prisma.$transaction((tx) =>
-      evaluateWorkerAchievements(tx, {
+    const result = await prisma.$transaction(async (tx) => {
+      const workerProgressCount = await evaluateWorkerAchievements(tx, {
         workerId: worker.workerId,
         cooperativeId,
         yearMonth: normalizedYearMonth,
         definitions,
         now,
-      }),
-    );
+      });
+
+      await recalculateWorkerLevel({
+        workerId: worker.workerId,
+        cooperativeId,
+        now,
+        db: tx,
+      });
+
+      return { workerProgressCount };
+    });
+
+    updatedProgressCount += result.workerProgressCount;
+    recalculatedLevelCount += 1;
   }
 
   return {
@@ -618,5 +632,6 @@ export async function evaluateAchievementsForCooperative({
     yearMonth: normalizedYearMonth,
     evaluatedWorkers: workers.length,
     updatedProgressCount,
+    recalculatedLevelCount,
   };
 }

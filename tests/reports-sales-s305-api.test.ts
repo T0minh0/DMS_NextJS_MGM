@@ -125,10 +125,10 @@ test('collective PDF route requires manager/admin with sales.read scope', () => 
   assert.match(source, /'sales',\s*'read'/);
 });
 
-test('collective PDF route hides sale from managers not creator or participant', () => {
+test('collective PDF route hides sale from managers not creator or accepted participant', () => {
   const source = readRoute(COLLECTIVE);
-  assert.match(source, /isCreator/);
-  assert.match(source, /isParticipant/);
+  assert.match(source, /canReadFullCollectiveSaleReport/);
+  assert.doesNotMatch(source, /status\s*===\s*['"]INVITED['"]/);
   assert.match(source, /COLLECTIVE_SALE_NOT_FOUND/);
 });
 
@@ -179,8 +179,8 @@ test('collective PDF route includes ACTIVE, SOLD, CANCELLED via computeStatus', 
 test('collective PDF route allows admin to bypass coop filter', () => {
   const source = readRoute(COLLECTIVE);
   assert.match(source, /isAdmin/);
-  const adminIdx = source.indexOf('isAdmin');
-  const participantIdx = source.indexOf('isParticipant');
+  const adminIdx = source.indexOf('const isAdmin');
+  const participantIdx = source.indexOf('if (!canReadFullCollectiveSaleReport');
   assert.ok(adminIdx < participantIdx, 'isAdmin check must precede participant scoping');
 });
 

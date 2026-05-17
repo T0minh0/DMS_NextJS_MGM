@@ -9,6 +9,7 @@ import {
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToJsonNumber } from '@/lib/decimal';
 import { createLogContext } from '@/lib/observability/logger';
+import { canReadFullCollectiveSaleReport } from '@/lib/reports/collective-access';
 
 const INCLUDE_FULL = {
   buyer: { select: { buyerName: true } },
@@ -56,15 +57,13 @@ export async function GET(
       return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
     }
 
-    // Manager scope: must be creator OR an accepted/invited participant.
-    if (!isAdmin) {
-      const isCreator = sale.creatorCooperativeId === coopId;
-      const isParticipant = sale.contributions.some(
-        (c) => c.cooperativeId === coopId && (c.status === 'ACCEPTED' || c.status === 'INVITED'),
-      );
-      if (!isCreator && !isParticipant) {
-        return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
-      }
+    if (!canReadFullCollectiveSaleReport({
+      isAdmin,
+      viewerCooperativeId: coopId,
+      creatorCooperativeId: sale.creatorCooperativeId,
+      contributions: sale.contributions,
+    })) {
+      return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
     }
 
     const myContribution = isAdmin

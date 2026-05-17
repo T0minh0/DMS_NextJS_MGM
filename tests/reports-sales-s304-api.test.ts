@@ -1,9 +1,10 @@
-// Static-analysis smoke checks for S3-04 sales report routes.
+// S3-04 sales report route checks.
 // Verifies RBAC, data fields, scoping, and contract compatibility.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { canReadFullCollectiveSaleReport } from '../src/lib/reports/collective-access';
 
 function readRoute(routePath: string) {
   return readFileSync(path.resolve(routePath), 'utf8');
@@ -85,10 +86,10 @@ test('collective report requires manager/admin with sales.read scope', () => {
   assert.match(source, /'sales',\s*'read'/);
 });
 
-test('collective report hides sale from managers not creator or participant', () => {
+test('collective report hides sale from managers not creator or accepted participant', () => {
   const source = readRoute(COLLECTIVE);
-  assert.match(source, /isCreator/);
-  assert.match(source, /isParticipant/);
+  assert.match(source, /canReadFullCollectiveSaleReport/);
+  assert.doesNotMatch(source, /status\s*===\s*['"]INVITED['"]/);
   assert.match(source, /COLLECTIVE_SALE_NOT_FOUND/);
 });
 
@@ -143,7 +144,63 @@ test('collective report allows admin to see any sale without coop filter', () =>
   const source = readRoute(COLLECTIVE);
   assert.match(source, /isAdmin/);
   // admin path skips the isCreator/isParticipant check
-  const adminIdx = source.indexOf('isAdmin');
-  const participantIdx = source.indexOf('isParticipant');
+  const adminIdx = source.indexOf('const isAdmin');
+  const participantIdx = source.indexOf('if (!canReadFullCollectiveSaleReport');
   assert.ok(adminIdx < participantIdx, 'isAdmin check must precede participant scoping');
+});
+
+test('collective report full access allows admin, creator and accepted participant', () => {
+  const contributions = [
+    { cooperativeId: BigInt(20), status: 'INVITED' },
+    { cooperativeId: BigInt(30), status: 'ACCEPTED' },
+  ];
+
+  assert.equal(
+    canReadFullCollectiveSaleReport({
+      isAdmin: true,
+      viewerCooperativeId: BigInt(99),
+      creatorCooperativeId: BigInt(10),
+      contributions,
+    }),
+    true,
+  );
+  assert.equal(
+    canReadFullCollectiveSaleReport({
+      isAdmin: false,
+      viewerCooperativeId: BigInt(10),
+      creatorCooperativeId: BigInt(10),
+      contributions,
+    }),
+    true,
+  );
+  assert.equal(
+    canReadFullCollectiveSaleReport({
+      isAdmin: false,
+      viewerCooperativeId: BigInt(30),
+      creatorCooperativeId: BigInt(10),
+      contributions,
+    }),
+    true,
+  );
+});
+
+test('collective report full access blocks invited-only and left participants', () => {
+  assert.equal(
+    canReadFullCollectiveSaleReport({
+      isAdmin: false,
+      viewerCooperativeId: BigInt(20),
+      creatorCooperativeId: BigInt(10),
+      contributions: [{ cooperativeId: BigInt(20), status: 'INVITED' }],
+    }),
+    false,
+  );
+  assert.equal(
+    canReadFullCollectiveSaleReport({
+      isAdmin: false,
+      viewerCooperativeId: BigInt(20),
+      creatorCooperativeId: BigInt(10),
+      contributions: [{ cooperativeId: BigInt(20), status: 'LEFT' }],
+    }),
+    false,
+  );
 });

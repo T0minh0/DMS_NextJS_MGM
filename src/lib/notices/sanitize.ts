@@ -31,7 +31,7 @@ function normalizeWhitespace(value: string) {
 }
 
 export function sanitizeNoticeTitle(value: string) {
-  return normalizeWhitespace(sanitizeHtml(value, titleOptions));
+  return normalizeWhitespace(sanitizeHtml(value, titleOptions)).slice(0, 200);
 }
 
 export function sanitizeNoticeContent(value: string) {

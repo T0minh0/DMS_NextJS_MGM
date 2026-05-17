@@ -81,8 +81,6 @@ export default function NoticesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [priorityFilter, setPriorityFilter] = useState<number | null>(null);
-  const [activeOnly, setActiveOnly] = useState(true);
-
   // Modal states
   const [showFormModal, setShowFormModal] = useState(false);
   const [editNotice, setEditNotice] = useState<Notice | null>(null);
@@ -135,9 +133,7 @@ export default function NoticesPage() {
     void fetchNotices(priorityFilter);
   }, [fetchNotices, priorityFilter]);
 
-  const displayedNotices = activeOnly
-    ? notices.filter((n) => !isExpired(n.expires_at))
-    : notices;
+  const displayedNotices = notices;
 
   const canEdit = (notice: Notice) => {
     if (isAdmin) return true;
@@ -198,7 +194,7 @@ export default function NoticesPage() {
           content: formContent.trim(),
           priority,
         };
-        if (formExpiresAt) body.expires_at = new Date(formExpiresAt).toISOString();
+        if (formExpiresAt) body.expires_at = new Date(`${formExpiresAt}T23:59:59`).toISOString();
         else body.expires_at = null;
 
         const resp = await fetch(`/api/notices/${editNotice._id}`, {
@@ -220,7 +216,7 @@ export default function NoticesPage() {
           priority,
           cooperative_id: isAdmin && formIsGlobal ? null : (user.cooperative_id ?? null),
         };
-        if (formExpiresAt) body.expires_at = new Date(formExpiresAt).toISOString();
+        if (formExpiresAt) body.expires_at = new Date(`${formExpiresAt}T23:59:59`).toISOString();
 
         const resp = await fetch('/api/notices', {
           method: 'POST',
@@ -295,9 +291,7 @@ export default function NoticesPage() {
         <p className="text-sm text-text-secondary mt-xs">
           {priorityFilter != null
             ? `Nenhum aviso com prioridade ${priorityFilter} encontrado.`
-            : activeOnly
-            ? 'Não há avisos ativos no momento.'
-            : 'Nenhum aviso cadastrado.'}
+            : 'Não há avisos ativos no momento.'}
         </p>
       </div>
       {canCreate && (
@@ -472,29 +466,9 @@ export default function NoticesPage() {
             ))}
           </div>
 
-          {/* Active-only toggle — API already returns only active notices; this toggle
-              hides items that became expired during the current session fetch */}
-          <label
-            className="flex items-center gap-xs cursor-pointer ml-auto select-none"
-            title="Oculta avisos cujo prazo de expiração já passou"
-          >
-            <span className="text-xs text-text-secondary font-medium">Apenas ativos</span>
-            <button
-              role="switch"
-              aria-checked={activeOnly}
-              aria-label="Exibir apenas avisos não expirados"
-              onClick={() => setActiveOnly((v) => !v)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                activeOnly ? 'bg-primary border-primary' : 'bg-surface-elevated border-outline'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform ${
-                  activeOnly ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </label>
+          <span className="ml-auto text-xs text-text-secondary" title="Avisos expirados são ocultados automaticamente pelo servidor">
+            Exibindo apenas avisos ativos
+          </span>
         </div>
 
         {/* ── Error banner ────────────────────────────────────────────────────── */}

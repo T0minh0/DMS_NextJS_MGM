@@ -14,6 +14,7 @@ sourceFiles:
   - src/app/manage-workers/page.tsx
   - src/app/worker-productivity/page.tsx
   - src/app/profile/page.tsx
+  - src/app/notices/page.tsx
   - scripts/check-visual-contract.mjs
   - Web_vault/Arquitetura/Frontend-e-UI.md
 audience:
@@ -206,6 +207,9 @@ routes:
   "/worker-productivity":
     purpose: analytics de produtividade da equipe
     evidence: filtros por periodo/trabalhador e estado sem dados
+  "/notices":
+    purpose: mural de avisos globais e da cooperativa com prioridade e expiracao
+    evidence: criar/editar/deletar aviso, filtro por prioridade, toggle apenas-ativos, badge global, permissao negativa (manager nao edita aviso global)
   "/profile":
     purpose: perfil do usuario autenticado
     evidence: leitura/edicao permitida e validacao de senha

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   FaBars,
+  FaBell,
   FaBox,
   FaChartBar,
   FaHome,
@@ -42,6 +43,7 @@ const navItems = [
   { href: '/manage-workers', icon: FaUsers, label: 'Usuários' },
   { href: '/sales', icon: FaShoppingCart, label: 'Vendas' },
   { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas' },
+  { href: '/notices', icon: FaBell, label: 'Avisos' },
   { href: '/profile', icon: FaUser, label: 'Meu Perfil' },
 ];
 

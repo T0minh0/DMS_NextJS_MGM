@@ -165,3 +165,12 @@ textarea {
 @utility shadow-glow-hover {
   box-shadow: var(--shadow-glow-hover);
 }
+
+/* prose-notice: minimal styles for sanitized HTML content in notice cards */
+.prose-notice a { color: var(--primary); text-decoration: underline; }
+.prose-notice a:hover { opacity: 0.85; }
+.prose-notice strong { color: var(--on-surface); font-weight: 600; }
+.prose-notice em { font-style: italic; }
+.prose-notice ul, .prose-notice ol { padding-left: var(--space-md); margin: var(--space-xxs) 0; list-style: revert; }
+.prose-notice p { margin: var(--space-xxs) 0; }
+.prose-notice code { background: var(--surface-elevated); padding: 0 4px; border-radius: var(--radius-sm); font-family: var(--font-mono-ui); font-size: 0.875em; }

@@ -7,6 +7,7 @@ import {
   requireScopedPermission,
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse, readJsonBody } from '@/lib/api/errors';
+import { lockCollectiveSaleForUpdate } from '@/lib/collective-sales/locks';
 import { createLogContext, logInfo } from '@/lib/observability/logger';
 
 export async function POST(
@@ -42,76 +43,77 @@ export async function POST(
       return apiErrorResponse({ message: 'cooperative_id inválido', code: 'INVALID_COOPERATIVE_ID', status: 400, requestId: context.requestId });
     }
 
-    const sale = await prisma.collectiveSale.findUnique({
-      where: { collectiveSaleId },
-      select: { creatorCooperativeId: true, soldAt: true, cancelledAt: true },
+    const contribution = await prisma.$transaction(async (tx) => {
+      const sale = await lockCollectiveSaleForUpdate(tx, collectiveSaleId);
+
+      if (!sale) {
+        return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
+      }
+
+      if (sale.soldAt != null || sale.cancelledAt != null) {
+        return apiErrorResponse({ message: 'Venda coletiva já encerrada', code: 'COLLECTIVE_SALE_CLOSED', status: 409, requestId: context.requestId });
+      }
+
+      // Only the creator cooperative can invite others
+      if (sale.creatorCooperativeId.toString() !== session.cooperativeId && session.role !== 'admin') {
+        return apiErrorResponse({ message: 'Apenas o criador pode convidar cooperativas', code: 'INVITE_FORBIDDEN', status: 403, requestId: context.requestId });
+      }
+
+      // Cannot invite own cooperative (the creator)
+      if (invitedCoopId === sale.creatorCooperativeId) {
+        return apiErrorResponse({ message: 'Não é possível convidar a própria cooperativa criadora', code: 'INVITE_SELF_FORBIDDEN', status: 400, requestId: context.requestId });
+      }
+
+      try {
+        return await tx.collectiveSaleContribution.create({
+          data: {
+            collectiveSaleId,
+            cooperativeId: invitedCoopId,
+            status: 'INVITED',
+          },
+          include: { cooperative: { select: { cooperativeName: true } } },
+        });
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002'
+        ) {
+          return apiErrorResponse({ message: 'Cooperativa já convidada ou participante', code: 'INVITE_DUPLICATE', status: 409, requestId: context.requestId });
+        }
+
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2003'
+        ) {
+          return apiErrorResponse({ message: 'Cooperativa não encontrada', code: 'COOPERATIVE_NOT_FOUND', status: 404, requestId: context.requestId });
+        }
+
+        throw e;
+      }
     });
 
-    if (!sale) {
-      return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
-    }
+    if (contribution instanceof Response) return contribution;
 
-    if (sale.soldAt != null || sale.cancelledAt != null) {
-      return apiErrorResponse({ message: 'Venda coletiva já encerrada', code: 'COLLECTIVE_SALE_CLOSED', status: 409, requestId: context.requestId });
-    }
+    logInfo('collective-sales.invite.succeeded', context, {
+      role: session.role,
+      collectiveSaleId: collectiveSaleId.toString(),
+      invitedCooperativeId: invitedCoopId.toString(),
+    });
 
-    // Only the creator cooperative can invite others
-    if (sale.creatorCooperativeId.toString() !== session.cooperativeId && session.role !== 'admin') {
-      return apiErrorResponse({ message: 'Apenas o criador pode convidar cooperativas', code: 'INVITE_FORBIDDEN', status: 403, requestId: context.requestId });
-    }
-
-    // Cannot invite own cooperative (the creator)
-    if (invitedCoopId === sale.creatorCooperativeId) {
-      return apiErrorResponse({ message: 'Não é possível convidar a própria cooperativa criadora', code: 'INVITE_SELF_FORBIDDEN', status: 400, requestId: context.requestId });
-    }
-
-    try {
-      const contribution = await prisma.collectiveSaleContribution.create({
-        data: {
-          collectiveSaleId,
-          cooperativeId: invitedCoopId,
-          status: 'INVITED',
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Convite enviado com sucesso',
+        contribution: {
+          contribution_id: contribution.contributionId.toString(),
+          collective_sale_id: collectiveSaleId.toString(),
+          cooperative_id: invitedCoopId.toString(),
+          cooperative_name: contribution.cooperative.cooperativeName,
+          status: contribution.status,
         },
-        include: { cooperative: { select: { cooperativeName: true } } },
-      });
-
-      logInfo('collective-sales.invite.succeeded', context, {
-        role: session.role,
-        collectiveSaleId: collectiveSaleId.toString(),
-        invitedCooperativeId: invitedCoopId.toString(),
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          message: 'Convite enviado com sucesso',
-          contribution: {
-            contribution_id: contribution.contributionId.toString(),
-            collective_sale_id: collectiveSaleId.toString(),
-            cooperative_id: invitedCoopId.toString(),
-            cooperative_name: contribution.cooperative.cooperativeName,
-            status: contribution.status,
-          },
-        },
-        { status: 201 },
-      );
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2002'
-      ) {
-        return apiErrorResponse({ message: 'Cooperativa já convidada ou participante', code: 'INVITE_DUPLICATE', status: 409, requestId: context.requestId });
-      }
-
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        e.code === 'P2003'
-      ) {
-        return apiErrorResponse({ message: 'Cooperativa não encontrada', code: 'COOPERATIVE_NOT_FOUND', status: 404, requestId: context.requestId });
-      }
-
-      throw e;
-    }
+      },
+      { status: 201 },
+    );
   } catch (error) {
     const authResponse = authErrorResponse(error, context);
     if (authResponse) return authResponse;

@@ -13,13 +13,13 @@ Repositorios:
 
 O `DMS_NextJS_MGM` e o alvo canonico para operacao. O `network_management_system` deve ser tratado como referencia historica e congelado, nao como fonte ativa de novas alteracoes.
 
-Status de deprecacao: **GO condicional para freeze operacional, NO-GO para desligamento definitivo ate S5-03 e S5-04**.
+Status de deprecacao: **GO condicional para freeze operacional, NO-GO para desligamento definitivo ate S5-04**.
 
 Motivo:
 
 - S5-02 ja validou UAT integrado, regressao visual e contratos RBAC/report por `scripts/run-s5-02-uat.mjs`.
 - S5-07 fecha a matriz de paridade funcional e a checklist de deprecacao.
-- S5-03 ainda precisa revisar seguranca, performance e concorrencia antes de executar desligamento real do legado.
+- S5-03 revisa seguranca, performance e concorrencia e mitiga a corrida de lifecycle/estoque em vendas coletivas.
 - S5-04 ainda precisa consolidar runbook final de migracao, operacao e handoff.
 
 Regra operacional: nao apagar, arquivar ou reescrever o repo Java nesta task. A acao segura agora e congelar writes e documentar o caminho de desligamento.
@@ -125,7 +125,7 @@ Antes do freeze, qualquer cliente externo do legado deve ser reconciliado contra
 | Java usava singular `/api/collective-sale` | Next usa plural `/api/collective-sales`, alinhado ao App Router e a tela `/collective-sales`. |
 | Java usava `PATCH /api/collective-sale/{saleId}/complete` para completion coletiva | Next preserva a capacidade em `POST /api/collective-sales/[id]/complete`, com path plural, resposta estruturada e idempotencia explicita. |
 | Java possuia frontend Thymeleaf/static tester | Substituido por telas Next versionadas e UAT Playwright. |
-| Java continha secrets/config em `application.properties` | Next exige env e guards de segredo; S5-03 ainda revisa superficie final. |
+| Java continha secrets/config em `application.properties` | Next exige env, guards de segredo e sweep S5-03 registrado em [[Operacao/Revisao-S5-03-seguranca-performance-concorrencia]]. |
 | Nomes fisicos mistos no banco | Aceito pela ADR-0001 para evitar migracao destrutiva; limpeza de casing e epic futuro. |
 | S5-02 usou API mockada no browser | Aceito para regressao UI; contratos backend reais foram rodados por testes. Banco real de cutover ainda exige S5-04. |
 
@@ -138,7 +138,7 @@ Antes do freeze, qualquer cliente externo do legado deve ser reconciliado contra
 | Matriz Java -> Next revisada | Feito | Este documento e `tests/deprecation-parity-s507.test.ts` |
 | Rotas coletivas Next documentadas como canonicas | Feito | `Web_vault/API/Vendas-e-estoque.md`, `Web_vault/API/Rotas.md` |
 | UAT integrado disponivel | Feito | `Web_vault/Operacao/UAT-S5-02.md` |
-| Security/performance/concurrency sweep | Pendente | S5-03 e blocker para desligamento definitivo |
+| Security/performance/concurrency sweep | Feito | [[Operacao/Revisao-S5-03-seguranca-performance-concorrencia]] e `tests/security-performance-concurrency-s503.test.ts` |
 | Runbook final de operacao/cutover | Pendente | S5-04 e blocker para handoff final |
 | Status ClickUp final desta task | Pendente ate QA | So mudar para `Completo e aprovado` apos peer review, QA PASS, commit local e releitura do ClickUp |
 
@@ -182,7 +182,7 @@ Regra Tony: nao executar `git push` durante este loop.
 
 Nao concluir deprecacao definitiva se qualquer item abaixo ocorrer:
 
-- S5-03 encontrar vulnerabilidade, degradacao de performance ou risco de concorrencia sem mitigacao.
+- Revisao de seguranca/performance/concorrencia encontrar vulnerabilidade, degradacao ou risco sem mitigacao.
 - S5-04 nao tiver runbook aprovado para cutover, rollback e suporte.
 - `npm run quality` falhar.
 - S5-02 UAT nao puder ser reproduzido em staging ou equivalente.

@@ -17,6 +17,7 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 | 2026-05-14 | missing_test | S1-04 fecha invariantes de estoque na aplicacao, mas o banco ainda nao tem check constraint para `current <= collected - sold`. | Criar task futura de constraint/backfill de estoque antes de permitir mutacoes fora dos helpers canonicos. | aberto |
 | 2026-05-16 | bug_pattern | P2002 capturado sem verificar `e.meta.target` pode silenciar constraint errada em endpoints de buyers. | Sempre checar `meta.target` antes de emitir resposta 409 de negocio; pattern canonico adicionado como convencao. | pendente |
 | 2026-05-16 | accepted_risk | `/api/buyers` retorna todos os buyers sem filtro por cooperativa — catálogo global consistente com legado, mas pode ser problema se buyers forem scopados no futuro. | Criar task futura para avaliar scoping de buyers por cooperativa. | pendente |
+| 2026-05-17 | missing_test | S5-03 fechou corridas conhecidas de venda coletiva por lock order, mas a cobertura de concorrencia ainda e estrutural/estatica, nao multi-transacao real em Postgres. | Criar smoke futuro com Postgres descartavel exercitando intercalacoes reais de `edit`/`invite`/`join`/`contribution`/`cancel`/`complete`. | pendente |
 
 ## Entradas detalhadas
 
@@ -129,4 +130,19 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 - **Sugestao:** abrir task futura para backfill/constraint de estoque e exigir em review que novas mutacoes de estoque passem pelos helpers canonicos ate a constraint existir.
 - **Acao sistemica:** task futura
 - **Dono/prazo:** backlog Tony DMS / antes de qualquer nova rota ou job que escreva em `Stock`.
+- **Status:** pendente
+
+### [missing_test] Concorrencia coletiva precisa de smoke multi-transacao real
+
+- **Data:** 2026-05-17
+- **Agente:** qa-reviewer + dev-tony
+- **Task:** 86e136ckx (S5-03)
+- **Fonte:** qa_final
+- **Sinal:** PASS com accepted_risk
+- **Descricao:** A S5-03 serializou `edit`, `invite`, `join`, `contribution`, `leave`, `cancel` e `complete` com `lockCollectiveSaleForUpdate`, alem de cobrir invariantes por testes estaticos/estruturais. QA aceitou o gate, mas registrou que ainda nao ha teste multi-transacao real em Postgres provando intercalacoes concorrentes.
+- **Causa raiz:** O suite atual roda majoritariamente por analise de fonte e unit tests sem banco concorrente controlado; criar harness transacional descartavel ficou fora do escopo da task.
+- **Impacto:** O lock order foi revisado e validado, mas uma regressao futura poderia passar se preservasse strings/ordem aparente sem exercitar bloqueios reais de banco.
+- **Sugestao:** Criar smoke com Postgres descartavel que abra transacoes concorrentes e teste intercalacoes `edit` vs `contribution`, `invite/join` vs `cancel/complete`, e `cancel` vs `leave`, assertando estoque, status e ausencia de deadlock.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de cutover operacional real com concorrencia multiusuario.
 - **Status:** pendente

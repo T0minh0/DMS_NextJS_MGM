@@ -12,6 +12,7 @@ import {
   updateLockedStockAggregate,
   StockDomainError,
 } from '@/lib/stock/ledger';
+import { lockCollectiveSaleForUpdate } from '@/lib/collective-sales/locks';
 import {
   decimalToJsonNumber,
   formatDecimal,
@@ -19,19 +20,14 @@ import {
 import { createLogContext, logInfo } from '@/lib/observability/logger';
 
 class AlreadyCompletedError extends Error {}
+class CollectiveSaleMissingDuringTransactionError extends Error {}
+class ConcurrentlyCancelledError extends Error {}
 class NoContributionsError extends Error {}
-// Thrown when the last revenue-share calculation produces a negative value,
-// indicating that intermediate rounding (ROUND_HALF_UP) exceeded totalRevenue.
-class RevenueShareArithmeticError extends Error {
-  constructor(public readonly detail: object) {
-    super('Revenue distribution produced negative last share');
-  }
-}
 
-// Distributes revenue to N contributions using the "last remainder" method so
-// that sum(revenueShare) == totalRevenue exactly (2 dp, ROUND_HALF_UP).
-// Contributions must be ordered consistently (e.g. cooperativeId asc) before
-// calling; the last entry absorbs any rounding residual.
+const CENT = new Prisma.Decimal('0.01');
+
+// Distributes revenue using largest remainder in cents so that
+// sum(revenueShare) == totalRevenue exactly without negative last shares.
 function distributeRevenue(
   contributions: { contributionId: bigint; cooperativeId: bigint; contributedWeight: Prisma.Decimal }[],
   priceKg: Prisma.Decimal,
@@ -42,29 +38,42 @@ function distributeRevenue(
     .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 
   const shares = new Map<bigint, Prisma.Decimal>();
-  let runningSum = new Prisma.Decimal(0);
-  const N = contributions.length;
 
-  for (let i = 0; i < N; i++) {
-    const c = contributions[i];
-    let share: Prisma.Decimal;
-    if (i === N - 1) {
-      share = totalRevenue.minus(runningSum);
-      if (share.lessThan(0)) {
-        throw new RevenueShareArithmeticError({
-          totalRevenue: totalRevenue.toFixed(2),
-          runningSum: runningSum.toFixed(2),
-          N,
-          priceKg: priceKg.toString(),
-        });
-      }
-    } else {
-      share = c.contributedWeight
-        .times(priceKg)
-        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-      runningSum = runningSum.plus(share);
+  const candidates = contributions.map((contribution) => {
+    const exactShare = contribution.contributedWeight.times(priceKg);
+    const baseShare = exactShare.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+    shares.set(contribution.contributionId, baseShare);
+
+    return {
+      contributionId: contribution.contributionId,
+      cooperativeId: contribution.cooperativeId,
+      remainder: exactShare.minus(baseShare),
+    };
+  });
+
+  const allocated = [...shares.values()].reduce(
+    (sum, share) => sum.plus(share),
+    new Prisma.Decimal(0),
+  );
+  let residual = totalRevenue.minus(allocated);
+
+  const byLargestRemainder = [...candidates].sort((a, b) => {
+    const remainderOrder = b.remainder.comparedTo(a.remainder);
+    if (remainderOrder !== 0) return remainderOrder;
+    if (a.cooperativeId !== b.cooperativeId) {
+      return a.cooperativeId < b.cooperativeId ? -1 : 1;
     }
-    shares.set(c.contributionId, share);
+    if (a.contributionId !== b.contributionId) {
+      return a.contributionId < b.contributionId ? -1 : 1;
+    }
+    return 0;
+  });
+
+  for (const candidate of byLargestRemainder) {
+    if (!residual.greaterThan(0)) break;
+
+    shares.set(candidate.contributionId, shares.get(candidate.contributionId)!.plus(CENT));
+    residual = residual.minus(CENT);
   }
 
   return shares;
@@ -145,10 +154,24 @@ export async function POST(
       });
     }
 
-    const priceKg = sale.priceKg;
-    const materialId = sale.materialId;
-
     await prisma.$transaction(async (tx) => {
+      const lockedSale = await lockCollectiveSaleForUpdate(tx, collectiveSaleId);
+
+      if (!lockedSale) {
+        throw new CollectiveSaleMissingDuringTransactionError();
+      }
+
+      if (lockedSale?.cancelledAt != null) {
+        throw new ConcurrentlyCancelledError();
+      }
+
+      if (lockedSale?.soldAt != null) {
+        throw new AlreadyCompletedError();
+      }
+
+      const priceKg = lockedSale.priceKg;
+      const materialId = lockedSale.materialId;
+
       // orderBy cooperativeId for deterministic stock-lock ordering across
       // concurrent completions — prevents deadlock when multiple sales share
       // some of the same cooperative participants.
@@ -261,19 +284,16 @@ export async function POST(
       return NextResponse.json({ success: true, message: 'Venda coletiva já concluída', status: 'SOLD' });
     }
 
-    if (error instanceof NoContributionsError) {
-      return apiErrorResponse({ message: 'Nenhuma contribuição de peso registrada', code: 'NO_CONTRIBUTIONS', status: 409, requestId: context.requestId });
+    if (error instanceof CollectiveSaleMissingDuringTransactionError) {
+      return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
     }
 
-    if (error instanceof RevenueShareArithmeticError) {
-      return apiInternalErrorResponse({
-        message: 'Erro no cálculo de distribuição de receita',
-        code: 'REVENUE_SHARE_ARITHMETIC_ERROR',
-        context,
-        event: 'collective-sales.complete.revenue-arithmetic-error',
-        error,
-        metadata: error.detail as Record<string, unknown>,
-      });
+    if (error instanceof ConcurrentlyCancelledError) {
+      return apiErrorResponse({ message: 'Venda coletiva cancelada não pode ser concluída', code: 'COLLECTIVE_SALE_CANCELLED', status: 409, requestId: context.requestId });
+    }
+
+    if (error instanceof NoContributionsError) {
+      return apiErrorResponse({ message: 'Nenhuma contribuição de peso registrada', code: 'NO_CONTRIBUTIONS', status: 409, requestId: context.requestId });
     }
 
     const authResponse = authErrorResponse(error, context);

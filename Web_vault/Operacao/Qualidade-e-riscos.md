@@ -19,6 +19,12 @@
 | `phone` no cliente nao existe no backend | profile/manage-workers | Usuario pode achar que telefone sera salvo |
 | `material_id` retorna number em `/api/materials` | algumas telas esperam string | Comparacoes podem falhar em casos especificos |
 
+## Riscos mitigados em S5-03
+
+| Risco | Evidencia | Resolucao |
+| --- | --- | --- |
+| Corrida `cancel`/`complete`/`leave`/`contribution` em venda coletiva podia usar snapshot obsoleto e devolver/finalizar estoque duas vezes | `Web_vault/Operacao/Revisao-S5-03-seguranca-performance-concorrencia.md`, `tests/security-performance-concurrency-s503.test.ts` | `lockCollectiveSaleForUpdate` serializa lifecycle com `FOR UPDATE`; cancel re-le contribution apos lock de estoque antes de `adjustStock`. |
+
 ## Riscos de manutencao
 
 | Risco | Evidencia | Impacto |

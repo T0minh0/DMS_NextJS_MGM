@@ -65,10 +65,11 @@ test('complete uses updateMany to atomically claim soldAt before touching stock'
 
 // ── Revenue share calculation ─────────────────────────────────────────────────
 
-test('complete computes revenue shares using distributeRevenue with last-remainder method', () => {
+test('complete computes revenue shares using distributeRevenue with largest-remainder method', () => {
   const source = readRoute(ROUTE);
   assert.match(source, /distributeRevenue/);
-  assert.match(source, /totalRevenue\.minus\(runningSum\)/);
+  assert.match(source, /ROUND_DOWN/);
+  assert.match(source, /remainder/);
 });
 
 test('complete sets revenueShare only on ACCEPTED contributions with weight > 0', () => {
@@ -133,6 +134,8 @@ test('complete response includes total_weight and revenue_share per participant'
 
 import { Prisma } from '@prisma/client';
 
+const CENT = new Prisma.Decimal('0.01');
+
 // Inline reimplementation to exercise the redistribution math.
 function distributeRevenue(
   contributions: { contributionId: bigint; cooperativeId: bigint; contributedWeight: Prisma.Decimal }[],
@@ -143,22 +146,40 @@ function distributeRevenue(
     .times(priceKg)
     .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   const shares = new Map<bigint, Prisma.Decimal>();
-  let runningSum = new Prisma.Decimal(0);
-  const N = contributions.length;
-  for (let i = 0; i < N; i++) {
-    const c = contributions[i];
-    let share: Prisma.Decimal;
-    if (i === N - 1) {
-      share = totalRevenue.minus(runningSum);
-      if (share.lessThan(0)) {
-        throw new Error('Revenue distribution produced negative last share');
-      }
-    } else {
-      share = c.contributedWeight.times(priceKg).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-      runningSum = runningSum.plus(share);
+
+  const candidates = contributions.map((contribution) => {
+    const exactShare = contribution.contributedWeight.times(priceKg);
+    const baseShare = exactShare.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+    shares.set(contribution.contributionId, baseShare);
+
+    return {
+      contributionId: contribution.contributionId,
+      cooperativeId: contribution.cooperativeId,
+      remainder: exactShare.minus(baseShare),
+    };
+  });
+
+  const allocated = [...shares.values()].reduce((sum, share) => sum.plus(share), new Prisma.Decimal(0));
+  let residual = totalRevenue.minus(allocated);
+
+  const byLargestRemainder = [...candidates].sort((a, b) => {
+    const remainderOrder = b.remainder.comparedTo(a.remainder);
+    if (remainderOrder !== 0) return remainderOrder;
+    if (a.cooperativeId !== b.cooperativeId) {
+      return a.cooperativeId < b.cooperativeId ? -1 : 1;
     }
-    shares.set(c.contributionId, share);
+    if (a.contributionId !== b.contributionId) {
+      return a.contributionId < b.contributionId ? -1 : 1;
+    }
+    return 0;
+  });
+
+  for (const candidate of byLargestRemainder) {
+    if (!residual.greaterThan(0)) break;
+    shares.set(candidate.contributionId, shares.get(candidate.contributionId)!.plus(CENT));
+    residual = residual.minus(CENT);
   }
+
   return shares;
 }
 
@@ -183,7 +204,7 @@ test('distributeRevenue: two equal contributions split revenue evenly', () => {
   assert.equal(shares.get(BigInt(2))!.toFixed(2), '50.00');
 });
 
-test('distributeRevenue: three contributions — last absorbs rounding, sum is exact', () => {
+test('distributeRevenue: three contributions with exact cents keep sum exact', () => {
   // 3 contributions of 10 kg each, price 0.33/kg → total 9.90
   // Each exact: 3.30 + 3.30 + 3.30 = 9.90 (exact in this case)
   const contribs = [makeContrib(1, '10'), makeContrib(2, '10'), makeContrib(3, '10')];
@@ -192,7 +213,7 @@ test('distributeRevenue: three contributions — last absorbs rounding, sum is e
   assert.equal(total.toFixed(2), new Prisma.Decimal('30').times('0.33').toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).toFixed(2));
 });
 
-test('distributeRevenue: rounding case — last remainder absorbs discrepancy', () => {
+test('distributeRevenue: rounding case — largest remainder absorbs discrepancy', () => {
   // 2 contributions of 1kg, price 0.005 → total rounds to 0.01
   const contribs = [makeContrib(1, '1'), makeContrib(2, '1')];
   const priceKg = new Prisma.Decimal('0.005');
@@ -203,12 +224,18 @@ test('distributeRevenue: rounding case — last remainder absorbs discrepancy', 
   assert.equal(sum.toFixed(2), totalRevenue.toFixed(2), 'sum must equal totalRevenue exactly');
 });
 
-test('distributeRevenue: throws RevenueShareArithmeticError when last share would be negative', () => {
-  // 5 contributions of 1kg each, price 0.006/kg → totalRevenue = 0.03
-  // First 4 each round to 0.01 → runningSum = 0.04 > 0.03 → last share = -0.01
-  const contribs = [1, 2, 3, 4, 5].map((i) => makeContrib(i, '1'));
-  assert.throws(
-    () => distributeRevenue(contribs, new Prisma.Decimal('0.006'), new Prisma.Decimal('5')),
-    (err: unknown) => err instanceof Error && err.message.includes('negative last share'),
-  );
+test('distributeRevenue: largest remainder avoids negative shares for tiny valid contributions', () => {
+  // 4 contributions of 0.01 kg at 0.50/kg -> totalRevenue = 0.02.
+  // Independent HALF_UP on the first three would over-allocate 0.03.
+  const contribs = [1, 2, 3, 4].map((i) => makeContrib(i, '0.01'));
+  const priceKg = new Prisma.Decimal('0.50');
+  const totalWeight = new Prisma.Decimal('0.04');
+  const shares = distributeRevenue(contribs, priceKg, totalWeight);
+  const totalRevenue = totalWeight.times(priceKg).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const values = [...shares.values()];
+  const sum = values.reduce((s, v) => s.plus(v), new Prisma.Decimal(0));
+
+  assert.equal(sum.toFixed(2), totalRevenue.toFixed(2), 'sum must equal totalRevenue exactly');
+  assert.equal(values.some((share) => share.lessThan(0)), false, 'shares must not be negative');
+  assert.deepEqual(values.map((share) => share.toFixed(2)), ['0.01', '0.01', '0.00', '0.00']);
 });

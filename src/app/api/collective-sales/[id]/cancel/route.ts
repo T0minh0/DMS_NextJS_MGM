@@ -6,6 +6,7 @@ import {
   requireScopedPermission,
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
+import { lockCollectiveSaleForUpdate } from '@/lib/collective-sales/locks';
 import { adjustStock, lockStockAggregateForUpdate } from '@/lib/stock/ledger';
 import { createLogContext, logInfo } from '@/lib/observability/logger';
 
@@ -31,30 +32,27 @@ export async function POST(
       return apiErrorResponse({ message: 'ID de venda coletiva inválido', code: 'INVALID_COLLECTIVE_SALE_ID', status: 400, requestId: context.requestId });
     }
 
-    const sale = await prisma.collectiveSale.findUnique({
-      where: { collectiveSaleId },
-      select: { creatorCooperativeId: true, soldAt: true, cancelledAt: true, materialId: true },
-    });
+    const result = await prisma.$transaction(async (tx) => {
+      const sale = await lockCollectiveSaleForUpdate(tx, collectiveSaleId);
 
-    if (!sale) {
-      return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
-    }
+      if (!sale) {
+        return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
+      }
 
-    if (sale.cancelledAt != null) {
-      return NextResponse.json({ success: true, message: 'Venda coletiva já cancelada', status: 'CANCELLED' });
-    }
+      if (sale.cancelledAt != null) {
+        return { idempotent: true as const };
+      }
 
-    if (sale.soldAt != null) {
-      return apiErrorResponse({ message: 'Venda coletiva já concluída', code: 'COLLECTIVE_SALE_SOLD', status: 409, requestId: context.requestId });
-    }
+      if (sale.soldAt != null) {
+        return apiErrorResponse({ message: 'Venda coletiva já concluída', code: 'COLLECTIVE_SALE_SOLD', status: 409, requestId: context.requestId });
+      }
 
-    if (sale.creatorCooperativeId.toString() !== session.cooperativeId && session.role !== 'admin') {
-      return apiErrorResponse({ message: 'Apenas o criador pode cancelar a venda coletiva', code: 'CANCEL_FORBIDDEN', status: 403, requestId: context.requestId });
-    }
+      if (sale.creatorCooperativeId.toString() !== session.cooperativeId && session.role !== 'admin') {
+        return apiErrorResponse({ message: 'Apenas o criador pode cancelar a venda coletiva', code: 'CANCEL_FORBIDDEN', status: 403, requestId: context.requestId });
+      }
 
-    const materialId = sale.materialId;
+      const materialId = sale.materialId;
 
-    await prisma.$transaction(async (tx) => {
       // Atomically claim the cancellation before touching any stock.
       // If two concurrent callers race past the outer guard, only one
       // will find cancelledAt=null here; the second gets count=0 and
@@ -74,18 +72,41 @@ export async function POST(
           status: 'ACCEPTED',
           contributedWeight: { not: null, gt: 0 },
         },
-        select: { cooperativeId: true, contributedWeight: true },
+        select: { contributionId: true, cooperativeId: true, contributedWeight: true },
+        orderBy: [{ cooperativeId: 'asc' }, { contributionId: 'asc' }],
       });
 
       for (const c of contributions) {
         await lockStockAggregateForUpdate(tx, c.cooperativeId, materialId);
+
+        const currentContribution = await tx.collectiveSaleContribution.findUnique({
+          where: { contributionId: c.contributionId },
+          select: { status: true, contributedWeight: true },
+        });
+
+        if (
+          currentContribution?.status !== 'ACCEPTED' ||
+          currentContribution.contributedWeight == null ||
+          !currentContribution.contributedWeight.greaterThan(0)
+        ) {
+          continue;
+        }
+
         await adjustStock(tx, {
           cooperativeId: c.cooperativeId,
           materialId,
-          deltaKg: c.contributedWeight!.negated(),
+          deltaKg: currentContribution.contributedWeight.negated(),
         });
       }
+
+      return { cancelled: true as const };
     });
+
+    if (result instanceof Response) return result;
+
+    if ('idempotent' in result) {
+      return NextResponse.json({ success: true, message: 'Venda coletiva já cancelada', status: 'CANCELLED' });
+    }
 
     logInfo('collective-sales.cancel.succeeded', context, {
       role: session.role,

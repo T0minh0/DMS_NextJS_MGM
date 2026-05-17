@@ -6,6 +6,7 @@ import {
   requireScopedPermission,
 } from '@/lib/auth/server';
 import { apiErrorResponse, apiInternalErrorResponse, readJsonBody } from '@/lib/api/errors';
+import { lockCollectiveSaleForUpdate } from '@/lib/collective-sales/locks';
 import { adjustStock, lockStockAggregateForUpdate } from '@/lib/stock/ledger';
 import { decimalToJsonNumber, formatDecimal, parseNonNegativeDecimal2 } from '@/lib/decimal';
 import { Prisma } from '@prisma/client';
@@ -41,22 +42,18 @@ export async function PATCH(
 
     const coopId = BigInt(session.cooperativeId);
 
-    const sale = await prisma.collectiveSale.findUnique({
-      where: { collectiveSaleId },
-      select: { soldAt: true, cancelledAt: true, materialId: true },
-    });
-
-    if (!sale) {
-      return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
-    }
-
-    if (sale.soldAt != null || sale.cancelledAt != null) {
-      return apiErrorResponse({ message: 'Venda coletiva já encerrada', code: 'COLLECTIVE_SALE_CLOSED', status: 409, requestId: context.requestId });
-    }
-
-    const materialId = sale.materialId;
-
     const updated = await prisma.$transaction(async (tx) => {
+      const sale = await lockCollectiveSaleForUpdate(tx, collectiveSaleId);
+
+      if (!sale) {
+        return apiErrorResponse({ message: 'Venda coletiva não encontrada', code: 'COLLECTIVE_SALE_NOT_FOUND', status: 404, requestId: context.requestId });
+      }
+
+      if (sale.soldAt != null || sale.cancelledAt != null) {
+        return apiErrorResponse({ message: 'Venda coletiva já encerrada', code: 'COLLECTIVE_SALE_CLOSED', status: 409, requestId: context.requestId });
+      }
+
+      const materialId = sale.materialId;
       await lockStockAggregateForUpdate(tx, coopId, materialId);
 
       const contribution = await tx.collectiveSaleContribution.findUnique({

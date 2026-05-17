@@ -209,7 +209,7 @@ routes:
     evidence: filtros por periodo/trabalhador e estado sem dados
   "/notices":
     purpose: mural de avisos globais e da cooperativa com prioridade e expiracao
-    evidence: criar/editar/deletar aviso, filtro por prioridade, toggle apenas-ativos, badge global, permissao negativa (manager nao edita aviso global)
+    evidence: criar/editar/deletar aviso, filtro por prioridade, label apenas-ativos, badge global, permissao negativa (manager nao edita aviso global)
   "/profile":
     purpose: perfil do usuario autenticado
     evidence: leitura/edicao permitida e validacao de senha

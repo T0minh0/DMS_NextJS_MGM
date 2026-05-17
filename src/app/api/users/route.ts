@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const session = await requireManagerOrAdmin();
     const { searchParams } = new URL(request.url);
     const gamificationView = searchParams.get('view') === 'gamification';
+    const teamManagementView = searchParams.get('view') === 'team-management';
     const targetCooperativeId = determineTargetCooperative(session);
     const workers = await prisma.workers.findMany({
       where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
@@ -22,8 +23,18 @@ export async function GET(request: Request) {
     });
 
     const formattedWorkers = workers
-      .filter((worker) => mapUserType(worker.userType) === 1)
+      .filter((worker) => {
+        const userType = mapUserType(worker.userType);
+
+        if (gamificationView) {
+          return userType === 1;
+        }
+
+        return teamManagementView || userType === 1;
+      })
       .map((worker) => {
+        const userType = mapUserType(worker.userType) ?? 1;
+
         if (gamificationView) {
           return {
             _id: worker.workerId.toString(),
@@ -31,7 +42,7 @@ export async function GET(request: Request) {
             wastepicker_id: formatWorkerId(worker.workerId),
             worker_id: Number(worker.workerId),
             user_id: Number(worker.workerId),
-            user_type: 1,
+            user_type: userType,
             full_name: worker.workerName,
             worker_name: worker.workerName,
             cooperative: worker.cooperative.toString(),
@@ -50,7 +61,7 @@ export async function GET(request: Request) {
           wastepicker_id: formatWorkerId(worker.workerId),
           worker_id: Number(worker.workerId),
           user_id: Number(worker.workerId),
-          user_type: 1,
+          user_type: userType,
           full_name: worker.workerName,
           worker_name: worker.workerName,
           cooperative: worker.cooperative.toString(),

@@ -10,12 +10,15 @@ Arquivo: `src/app/api/user/route.ts`
 | --- | --- | --- | --- |
 | `id` | string BigInt | Condicional | Busca por `workerId` |
 | `cpf` | string | Condicional | Busca por CPF em bytes |
+| `reveal` | `documents` | Nao | Revela CPF/PIS/RG completos apenas para usuario autorizado |
 
 Exige pelo menos `id` ou `cpf`.
 
 ### Retorno
 
-Retorna `id`, `worker_id`, `wastepicker_id`, `full_name`, `cpf`/`CPF`, `PIS`, `RG`, `role`, `userType`, `user_type`, `email`, `gender`, datas, `cooperative_id` e `cooperative_name` para usuario autorizado no escopo.
+Retorna `id`, `worker_id`, `wastepicker_id`, `full_name`, `cpf`/`CPF`, `PIS`, `RG`, `role`, `userType`, `user_type`, `email`, `gender`, datas, `cooperative_id`, `cooperative_name`, `can_reveal_documents` e `documents_revealed` para usuario autorizado no escopo.
+
+CPF, PIS e RG saem mascarados por padrao. A leitura completa exige `reveal=documents`, escopo server-side valido e permissao de edicao/gestao de usuarios no RBAC. A tela `/manage-workers` usa essa revelacao somente por acao explicita dentro do modal de edicao.
 
 ### Autorizacao
 
@@ -69,9 +72,11 @@ Autorizacao: troca senha apenas do proprio usuario, inclusive para `manager`/`ad
 
 Arquivo: `src/app/api/users/route.ts`
 
-Lista apenas catadores/trabalhadores (`mapUserType(userType) === 1`), ordenados por nome, incluindo cooperativa. `manager` recebe apenas a propria cooperativa; `admin` recebe todas.
+Por padrao lista apenas integrantes operacionais (`mapUserType(userType) === 1`), ordenados por nome, incluindo cooperativa. `manager` recebe apenas a propria cooperativa; `admin` recebe todas.
 
 Campos retornados incluem aliases para compatibilidade: `wastepicker_id`, `worker_id`, `user_id`, `full_name`, `worker_name`, `cooperative_id`, `CPF`, `cpf`, `PIS`, `RG`, datas e email. Documentos pessoais saem mascarados na listagem; fluxos de edicao buscam detalhe autorizado em `/api/user?id=...`.
+
+`view=team-management` inclui gestores e integrantes operacionais para a tela de equipe. `view=gamification` continua retornando payload reduzido e apenas integrantes operacionais, sem CPF/PIS/RG/email/datas.
 
 ## `GET /api/users/all`
 
@@ -104,11 +109,12 @@ Arquivo: `src/app/api/users/create/route.ts`
 
 ### Regras
 
-- CPF duplicado retorna `409` com mensagem generica para evitar exposicao explicita de documento.
-- CPF, PIS e RG precisam conter digitos.
+- CPF duplicado retorna `409` com mensagem generica para evitar exposicao explicita de documento, cooperativa ou titular.
+- CPF e PIS precisam conter 11 digitos; RG precisa conter 8 ou 9 digitos.
 - `manager` so pode criar usuario na propria cooperativa; `admin` pode informar outra cooperativa.
+- CPF e identidade global de login: como o login usa CPF como identificador, a criacao serializa a tabela `Workers` e bloqueia duplicidade global antes de persistir. A resposta de conflito continua generica e nao informa se o CPF existe, em qual cooperativa esta ou quem e o titular.
 - Cria `Workers`.
-- Retorna mensagem diferente para gerente e catador.
+- Retorna mensagem gerencial sem tratar catador como publico primario da web.
 
 ## `POST /api/users/update`
 
@@ -118,7 +124,9 @@ Atualiza usuario administrativo.
 
 ### Regras
 
-- Exige `id`, nome, datas, cooperativa, PIS e RG.
+- Exige `id`, nome, datas e cooperativa.
+- PIS/RG sao opcionais em atualizacao administrativa; quando omitidos ou mascarados, os documentos persistidos sao preservados. A UI so envia PIS/RG completos depois de `reveal=documents`.
+- PIS precisa conter 11 digitos; RG precisa conter 8 ou 9 digitos.
 - `user_type` precisa ser `0` ou `1`.
 - Senha e opcional; se enviada, atualiza com bcrypt custo `10`.
 - `manager` so pode atualizar usuario da propria cooperativa e manter cooperativa dentro desse escopo.

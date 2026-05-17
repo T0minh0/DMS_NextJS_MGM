@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authErrorResponse, requireManagerOrAdmin } from '@/lib/auth/server';
+import { authErrorResponse, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { hasWorkerOperationalDependencies } from '@/lib/users/dependencies';
@@ -40,6 +40,13 @@ export async function POST(request: Request) {
         status: 404,
       });
     }
+
+    requireScopedPermission(
+      session,
+      'users',
+      'delete',
+      session.role === 'admin' && existing.cooperative.toString() !== session.cooperativeId ? 'global' : 'cooperative',
+    );
 
     const [salesUsage, measurementUsage, contributionsUsage] = await Promise.all([
       prisma.sales.count({ where: { responsible: workerId } }),

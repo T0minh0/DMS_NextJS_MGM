@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
-import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  requireManagerOrAdmin,
+  requireScopedPermission,
+} from '@/lib/auth/server';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
-import { sanitizeDigits } from '@/lib/db-utils';
+import { normalizeCpfDigits, normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +46,13 @@ export async function POST(request: Request) {
     }
 
     const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
+    requireScopedPermission(
+      session,
+      'users',
+      'create',
+      session.role === 'admin' && targetCooperativeId !== session.cooperativeId ? 'global' : 'cooperative',
+    );
+
     let cooperativeBigInt: bigint;
     try {
       cooperativeBigInt = BigInt(targetCooperativeId);
@@ -52,13 +64,13 @@ export async function POST(request: Request) {
       });
     }
 
-    const cpfDigits = sanitizeDigits(CPF);
-    const pisDigits = sanitizeDigits(PIS);
-    const rgDigits = sanitizeDigits(RG);
+    const cpfDigits = normalizeCpfDigits(CPF);
+    const pisDigits = normalizePisDigits(PIS);
+    const rgDigits = normalizeRgDigits(RG);
 
     if (!cpfDigits || !pisDigits || !rgDigits) {
       return apiErrorResponse({
-        message: 'CPF, PIS e RG devem conter apenas números',
+        message: 'CPF e PIS devem conter 11 dígitos; RG deve conter 8 ou 9 dígitos',
         code: 'INVALID_DOCUMENTS',
         status: 400,
       });
@@ -86,12 +98,47 @@ export async function POST(request: Request) {
       }
     }
 
-    const existing = await prisma.workers.findFirst({
-      where: { cpf: Buffer.from(cpfDigits, 'utf8') },
-      select: { workerId: true, cooperative: true },
+    const cpfBuffer = Buffer.from(cpfDigits, 'utf8');
+    const pisBuffer = Buffer.from(pisDigits, 'utf8');
+    const rgBuffer = Buffer.from(rgDigits, 'utf8');
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`LOCK TABLE "Workers" IN SHARE ROW EXCLUSIVE MODE`;
+
+      const existing = await tx.workers.findFirst({
+        where: { cpf: cpfBuffer },
+        select: { workerId: true },
+      });
+
+      if (existing) {
+        return { created: null };
+      }
+
+      const now = new Date();
+
+      const created = await tx.workers.create({
+        data: {
+          workerName: full_name.trim(),
+          cooperative: cooperativeBigInt,
+          cpf: cpfBuffer,
+          userType: String(userTypeNumber),
+          birthDate: birthDateObj,
+          enterDate: enterDateObj,
+          exitDate: exitDateObj,
+          pis: pisBuffer,
+          rg: rgBuffer,
+          gender: gender?.trim() || null,
+          password: Buffer.from(passwordHash, 'utf8'),
+          email: email?.trim() || 'sem-email@coop.local',
+          lastUpdate: now,
+        },
+      });
+
+      return { created };
     });
 
-    if (existing) {
+    if (!result.created) {
       return apiErrorResponse({
         message: 'Não foi possível concluir o cadastro com os dados informados',
         code: 'USER_CREATE_CONFLICT',
@@ -99,34 +146,13 @@ export async function POST(request: Request) {
       });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const now = new Date();
-
-    const created = await prisma.workers.create({
-      data: {
-        workerName: full_name.trim(),
-        cooperative: cooperativeBigInt,
-        cpf: Buffer.from(cpfDigits, 'utf8'),
-        userType: String(userTypeNumber),
-        birthDate: birthDateObj,
-        enterDate: enterDateObj,
-        exitDate: exitDateObj,
-        pis: Buffer.from(pisDigits, 'utf8'),
-        rg: Buffer.from(rgDigits, 'utf8'),
-        gender: gender?.trim() || null,
-        password: Buffer.from(passwordHash, 'utf8'),
-        email: email?.trim() || 'sem-email@coop.local',
-        lastUpdate: now,
-      },
-    });
-
     return NextResponse.json(
       {
-        message: userTypeNumber === 1 ? 'Catador criado com sucesso!' : 'Usuário de gerência criado com sucesso!',
+        message: userTypeNumber === 1 ? 'Integrante operacional cadastrado com sucesso!' : 'Usuário de gestão cadastrado com sucesso!',
         user: {
-          id: created.workerId.toString(),
-          full_name: created.workerName,
-          cooperative_id: created.cooperative.toString(),
+          id: result.created.workerId.toString(),
+          full_name: result.created.workerName,
+          cooperative_id: result.created.cooperative.toString(),
           user_type: userTypeNumber,
         },
       },

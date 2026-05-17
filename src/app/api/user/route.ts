@@ -6,11 +6,12 @@ import {
   determineTargetCooperative,
   determineTargetWorker,
   requireAuth,
+  requireScopedPermission,
 } from '@/lib/auth/server';
 import { mapDatabaseUserTypeToRole, roleToUserType } from '@/lib/auth/shared';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decodeBytes, formatWorkerId } from '@/lib/db-utils';
-import { digitsOnly } from '@/lib/privacy/pii';
+import { digitsOnly, maskCpf, maskPis, maskRg } from '@/lib/privacy/pii';
 
 function scopedWorkerWhere(
   session: Awaited<ReturnType<typeof requireAuth>>,
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const idParam = searchParams.get('id');
     const cpfParam = searchParams.get('cpf');
+    const revealDocuments = searchParams.get('reveal') === 'documents';
 
     if (!idParam && !cpfParam) {
       return apiErrorResponse({
@@ -96,22 +98,41 @@ export async function GET(request: Request) {
 
     const role = mapDatabaseUserTypeToRole(worker.userType) ?? 'worker';
     const userType = roleToUserType(role);
+    const isSelf = worker.workerId.toString() === session.workerId;
+    const readScope = isSelf
+      ? 'self'
+      : session.role === 'admin' && worker.cooperative.toString() !== session.cooperativeId
+        ? 'global'
+        : 'cooperative';
+
+    requireScopedPermission(session, 'users', 'read', readScope);
+
+    const canRevealDocuments = isSelf || session.role === 'admin' || session.role === 'manager';
+
+    if (revealDocuments) {
+      const revealScope = isSelf ? 'self' : readScope;
+      requireScopedPermission(session, 'users', isSelf ? 'update' : 'manage', revealScope);
+    }
 
     const cpfValue = decodeBytes(worker.cpf);
     const pisValue = decodeBytes(worker.pis);
     const rgValue = decodeBytes(worker.rg);
+    const responseCpf = revealDocuments && canRevealDocuments ? cpfValue : maskCpf(cpfValue);
+    const responsePis = revealDocuments && canRevealDocuments ? pisValue : maskPis(pisValue);
+    const responseRg = revealDocuments && canRevealDocuments ? rgValue : maskRg(rgValue);
+
     const response = {
       id: worker.workerId.toString(),
       worker_id: Number(worker.workerId),
       wastepicker_id: formatWorkerId(worker.workerId),
       full_name: worker.workerName,
       name: worker.workerName,
-      CPF: cpfValue,
-      cpf: cpfValue,
-      PIS: pisValue,
-      pis: pisValue,
-      RG: rgValue,
-      rg: rgValue,
+      CPF: responseCpf,
+      cpf: responseCpf,
+      PIS: responsePis,
+      pis: responsePis,
+      RG: responseRg,
+      rg: responseRg,
       role,
       userType,
       user_type: userType,
@@ -122,6 +143,8 @@ export async function GET(request: Request) {
       exit_date: worker.exitDate?.toISOString().split('T')[0] ?? null,
       cooperative_id: worker.cooperative.toString(),
       cooperative_name: worker.cooperativeRef?.cooperativeName ?? null,
+      can_reveal_documents: canRevealDocuments,
+      documents_revealed: revealDocuments && canRevealDocuments,
     };
 
     return NextResponse.json(response);

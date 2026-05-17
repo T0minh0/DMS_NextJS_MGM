@@ -2,6 +2,21 @@ export function digitsOnly(value: string | null | undefined) {
   return value?.replace(/\D/g, '') ?? '';
 }
 
+export function normalizeCpfDigits(value: string | null | undefined) {
+  const digits = digitsOnly(value);
+  return digits.length === 11 ? digits : null;
+}
+
+export function normalizePisDigits(value: string | null | undefined) {
+  const digits = digitsOnly(value);
+  return digits.length === 11 ? digits : null;
+}
+
+export function normalizeRgDigits(value: string | null | undefined) {
+  const digits = digitsOnly(value);
+  return digits.length >= 8 && digits.length <= 9 ? digits : null;
+}
+
 function maskDigits(value: string, visibleDigits = 2) {
   const digits = digitsOnly(value);
   if (!digits) {

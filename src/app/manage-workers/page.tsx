@@ -1,27 +1,32 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import {
-  FaUser,
-  FaExclamationCircle,
-  FaUserPlus,
+  FaCheckCircle,
   FaEdit,
-  FaTrash,
+  FaExclamationCircle,
+  FaEye,
   FaSearch,
+  FaShieldAlt,
   FaTimes,
+  FaTrash,
+  FaUser,
+  FaUserPlus,
+  FaUsers,
 } from 'react-icons/fa';
 
-interface User {
+interface ManagedUser {
   _id: string;
   id: string;
   full_name: string;
   CPF?: string;
   cpf?: string;
-  email?: string;
+  email?: string | null;
   phone?: string;
   user_type: number;
+  role?: 'admin' | 'manager' | 'worker';
   PIS?: string;
   RG?: string;
   pis?: string;
@@ -34,6 +39,8 @@ interface User {
   cooperative_id?: string;
   cooperative?: string;
   cooperative_name?: string | null;
+  can_reveal_documents?: boolean;
+  documents_revealed?: boolean;
 }
 
 interface Cooperative {
@@ -42,29 +49,138 @@ interface Cooperative {
   name: string;
 }
 
+interface SessionUser {
+  id: string;
+  full_name: string;
+  role: 'admin' | 'manager';
+  cooperative_id: string;
+  cooperative_name?: string | null;
+}
+
+type FieldErrors = Partial<Record<
+  | 'fullName'
+  | 'cpf'
+  | 'pis'
+  | 'rg'
+  | 'birthDate'
+  | 'enterDate'
+  | 'cooperativeId'
+  | 'password'
+  | 'confirmPassword',
+  string
+>>;
+
+const fieldClass = "block h-11 w-full rounded-lg border border-outline bg-surface px-3 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0 disabled:bg-surface-elevated disabled:text-text-secondary";
+const labelClass = "mb-1 block text-sm font-medium text-text-secondary";
+
+function getUserId(user: ManagedUser) {
+  return user._id || user.id;
+}
+
+function formatDateForInput(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+  return date.toISOString().split('T')[0];
+}
+
+function formatDateForDisplay(value?: string | null) {
+  const input = formatDateForInput(value);
+  if (!input) return '-';
+  const [year, month, day] = input.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+function formatCpf(value?: string | null) {
+  if (!value) return '-';
+  if (value.includes('*')) return value;
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 11) return value;
+  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function documentValue(user: ManagedUser, upperKey: 'CPF' | 'PIS' | 'RG', lowerKey: 'cpf' | 'pis' | 'rg') {
+  return user[upperKey] || user[lowerKey] || '';
+}
+
+function documentDigits(value: string) {
+  return value.replace(/\D/g, '');
+}
+
+function hasCompleteCpf(value: string) {
+  return documentDigits(value).length === 11;
+}
+
+function hasCompletePis(value: string) {
+  return documentDigits(value).length === 11;
+}
+
+function hasCompleteRg(value: string) {
+  const length = documentDigits(value).length;
+  return length >= 8 && length <= 9;
+}
+
+function roleLabel(userType: number) {
+  return userType === 0 ? 'Gestão' : 'Operação';
+}
+
+function roleTone(userType: number) {
+  return userType === 0
+    ? 'border-secondary/35 bg-secondary/12 text-secondary'
+    : 'border-success/35 bg-success/12 text-success';
+}
+
+function statusLabel(user: ManagedUser) {
+  return user.exit_date ? 'Desligado' : 'Ativo';
+}
+
+function statusTone(user: ManagedUser) {
+  return user.exit_date
+    ? 'border-warning/35 bg-warning/12 text-warning'
+    : 'border-primary/35 bg-primary/12 text-primary';
+}
+
+function containsMaskedDocument(value: string) {
+  return value.includes('*');
+}
+
+async function readJson<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof data.message === 'string' ? data.message : fallbackMessage;
+    throw new Error(message);
+  }
+  return data as T;
+}
+
 export default function ManageWorkersPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const requestSeq = useRef(0);
+
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [cooperatives, setCooperatives] = useState<Cooperative[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loadingCooperatives, setLoadingCooperatives] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  // Modal states
-  const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Form fields
+  const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [currentUserId, setCurrentUserId] = useState('');
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [documentsRevealed, setDocumentsRevealed] = useState(false);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [pis, setPis] = useState('');
   const [rg, setRg] = useState('');
-  const [userType, setUserType] = useState<number>(1); // Default: Catador (1)
+  const [userType, setUserType] = useState<number>(1);
   const [birthDate, setBirthDate] = useState('');
   const [enterDate, setEnterDate] = useState('');
   const [exitDate, setExitDate] = useState('');
@@ -73,144 +189,81 @@ export default function ManageWorkersPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const formatDateForInput = (value?: string | null) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return value.slice(0, 10);
-    }
-    return date.toISOString().split('T')[0];
-  };
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<ManagedUser | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  // Load users on component mount
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        // Check if user is logged in
-        const userData = localStorage.getItem('user');
-        if (!userData) {
-          router.push('/login');
-          return;
-        }
+  const defaultCooperativeId = cooperativeId || cooperatives[0]?.cooperative_id || '';
+  const isEditing = modalMode === 'edit';
+  const documentsLocked = isEditing && !documentsRevealed;
 
-        // No need to check user type since only managers can access the dashboard
-        await loadUsers();
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        setError('Erro ao carregar usuários');
-        setLoading(false);
+  const loadPageData = useCallback(async (initialLoading = true) => {
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
+
+    if (initialLoading) setLoading(true);
+    setLoadingCooperatives(true);
+    setError(null);
+
+    try {
+      const [sessionResponse, usersResponse, cooperativesResponse] = await Promise.all([
+        fetch('/api/auth/session'),
+        fetch('/api/users?view=team-management'),
+        fetch('/api/cooperatives'),
+      ]);
+
+      if (sessionResponse.status === 401) {
+        router.push('/login');
+        return;
       }
-    };
 
-    fetchUsers();
+      const [sessionData, usersData, cooperativesData] = await Promise.all([
+        readJson<SessionUser>(sessionResponse, 'Sessão indisponível'),
+        readJson<ManagedUser[]>(usersResponse, 'Falha ao carregar equipe'),
+        readJson<Cooperative[]>(cooperativesResponse, 'Falha ao carregar cooperativas'),
+      ]);
+
+      if (requestId !== requestSeq.current) return;
+
+      setSessionUser(sessionData);
+      setUsers(usersData);
+      setCooperatives(cooperativesData);
+      setCooperativeId((current) => current || cooperativesData[0]?.cooperative_id || '');
+    } catch (err) {
+      if (requestId !== requestSeq.current) return;
+      setError(err instanceof Error ? err.message : 'Erro ao carregar gestão de equipe');
+    } finally {
+      if (requestId === requestSeq.current) {
+        setLoading(false);
+        setLoadingCooperatives(false);
+      }
+    }
   }, [router]);
 
   useEffect(() => {
-    const fetchCooperatives = async () => {
-      try {
-        setLoadingCooperatives(true);
-        const response = await fetch('/api/cooperatives');
-        if (!response.ok) {
-          throw new Error('Erro ao carregar cooperativas');
-        }
-        const data = await response.json();
-        setCooperatives(data);
-        if (data.length > 0) {
-          setCooperativeId((current) => current || data[0].cooperative_id);
-        }
-      } catch (err) {
-        console.error('Error loading cooperatives:', err);
-        setError((prev) => prev || 'Erro ao carregar cooperativas');
-      } finally {
-        setLoadingCooperatives(false);
-      }
-    };
+    void loadPageData();
+  }, [loadPageData]);
 
-    fetchCooperatives();
-  }, []);
+  const filteredUsers = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return users;
 
-  const loadUsers = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/users');
+    return users.filter((user) => {
+      const values = [
+        user.full_name,
+        user.email,
+        user.cooperative_name,
+        roleLabel(user.user_type),
+        documentValue(user, 'CPF', 'cpf'),
+      ];
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Falha ao carregar usuários' }));
-        throw new Error(errorData.message || `Error ${response.status}: Falha ao carregar usuários`);
-      }
+      return values.some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [searchTerm, users]);
 
-      const data = await response.json();
-      setUsers(data);
-    } catch (error) {
-      console.error('Error loading users:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao carregar lista de usuários');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const activeUsers = users.filter((user) => !user.exit_date).length;
+  const offboardedUsers = users.length - activeUsers;
+  const managementUsers = users.filter((user) => user.user_type === 0).length;
 
-  // Format CPF for display
-  const formatCPF = (cpf: string): string => {
-    if (!cpf) return '';
-    const numericCPF = cpf.replace(/\D/g, '');
-    if (numericCPF.length !== 11) return cpf;
-
-    return numericCPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
-
-  // Open modal to create a new user
-  const openCreateModal = () => {
-    setModalMode('create');
-    resetForm();
-    setShowModal(true);
-  };
-
-  // Open modal to edit an existing user
-  const openEditModal = async (user: User) => {
-    const userId = user._id || user.id;
-    let editableUser = user;
-
-    try {
-      const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-      if (!response.ok) {
-        throw new Error('Erro ao carregar dados completos do usuário');
-      }
-
-      const detail = await response.json();
-      editableUser = {
-        ...user,
-        ...detail,
-        _id: userId,
-        id: detail.id ?? userId,
-        birthdate: detail.birth_date ?? user.birthdate,
-      };
-    } catch (error) {
-      console.error('Error loading editable user details:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao carregar dados completos do usuário');
-      return;
-    }
-
-    setModalMode('edit');
-    setCurrentUserId(userId);
-    setFullName(editableUser.full_name || '');
-    setCpf(editableUser.CPF || editableUser.cpf || '');
-    setEmail(editableUser.email || '');
-    setPhone(editableUser.phone || '');
-    setPis(editableUser.PIS || editableUser.pis || '');
-    setRg(editableUser.RG || editableUser.rg || '');
-    setUserType(editableUser.user_type);
-    setBirthDate(formatDateForInput(editableUser.birthdate || editableUser.birth_date));
-    setEnterDate(formatDateForInput(editableUser.enter_date));
-    setExitDate(formatDateForInput(editableUser.exit_date));
-    setGender(editableUser.gender || '');
-    setCooperativeId(editableUser.cooperative_id || cooperatives[0]?.cooperative_id || cooperativeId);
-    setPassword('');
-    setConfirmPassword('');
-    setShowModal(true);
-  };
-
-  // Reset form fields
   const resetForm = () => {
     setCurrentUserId('');
     setFullName('');
@@ -224,629 +277,773 @@ export default function ManageWorkersPage() {
     setEnterDate('');
     setExitDate('');
     setGender('');
-    setCooperativeId(cooperatives[0]?.cooperative_id || '');
+    setCooperativeId(defaultCooperativeId);
     setPassword('');
     setConfirmPassword('');
+    setFieldErrors({});
+    setDocumentsRevealed(false);
   };
 
-  // Close modal
   const closeModal = () => {
     setShowModal(false);
-    resetForm();
     setError(null);
+    resetForm();
   };
 
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openCreateModal = () => {
+    setModalMode('create');
+    resetForm();
+    setCooperativeId(defaultCooperativeId);
+    setShowModal(true);
+  };
+
+  const applyUserToForm = (user: ManagedUser) => {
+    setFullName(user.full_name || '');
+    setCpf(documentValue(user, 'CPF', 'cpf'));
+    setEmail(user.email || '');
+    setPhone(user.phone || '');
+    setPis(documentValue(user, 'PIS', 'pis'));
+    setRg(documentValue(user, 'RG', 'rg'));
+    setUserType(user.user_type);
+    setBirthDate(formatDateForInput(user.birthdate || user.birth_date));
+    setEnterDate(formatDateForInput(user.enter_date));
+    setExitDate(formatDateForInput(user.exit_date));
+    setGender(user.gender || '');
+    setCooperativeId(user.cooperative_id || user.cooperative || defaultCooperativeId);
+    setPassword('');
+    setConfirmPassword('');
+    setDocumentsRevealed(Boolean(user.documents_revealed));
+  };
+
+  const openEditModal = async (user: ManagedUser) => {
+    const userId = getUserId(user);
+    setModalMode('edit');
+    setCurrentUserId(userId);
+    setFieldErrors({});
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+      const detail = await readJson<ManagedUser>(response, 'Erro ao carregar dados do integrante');
+      applyUserToForm({
+        ...user,
+        ...detail,
+        _id: userId,
+        id: detail.id ?? userId,
+        birthdate: detail.birth_date ?? user.birthdate,
+      });
+      setShowModal(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar dados do integrante');
+    }
+  };
+
+  const revealDocuments = async () => {
+    if (!currentUserId) return;
+    setDocumentsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/user?id=${encodeURIComponent(currentUserId)}&reveal=documents`);
+      const detail = await readJson<ManagedUser>(response, 'Não foi possível revelar documentos');
+      setCpf(documentValue(detail, 'CPF', 'cpf'));
+      setPis(documentValue(detail, 'PIS', 'pis'));
+      setRg(documentValue(detail, 'RG', 'rg'));
+      setDocumentsRevealed(true);
+      setSuccess('Documentos liberados para edição nesta sessão.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível revelar documentos');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const validateForm = () => {
+    const nextErrors: FieldErrors = {};
+
+    if (!fullName.trim()) nextErrors.fullName = 'Informe o nome completo.';
+    if (!birthDate) nextErrors.birthDate = 'Informe a data de nascimento.';
+    if (!enterDate) nextErrors.enterDate = 'Informe a data de entrada.';
+    if (!cooperativeId) nextErrors.cooperativeId = 'Selecione a cooperativa.';
+
+    if (!isEditing) {
+      if (!cpf.trim()) nextErrors.cpf = 'Informe o CPF.';
+      else if (!hasCompleteCpf(cpf)) nextErrors.cpf = 'CPF precisa ter 11 dígitos.';
+      if (!pis.trim()) nextErrors.pis = 'Informe o PIS/NIS.';
+      else if (!hasCompletePis(pis)) nextErrors.pis = 'PIS/NIS precisa ter 11 dígitos.';
+      if (!rg.trim()) nextErrors.rg = 'Informe o RG.';
+      else if (!hasCompleteRg(rg)) nextErrors.rg = 'RG precisa ter 8 ou 9 dígitos.';
+      if (password.length < 6) nextErrors.password = 'Use pelo menos 6 caracteres.';
+      if (password !== confirmPassword) nextErrors.confirmPassword = 'As senhas precisam coincidir.';
+    } else {
+      if (documentsRevealed) {
+        if (!pis.trim() || containsMaskedDocument(pis) || !hasCompletePis(pis)) {
+          nextErrors.pis = 'Revele e informe o PIS/NIS com 11 dígitos.';
+        }
+        if (!rg.trim() || containsMaskedDocument(rg) || !hasCompleteRg(rg)) {
+          nextErrors.rg = 'Revele e informe o RG com 8 ou 9 dígitos.';
+        }
+      }
+
+      if (password && password.length < 6) nextErrors.password = 'Use pelo menos 6 caracteres.';
+      if (password && password !== confirmPassword) nextErrors.confirmPassword = 'As senhas precisam coincidir.';
+    }
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
     setSuccess(null);
 
-    // Validate form
-    if (!fullName.trim()) {
-      setError('Nome completo é obrigatório');
+    if (!validateForm()) {
+      setError('Revise os campos destacados antes de salvar.');
       return;
     }
 
-    if (!cpf.trim()) {
-      setError('CPF é obrigatório');
-      return;
-    }
-
-    if (!birthDate) {
-      setError('Data de nascimento é obrigatória');
-      return;
-    }
-
-    if (!enterDate) {
-      setError('Data de entrada é obrigatória');
-      return;
-    }
-
-    if (!cooperativeId) {
-      setError('Selecione uma cooperativa');
-      return;
-    }
-
-    if (!pis.trim()) {
-      setError('PIS/NIS é obrigatório');
-      return;
-    }
-
-    if (!rg.trim()) {
-      setError('RG é obrigatório');
-      return;
-    }
-
-    // Validate password for new users
-    if (modalMode === 'create') {
-      if (password.length < 6) {
-        setError('A senha deve ter pelo menos 6 caracteres');
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setError('As senhas não coincidem');
-        return;
-      }
-    } else if (password && password.length < 6) {
-      setError('A nova senha deve ter pelo menos 6 caracteres');
-      return;
-    } else if (password && password !== confirmPassword) {
-      setError('As senhas não coincidem');
-      return;
-    }
+    setFormSubmitting(true);
 
     try {
-      const endpoint = modalMode === 'create'
-        ? '/api/users/create'
-        : '/api/users/update';
-
       const payload: Record<string, unknown> = {
-        full_name: fullName,
-        CPF: cpf,
-        email: email || undefined,
-        phone: phone || undefined,
-        PIS: pis || undefined,
-        RG: rg || undefined,
+        full_name: fullName.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
         user_type: userType,
         birth_date: birthDate,
         enter_date: enterDate,
         exit_date: exitDate || undefined,
         gender: gender || undefined,
-        cooperative_id: cooperativeId
+        cooperative_id: cooperativeId,
       };
 
-      // Add ID for updates
-      if (modalMode === 'edit') {
+      if (isEditing) {
         payload.id = currentUserId;
-      }
-
-      // Add password for creation or if changing password
-      if (modalMode === 'create' || (modalMode === 'edit' && password)) {
+        if (documentsRevealed) {
+          payload.PIS = pis;
+          payload.RG = rg;
+        }
+        if (password) payload.password = password;
+      } else {
+        payload.CPF = cpf;
+        payload.PIS = pis;
+        payload.RG = rg;
         payload.password = password;
       }
 
+      const endpoint = isEditing ? '/api/users/update' : '/api/users/create';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Operação falhou');
-      }
-
-      // Show success message and close modal
-      setSuccess(modalMode === 'create'
-        ? 'Usuário criado com sucesso!'
-        : 'Usuário atualizado com sucesso!');
-
-      // Reset form and close modal
+      await readJson(response, 'Operação não concluída');
       closeModal();
-
-      // Reload users list
-      loadUsers();
-
-    } catch (error) {
-      console.error('Form submission error:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao processar requisição');
+      setSuccess(isEditing ? 'Integrante atualizado com sucesso.' : 'Integrante cadastrado com sucesso.');
+      await loadPageData(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao salvar integrante');
+    } finally {
+      setFormSubmitting(false);
     }
   };
 
-  // Handle user deletion
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.')) {
-      return;
-    }
+  const confirmDeleteUser = async () => {
+    if (!pendingDeleteUser) return;
+    setDeleteSubmitting(true);
+    setError(null);
+    setSuccess(null);
 
     try {
-      const response = await fetch(`/api/users/delete`, {
+      const response = await fetch('/api/users/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: userId })
+        body: JSON.stringify({ id: getUserId(pendingDeleteUser) }),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Falha ao excluir usuário');
-      }
-
-      setSuccess('Usuário excluído com sucesso!');
-      loadUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao excluir usuário');
+      await readJson(response, 'Remoção não concluída');
+      setPendingDeleteUser(null);
+      setSuccess('Cadastro removido com sucesso.');
+      await loadPageData(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover cadastro');
+    } finally {
+      setDeleteSubmitting(false);
     }
   };
 
-  // Filter users based on search term
-  const filteredUsers = users.filter(user => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (user.full_name && user.full_name.toLowerCase().includes(searchLower)) ||
-      (user.CPF && user.CPF.toLowerCase().includes(searchLower)) ||
-      (user.cpf && user.cpf.toLowerCase().includes(searchLower)) ||
-      (user.email && user.email.toLowerCase().includes(searchLower))
-    );
-  });
+  const renderFieldError = (field: keyof FieldErrors) => (
+    fieldErrors[field] ? <p className="mt-1 text-xs text-error">{fieldErrors[field]}</p> : null
+  );
 
-  const labelClass = "block text-sm font-medium text-text-secondary mb-1";
-  const fieldClass = "block w-full px-3 py-2 border border-outline rounded-lg bg-surface text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0 disabled:bg-surface-elevated disabled:text-text-secondary";
-  const selectFieldClass = `${fieldClass} appearance-none`;
+  const renderUserActions = (user: ManagedUser, variant: 'desktop' | 'mobile' = 'desktop') => {
+    if (variant === 'mobile') {
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => void openEditModal(user)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/35 px-3 text-sm font-semibold text-primary hover:bg-primary/12"
+          >
+            <FaEdit className="h-4 w-4" />
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingDeleteUser(user)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-error/35 px-3 text-sm font-semibold text-error hover:bg-error/12"
+          >
+            <FaTrash className="h-4 w-4" />
+            Remover
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex justify-end gap-2">
+      <button
+        type="button"
+        onClick={() => void openEditModal(user)}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-primary/35 text-primary hover:bg-primary/12"
+        aria-label={`Editar ${user.full_name}`}
+        title="Editar integrante"
+      >
+        <FaEdit />
+      </button>
+      <button
+        type="button"
+        onClick={() => setPendingDeleteUser(user)}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-error/35 text-error hover:bg-error/12"
+        aria-label={`Remover ${user.full_name}`}
+        title="Remover cadastro sem histórico operacional"
+      >
+        <FaTrash />
+      </button>
+    </div>
+    );
+  };
 
   return (
     <Layout activePath="/manage-workers">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-primary">Gerenciar Usuários</h1>
-          <button
-            onClick={openCreateModal}
-            className="bg-primary hover:bg-primary/90 text-background px-4 py-2 rounded-lg flex items-center transition-colors duration-200"
+      <main className="mx-auto max-w-6xl space-y-6">
+        <section className="surface-panel rounded-xl p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/25 bg-primary/12 px-3 py-1 text-xs font-semibold uppercase text-primary">
+                <FaUsers className="h-3.5 w-3.5" />
+                Equipe
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground">Equipe gerenciada</h1>
+                <p className="mt-2 max-w-3xl text-sm text-text-secondary">
+                  Pessoas, papeis e documentos da cooperativa no escopo autorizado.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-text-secondary">
+                <span className="rounded-full border border-outline/70 bg-surface px-3 py-1">
+                  {sessionUser?.cooperative_name || 'Escopo da sessão'}
+                </span>
+                <span className="rounded-full border border-outline/70 bg-surface px-3 py-1">
+                  {sessionUser?.role === 'admin' ? 'Admin' : 'Gerente'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-lg bg-primary px-4 text-sm font-semibold text-background shadow-glow hover:bg-primary/90"
+            >
+              <FaUserPlus className="h-4 w-4" />
+              Adicionar integrante
+            </button>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Ativos</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{loading ? '...' : activeUsers}</p>
+          </div>
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Gestão</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{loading ? '...' : managementUsers}</p>
+          </div>
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Desligados</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{loading ? '...' : offboardedUsers}</p>
+          </div>
+        </section>
+
+        {(error || success) && (
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              error
+                ? 'border-error/35 bg-error/12 text-foreground'
+                : 'border-success/35 bg-success/12 text-foreground'
+            }`}
           >
-            <FaUserPlus className="mr-2" />
-            Novo Usuário
-          </button>
-        </div>
-
-        {error && (
-          <div className="mb-4 bg-error/12 border border-error/35 text-foreground px-4 py-3 rounded-lg flex items-start">
-            <FaExclamationCircle className="text-error mt-0.5 mr-2 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-4 bg-success/12 border border-success/35 text-foreground px-4 py-3 rounded-lg">
-            {success}
-          </div>
-        )}
-
-        {/* Search Bar */}
-        <div className="mb-6 relative">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary" />
-            <input
-              type="text"
-              className="w-full pl-10 pr-10 py-2 border border-outline bg-surface text-foreground placeholder:text-text-secondary/45 rounded-lg focus:border-primary focus:ring-0"
-              placeholder="Buscar por nome, CPF ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {searchTerm && (
-              <button
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary hover:text-foreground"
-                onClick={() => setSearchTerm('')}
-              >
-                <FaTimes />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center p-8">
-            <div className="animate-spin text-dms-secondary">
-              <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+            <div className="flex items-start gap-2">
+              {error ? <FaExclamationCircle className="mt-0.5 text-error" /> : <FaCheckCircle className="mt-0.5 text-success" />}
+              <span>{error || success}</span>
             </div>
           </div>
-        ) : (
-          <div className="bg-surface rounded-xl border border-outline shadow-soft overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-outline">
-                <thead className="bg-surface-elevated">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
-                      Nome
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
-                      CPF
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
-                      Email
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase">
-                      Tipo
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-text-secondary uppercase">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-surface divide-y divide-outline">
-                  {filteredUsers.length === 0 ? (
+        )}
+
+        <section className="surface-panel rounded-xl p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-xl">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+              <input
+                type="text"
+                className="h-11 w-full rounded-lg border border-outline bg-surface px-10 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0"
+                placeholder="Buscar nome ou documento"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-foreground"
+                  onClick={() => setSearchTerm('')}
+                  aria-label="Limpar busca"
+                >
+                  <FaTimes />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadPageData(false)}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-outline bg-surface px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+            >
+              Atualizar lista
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="mt-6 rounded-lg border border-outline bg-surface p-8 text-center text-sm text-text-secondary">
+              Carregando equipe...
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-dashed border-outline bg-surface p-8 text-center">
+              <p className="text-sm font-semibold text-foreground">
+                {searchTerm ? 'Nenhum integrante encontrado' : 'Nenhum integrante cadastrado'}
+              </p>
+              <p className="mt-2 text-sm text-text-secondary">
+                {searchTerm ? 'Ajuste a busca ou recarregue a lista.' : 'Cadastre o primeiro integrante para este escopo.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 hidden overflow-x-auto rounded-lg border border-outline md:block">
+                <table className="min-w-[56rem] w-full divide-y divide-outline bg-surface">
+                  <thead className="bg-surface-elevated">
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 text-center text-sm text-text-secondary">
-                        {searchTerm ? 'Nenhum usuário encontrado para esta busca' : 'Nenhum usuário cadastrado'}
-                      </td>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Integrante</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">CPF</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Papel</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Cooperativa</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Entrada / saída</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-text-secondary">Ações</th>
                     </tr>
-                  ) : (
-                    filteredUsers.map(user => (
-                      <tr key={user._id || user.id} className="hover:bg-surface-alt">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded-full bg-primary/14 border border-primary/35 flex items-center justify-center text-primary">
-                                <FaUser />
-                              </div>
+                  </thead>
+                  <tbody className="divide-y divide-outline">
+                    {filteredUsers.map((user) => (
+                      <tr key={getUserId(user)} className="hover:bg-surface-alt">
+                        <td className="px-4 py-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/35 bg-primary/12 text-primary">
+                              <FaUser />
                             </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-foreground">
-                                {user.full_name}
-                              </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">{user.full_name}</p>
+                              <p className="truncate text-xs text-text-secondary">{user.email || 'Email não informado'}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
-                          {formatCPF(user.CPF || user.cpf || '')}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
-                          {user.email || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            user.user_type === 0
-                              ? 'bg-secondary/14 text-secondary'
-                              : 'bg-success/14 text-success'
-                          }`}>
-                            {user.user_type === 0 ? 'Gerência' : 'Catador'}
+                        <td className="px-4 py-4 text-sm text-text-secondary">{formatCpf(documentValue(user, 'CPF', 'cpf'))}</td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${roleTone(user.user_type)}`}>
+                            {roleLabel(user.user_type)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => openEditModal(user)}
-                            className="text-primary hover:text-secondary mr-3"
-                            title="Editar usuário"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user._id || user.id)}
-                            className="text-error hover:text-error/80"
-                            title="Excluir usuário"
-                          >
-                            <FaTrash />
-                          </button>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(user)}`}>
+                            {statusLabel(user)}
+                          </span>
                         </td>
+                        <td className="px-4 py-4 text-sm text-text-secondary">{user.cooperative_name || user.cooperative_id || '-'}</td>
+                        <td className="px-4 py-4 text-sm text-text-secondary">
+                          {formatDateForDisplay(user.enter_date)}
+                          <span className="mx-1">/</span>
+                          {formatDateForDisplay(user.exit_date)}
+                        </td>
+                        <td className="px-4 py-4">{renderUserActions(user)}</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-      {/* User Modal */}
+              <div className="mt-6 grid gap-3 md:hidden">
+                {filteredUsers.map((user) => (
+                  <article key={getUserId(user)} className="rounded-lg border border-outline bg-surface p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{user.full_name}</p>
+                        <p className="mt-1 truncate text-xs text-text-secondary">{user.email || 'Email não informado'}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${roleTone(user.user_type)}`}>
+                          {roleLabel(user.user_type)}
+                        </span>
+                        <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusTone(user)}`}>
+                          {statusLabel(user)}
+                        </span>
+                      </div>
+                    </div>
+                    <dl className="mt-4 grid gap-2 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">CPF</dt>
+                        <dd className="text-right text-foreground">{formatCpf(documentValue(user, 'CPF', 'cpf'))}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">Cooperativa</dt>
+                        <dd className="text-right text-foreground">{user.cooperative_name || user.cooperative_id || '-'}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">Entrada</dt>
+                        <dd className="text-right text-foreground">{formatDateForDisplay(user.enter_date)}</dd>
+                      </div>
+                      {user.exit_date && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-text-secondary">Saída</dt>
+                          <dd className="text-right text-warning">{formatDateForDisplay(user.exit_date)}</dd>
+                        </div>
+                      )}
+                    </dl>
+                    <div className="mt-4">{renderUserActions(user, 'mobile')}</div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      </main>
+
       {showModal && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-surface rounded-xl border border-outline shadow-xl w-full max-w-md mx-auto my-8 overflow-hidden">
-            <div className="px-6 py-4 bg-primary text-background flex justify-between items-center sticky top-0 z-10">
-              <h3 className="text-lg font-medium">
-                {modalMode === 'create' ? 'Novo Usuário' : 'Editar Usuário'}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-background/80 p-4">
+          <div className="my-8 w-full max-w-3xl overflow-hidden rounded-xl border border-outline bg-surface shadow-xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-outline bg-surface-elevated px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {isEditing ? 'Editar integrante' : 'Adicionar integrante'}
+                </h2>
+                <p className="mt-1 text-xs text-text-secondary">
+                  {isEditing ? 'Cadastro e desligamento dentro do escopo autorizado.' : 'Novo cadastro na equipe da cooperativa.'}
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={closeModal}
-                className="text-background hover:text-background/75"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:bg-surface hover:text-foreground"
+                aria-label="Fechar modal"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              {error && (
-                <div className="mb-4 bg-error/12 border border-error/35 text-foreground px-4 py-3 rounded-lg flex items-start">
-                  <FaExclamationCircle className="text-error mt-0.5 mr-2 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <label htmlFor="fullName" className={labelClass}>
-                    Nome Completo *
-                  </label>
+            <form onSubmit={handleSubmit} className="max-h-[78vh] overflow-y-auto p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label htmlFor="fullName" className={labelClass}>Nome completo *</label>
                   <input
                     id="fullName"
                     type="text"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(event) => setFullName(event.target.value)}
                     className={fieldClass}
-                    required
                   />
+                  {renderFieldError('fullName')}
                 </div>
 
-                <div className="mb-4">
-                  <label htmlFor="cpf" className={labelClass}>
-                    CPF *
-                  </label>
-                  <input
-                    id="cpf"
-                    type="text"
-                    value={cpf}
-                    onChange={(e) => setCpf(e.target.value)}
-                    className={fieldClass}
-                    placeholder="000.000.000-00"
-                    required
-                    disabled={modalMode === 'edit'} // Cannot edit CPF for existing users
-                  />
-                  {modalMode === 'edit' && (
-                    <p className="mt-1 text-xs text-text-secondary">CPF não pode ser alterado</p>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <label htmlFor="email" className={labelClass}>
-                    Email
-                  </label>
+                <div>
+                  <label htmlFor="email" className={labelClass}>Email</label>
                   <input
                     id="email"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(event) => setEmail(event.target.value)}
                     className={fieldClass}
                   />
                 </div>
 
-                <div className="mb-4">
-                  <label htmlFor="phone" className={labelClass}>
-                    Telefone
-                  </label>
+                <div>
+                  <label htmlFor="phone" className={labelClass}>Telefone</label>
                   <input
                     id="phone"
                     type="tel"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(event) => setPhone(event.target.value)}
                     placeholder="(00) 00000-0000"
                     className={fieldClass}
                   />
                 </div>
+              </div>
 
-                <div className="mb-4">
-                  <label htmlFor="pis" className={labelClass}>
-                    PIS/NIS *
-                  </label>
-                  <input
-                    id="pis"
-                    type="text"
-                    value={pis}
-                    onChange={(e) => setPis(e.target.value)}
-                    placeholder="000.00000.00-0"
+              <div className={`mt-5 rounded-lg border p-4 ${
+                documentsRevealed
+                  ? 'border-warning/45 bg-warning/10'
+                  : 'border-outline bg-surface-alt'
+              }`}>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-2">
+                    <FaShieldAlt className="text-primary" />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Documentos pessoais</p>
+                      <p className="text-xs text-text-secondary">
+                        {documentsRevealed || !isEditing ? 'Campos liberados para cadastro ou edição.' : 'Valores mascarados na leitura atual.'}
+                      </p>
+                    </div>
+                  </div>
+                  {isEditing && !documentsRevealed && (
+                    <button
+                      type="button"
+                      onClick={() => void revealDocuments()}
+                      disabled={documentsLoading}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/35 px-3 text-sm font-semibold text-primary hover:bg-primary/12 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      <FaEye className="h-4 w-4" />
+                      {documentsLoading ? 'Liberando...' : 'Revelar para editar'}
+                    </button>
+                  )}
+                </div>
+
+                {documentsRevealed && (
+                  <div className="mt-4 rounded-lg border border-warning/35 bg-background/35 px-3 py-2 text-sm text-warning">
+                    <div className="flex items-start gap-2">
+                      <FaExclamationCircle className="mt-0.5 shrink-0" />
+                      <p>
+                        Dados sensíveis expostos nesta sessão. Confira somente o necessário e feche o modal para voltar à leitura mascarada.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label htmlFor="cpf" className={labelClass}>CPF *</label>
+                    <input
+                      id="cpf"
+                      type="text"
+                      value={cpf}
+                      onChange={(event) => setCpf(event.target.value)}
+                      placeholder="000.000.000-00"
+                      className={fieldClass}
+                      disabled={isEditing}
+                    />
+                    {renderFieldError('cpf')}
+                  </div>
+                  <div>
+                    <label htmlFor="pis" className={labelClass}>PIS/NIS *</label>
+                    <input
+                      id="pis"
+                      type="text"
+                      value={pis}
+                      onChange={(event) => setPis(event.target.value)}
+                      placeholder="000.00000.00-0"
+                      className={fieldClass}
+                      disabled={documentsLocked}
+                    />
+                    {renderFieldError('pis')}
+                  </div>
+                  <div>
+                    <label htmlFor="rg" className={labelClass}>RG *</label>
+                    <input
+                      id="rg"
+                      type="text"
+                      value={rg}
+                      onChange={(event) => setRg(event.target.value)}
+                      placeholder="00.000.000-0"
+                      className={fieldClass}
+                      disabled={documentsLocked}
+                    />
+                    {renderFieldError('rg')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="cooperative" className={labelClass}>Cooperativa *</label>
+                  <select
+                    id="cooperative"
+                    value={cooperativeId}
+                    onChange={(event) => setCooperativeId(event.target.value)}
                     className={fieldClass}
-                    required
+                    disabled={loadingCooperatives || cooperatives.length === 0}
+                  >
+                    {loadingCooperatives && <option>Carregando...</option>}
+                    {!loadingCooperatives && cooperatives.length === 0 && <option>Nenhuma cooperativa cadastrada</option>}
+                    {!loadingCooperatives && cooperatives.map((cooperative) => (
+                      <option key={cooperative.cooperative_id} value={cooperative.cooperative_id}>
+                        {cooperative.name}
+                      </option>
+                    ))}
+                  </select>
+                  {renderFieldError('cooperativeId')}
+                </div>
+
+                <div>
+                  <label htmlFor="userType" className={labelClass}>Papel *</label>
+                  <select
+                    id="userType"
+                    value={userType}
+                    onChange={(event) => setUserType(Number(event.target.value))}
+                    className={fieldClass}
+                  >
+                    <option value={1}>Operação de coleta</option>
+                    <option value={0}>Gestão da cooperativa</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="birthDate" className={labelClass}>Data de nascimento *</label>
+                  <input
+                    id="birthDate"
+                    type="date"
+                    value={birthDate}
+                    onChange={(event) => setBirthDate(event.target.value)}
+                    className={fieldClass}
+                  />
+                  {renderFieldError('birthDate')}
+                </div>
+
+                <div>
+                  <label htmlFor="enterDate" className={labelClass}>Data de entrada *</label>
+                  <input
+                    id="enterDate"
+                    type="date"
+                    value={enterDate}
+                    onChange={(event) => setEnterDate(event.target.value)}
+                    className={fieldClass}
+                  />
+                  {renderFieldError('enterDate')}
+                </div>
+
+                <div>
+                  <label htmlFor="exitDate" className={labelClass}>Data de saída</label>
+                  <input
+                    id="exitDate"
+                    type="date"
+                    value={exitDate}
+                    onChange={(event) => setExitDate(event.target.value)}
+                    className={fieldClass}
                   />
                 </div>
 
-                <div className="mb-4">
-                  <label htmlFor="rg" className={labelClass}>
-                    RG *
-                  </label>
-                  <input
-                    id="rg"
-                    type="text"
-                    value={rg}
-                    onChange={(e) => setRg(e.target.value)}
-                    placeholder="00.000.000-0"
+                <div>
+                  <label htmlFor="gender" className={labelClass}>Gênero</label>
+                  <select
+                    id="gender"
+                    value={gender}
+                    onChange={(event) => setGender(event.target.value)}
                     className={fieldClass}
-                    required
-                  />
+                  >
+                    <option value="">Não informar</option>
+                    <option value="Feminino">Feminino</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Outro">Outro</option>
+                  </select>
                 </div>
 
-                <div className="mb-4">
-                  <label htmlFor="cooperative" className={labelClass}>
-                    Cooperativa *
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="cooperative"
-                      value={cooperativeId}
-                      onChange={(e) => setCooperativeId(e.target.value)}
-                      className={selectFieldClass}
-                      disabled={loadingCooperatives || cooperatives.length === 0}
-                    >
-                      {loadingCooperatives && <option>Carregando...</option>}
-                      {!loadingCooperatives && cooperatives.length === 0 && (
-                        <option>Nenhuma cooperativa cadastrada</option>
-                      )}
-                      {!loadingCooperatives &&
-                        cooperatives.map((coop) => (
-                          <option key={coop.cooperative_id} value={coop.cooperative_id}>
-                            {coop.name}
-                          </option>
-                        ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
-                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="mb-4">
-                    <label htmlFor="birthDate" className={labelClass}>
-                      Data de Nascimento *
-                    </label>
-                    <input
-                      id="birthDate"
-                      type="date"
-                      value={birthDate}
-                      onChange={(e) => setBirthDate(e.target.value)}
-                      className={fieldClass}
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="enterDate" className={labelClass}>
-                      Data de Entrada *
-                    </label>
-                    <input
-                      id="enterDate"
-                      type="date"
-                      value={enterDate}
-                      onChange={(e) => setEnterDate(e.target.value)}
-                      className={fieldClass}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="mb-4">
-                    <label htmlFor="exitDate" className={labelClass}>
-                      Data de Saída
-                    </label>
-                    <input
-                      id="exitDate"
-                      type="date"
-                      value={exitDate}
-                      onChange={(e) => setExitDate(e.target.value)}
-                      className={fieldClass}
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="gender" className={labelClass}>
-                      Gênero
-                    </label>
-                    <div className="relative">
-                      <select
-                        id="gender"
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value)}
-                        className={selectFieldClass}
-                      >
-                        <option value="">Não informar</option>
-                        <option value="Feminino">Feminino</option>
-                        <option value="Masculino">Masculino</option>
-                        <option value="Outro">Outro</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label htmlFor="userType" className={labelClass}>
-                    Tipo de Usuário *
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="userType"
-                      value={userType}
-                      onChange={(e) => setUserType(Number(e.target.value))}
-                      className={selectFieldClass}
-                    >
-                      <option value={1}>Catador</option>
-                      <option value={0}>Gerência (Acesso ao Dashboard)</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary">
-                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-4">
+                <div>
                   <label htmlFor="password" className={labelClass}>
-                    {modalMode === 'create' ? 'Senha *' : 'Nova Senha (deixe em branco para manter)'}
+                    {isEditing ? 'Nova senha' : 'Senha *'}
                   </label>
                   <input
                     id="password"
                     type="password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(event) => setPassword(event.target.value)}
                     className={fieldClass}
                     minLength={6}
-                    required={modalMode === 'create'}
                   />
-                  <p className="mt-1 text-xs text-text-secondary">Mínimo de 6 caracteres</p>
+                  {renderFieldError('password')}
                 </div>
 
-                <div className="mb-6">
+                <div>
                   <label htmlFor="confirmPassword" className={labelClass}>
-                    {modalMode === 'create' ? 'Confirmar Senha *' : 'Confirmar Nova Senha'}
+                    {isEditing ? 'Confirmar nova senha' : 'Confirmar senha *'}
                   </label>
                   <input
                     id="confirmPassword"
                     type="password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`${fieldClass} ${
-                      confirmPassword && confirmPassword !== password
-                        ? 'border-error/40 bg-error/12'
-                        : ''
-                    }`}
-                    required={modalMode === 'create'}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className={fieldClass}
+                    minLength={6}
                   />
-                  {confirmPassword && confirmPassword !== password && (
-                    <p className="mt-1 text-xs text-error">As senhas não coincidem</p>
-                  )}
+                  {renderFieldError('confirmPassword')}
                 </div>
+              </div>
 
-                <div className="sticky bottom-0 pt-4 bg-surface mt-6 border-t border-outline">
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-4 py-2 border border-outline rounded-lg text-foreground hover:bg-surface-alt"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-primary text-background rounded-lg hover:bg-primary/90 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-70"
-                      disabled={
-                        loadingCooperatives ||
-                        (modalMode === 'create' && (
-                          !fullName.trim() ||
-                          !cpf.trim() ||
-                          !pis.trim() ||
-                          !rg.trim() ||
-                          !birthDate ||
-                          !enterDate ||
-                          !cooperativeId ||
-                          password.length < 6 ||
-                          password !== confirmPassword
-                        ))
-                      }
-                    >
-                      {modalMode === 'create' ? 'Criar Usuário' : 'Salvar Alterações'}
-                    </button>
-                  </div>
-                </div>
-              </form>
+              <div className="sticky bottom-0 mt-6 flex flex-col gap-3 border-t border-outline bg-surface pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="min-h-11 rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={formSubmitting}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-background hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {formSubmitting ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Cadastrar integrante'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="w-full max-w-md rounded-xl border border-outline bg-surface p-6 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-error/35 bg-error/12 text-error">
+                <FaTrash />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Confirmar remoção</h2>
+                <p className="mt-2 text-sm text-text-secondary">
+                  {pendingDeleteUser.full_name} só será removido se não houver vendas, medições ou contribuições associadas.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteUser(null)}
+                className="min-h-11 rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteUser()}
+                disabled={deleteSubmitting}
+                className="min-h-11 rounded-lg bg-error px-4 text-sm font-semibold text-background hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {deleteSubmitting ? 'Removendo...' : 'Remover cadastro'}
+              </button>
             </div>
           </div>
         </div>

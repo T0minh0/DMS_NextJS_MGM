@@ -9,7 +9,11 @@ import {
 } from '@/lib/auth/server';
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
-import { sanitizeDigits } from '@/lib/db-utils';
+import { normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
+
+function isMaskedDocument(value: unknown) {
+  return typeof value === 'string' && value.includes('*');
+}
 
 export async function POST(request: Request) {
   try {
@@ -61,17 +65,27 @@ export async function POST(request: Request) {
     if (email) {
       updateData.email = email.trim();
     }
-    if (PIS) {
-      const pisDigits = sanitizeDigits(PIS);
-      if (pisDigits) {
-        updateData.pis = Buffer.from(pisDigits, 'utf8');
+    if (PIS && !isMaskedDocument(PIS)) {
+      const pisDigits = normalizePisDigits(PIS);
+      if (!pisDigits) {
+        return apiErrorResponse({
+          message: 'PIS deve conter 11 dígitos',
+          code: 'INVALID_DOCUMENTS',
+          status: 400,
+        });
       }
+      updateData.pis = Buffer.from(pisDigits, 'utf8');
     }
-    if (RG) {
-      const rgDigits = sanitizeDigits(RG);
-      if (rgDigits) {
-        updateData.rg = Buffer.from(rgDigits, 'utf8');
+    if (RG && !isMaskedDocument(RG)) {
+      const rgDigits = normalizeRgDigits(RG);
+      if (!rgDigits) {
+        return apiErrorResponse({
+          message: 'RG deve conter 8 ou 9 dígitos',
+          code: 'INVALID_DOCUMENTS',
+          status: 400,
+        });
       }
+      updateData.rg = Buffer.from(rgDigits, 'utf8');
     }
 
     await prisma.workers.update({

@@ -2,11 +2,20 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin } from '@/lib/auth/server';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  requireManagerOrAdmin,
+  requireScopedPermission,
+} from '@/lib/auth/server';
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
-import { sanitizeDigits } from '@/lib/db-utils';
+import { normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
 import { shouldBlockWorkerCooperativeTransfer } from '@/lib/users/dependencies';
+
+function isMaskedDocument(value: unknown) {
+  return typeof value === 'string' && value.includes('*');
+}
 
 export async function POST(request: Request) {
   try {
@@ -26,9 +35,9 @@ export async function POST(request: Request) {
       cooperative_id,
     } = await request.json();
 
-    if (!id || !full_name || !birth_date || !enter_date || !cooperative_id || !PIS || !RG) {
+    if (!id || !full_name || !birth_date || !enter_date || !cooperative_id) {
       return apiErrorResponse({
-        message: 'ID, nome, datas, cooperativa, PIS e RG são obrigatórios',
+        message: 'ID, nome, datas e cooperativa são obrigatórios',
         code: 'REQUIRED_USER_FIELDS',
         status: 400,
       });
@@ -67,6 +76,13 @@ export async function POST(request: Request) {
     }
 
     const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
+    requireScopedPermission(
+      session,
+      'users',
+      'update',
+      session.role === 'admin' && targetCooperativeId !== session.cooperativeId ? 'global' : 'cooperative',
+    );
+
     let cooperativeBigInt: bigint;
     try {
       cooperativeBigInt = BigInt(targetCooperativeId);
@@ -101,11 +117,14 @@ export async function POST(request: Request) {
       }
     }
 
-    const pisDigits = sanitizeDigits(PIS);
-    const rgDigits = sanitizeDigits(RG);
-    if (!pisDigits || !rgDigits) {
+    const pisDigits = typeof PIS === 'string' && !isMaskedDocument(PIS) ? normalizePisDigits(PIS) : null;
+    const rgDigits = typeof RG === 'string' && !isMaskedDocument(RG) ? normalizeRgDigits(RG) : null;
+    if (
+      (typeof PIS === 'string' && !isMaskedDocument(PIS) && !pisDigits) ||
+      (typeof RG === 'string' && !isMaskedDocument(RG) && !rgDigits)
+    ) {
       return apiErrorResponse({
-        message: 'PIS e RG devem conter apenas números',
+        message: 'PIS deve conter 11 dígitos; RG deve conter 8 ou 9 dígitos',
         code: 'INVALID_DOCUMENTS',
         status: 400,
       });
@@ -136,8 +155,6 @@ export async function POST(request: Request) {
     const updateData: Prisma.WorkersUpdateInput = {
       workerName: full_name.trim(),
       email: email?.trim() || existing.email,
-      pis: Buffer.from(pisDigits, 'utf8'),
-      rg: Buffer.from(rgDigits, 'utf8'),
       userType: String(userTypeNumber),
       birthDate: birthDateObj,
       enterDate: enterDateObj,
@@ -150,6 +167,14 @@ export async function POST(request: Request) {
       },
       lastUpdate: new Date(),
     };
+
+    if (pisDigits) {
+      updateData.pis = Buffer.from(pisDigits, 'utf8');
+    }
+
+    if (rgDigits) {
+      updateData.rg = Buffer.from(rgDigits, 'utf8');
+    }
 
     if (password) {
       const passwordHash = await bcrypt.hash(password, 10);

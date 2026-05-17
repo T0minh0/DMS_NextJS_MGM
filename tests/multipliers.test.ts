@@ -79,11 +79,12 @@ test('random-multiplier job uses InMemoryJobRunLedger for within-process idempot
   assert.match(source, /ledger/);
 });
 
-test('random-multiplier job skips cooperatives already updated this period (DB-level idempotency)', () => {
+test('random-multiplier job uses history unique key for DB-level idempotency', () => {
   const source = readRoute('src/app/api/jobs/random-multiplier/route.ts');
-  assert.match(source, /cooperativeRandomMultiplier\.findFirst/);
+  assert.match(source, /cooperativeRandomMultiplierHistory\.createMany/);
+  assert.match(source, /skipDuplicates:\s*true/);
+  assert.match(source, /cooperativeRandomMultiplierHistory\.findUniqueOrThrow/);
   assert.match(source, /lastUpdated/);
-  assert.match(source, /gte.*periodStart/);
   assert.match(source, /skippedCount/);
   assert.match(source, /cooperativeRandomMultiplier\.upsert/);
 });
@@ -97,6 +98,6 @@ test('random-multiplier job returns skipped status when already running', () => 
 test('random-multiplier job uses period key based on year-month', () => {
   const source = readRoute('src/app/api/jobs/random-multiplier/route.ts');
   assert.match(source, /buildPeriodKey/);
-  assert.match(source, /getUTCFullYear/);
-  assert.match(source, /getUTCMonth/);
+  assert.match(source, /LEADERBOARD_TIME_ZONE/);
+  assert.match(source, /formatToParts/);
 });

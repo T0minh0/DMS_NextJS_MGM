@@ -35,13 +35,14 @@ export interface JobRunClaim {
 }
 
 export interface JobRunLedger {
-  claim(key: string): Promise<JobRunClaim>;
+  claim(key: string, options?: { rerunCompleted?: boolean }): Promise<JobRunClaim>;
   complete(key: string, result?: unknown): Promise<void>;
   fail(key: string, error: unknown): Promise<void>;
 }
 
 export interface RunIdempotentJobOptions {
   context?: Partial<LogContext>;
+  rerunCompleted?: boolean;
 }
 
 export type RunIdempotentJobResult<T> =
@@ -83,7 +84,9 @@ export async function runIdempotentJob<T>(
     domain: 'job',
     ...options.context,
   };
-  const claim = await ledger.claim(key);
+  const claim = await ledger.claim(key, {
+    rerunCompleted: options.rerunCompleted,
+  });
 
   if (!claim.acquired) {
     logWarn('job.skipped', context, {
@@ -127,10 +130,13 @@ export async function runIdempotentJob<T>(
 export class InMemoryJobRunLedger implements JobRunLedger {
   private readonly records = new Map<string, JobRunRecord>();
 
-  async claim(key: string): Promise<JobRunClaim> {
+  async claim(
+    key: string,
+    options: { rerunCompleted?: boolean } = {},
+  ): Promise<JobRunClaim> {
     const current = this.records.get(key);
 
-    if (current?.status === 'completed') {
+    if (current?.status === 'completed' && !options.rerunCompleted) {
       return { acquired: false, reason: 'already_completed', record: current };
     }
 

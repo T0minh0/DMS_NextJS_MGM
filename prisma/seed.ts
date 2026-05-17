@@ -229,7 +229,7 @@ async function main() {
   assertSafeSeedTarget();
 
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "leaderboard_entry", "leaderboard_snapshot", "worker_achievement", "worker_level", "achievement_xp_override", "achievement_definition", "level_definition", "cooperative_random_multiplier", "cooperative_material_multiplier", "notice_board", "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE "leaderboard_entry", "leaderboard_snapshot", "worker_achievement", "worker_level", "achievement_xp_override", "achievement_definition", "level_definition", "cooperative_random_multiplier_history", "cooperative_random_multiplier", "cooperative_material_multiplier", "notice_board", "Worker_contributions", "collective_sale_contribution", "collective_sale", "material_bag_state", "Stock", "Measurments", "Sales", "Devices", "Workers", "Buyers", "Materials", "Groups", "Cooperative" RESTART IDENTITY CASCADE;',
   );
 
   await prisma.levelDefinition.createMany({
@@ -520,6 +520,29 @@ async function main() {
         cooperativeId: cooperativeNorte.cooperativeId,
         multiplierValue: '1.000',
         lastUpdated: new Date('2026-05-13T09:00:00Z'),
+      },
+    ],
+  });
+
+  await prisma.cooperativeRandomMultiplierHistory.createMany({
+    data: [
+      {
+        cooperativeId: cooperativeHorizonte.cooperativeId,
+        yearMonth: '2026-05',
+        multiplierValue: '1.100',
+        updatedAt: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeLeste.cooperativeId,
+        yearMonth: '2026-05',
+        multiplierValue: '0.900',
+        updatedAt: new Date('2026-05-13T09:00:00Z'),
+      },
+      {
+        cooperativeId: cooperativeNorte.cooperativeId,
+        yearMonth: '2026-05',
+        multiplierValue: '1.000',
+        updatedAt: new Date('2026-05-13T09:00:00Z'),
       },
     ],
   });

@@ -8,10 +8,10 @@ import {
   runIdempotentJob,
 } from '@/lib/jobs/idempotency';
 import { verifyJobAuthorizationHeader } from '@/lib/jobs/auth';
+import { LEADERBOARD_TIME_ZONE } from '@/lib/leaderboard';
 
 // Per-process ledger prevents concurrent in-process runs. Cross-process idempotency
-// is handled by checking lastUpdated before each upsert — if a record was already set
-// in the current period (same year-month), the upsert is skipped rather than re-randomizing.
+// is handled by the unique history row for each cooperative/year-month.
 const ledger = new InMemoryJobRunLedger();
 
 function generateRandomMultiplier(): number {
@@ -20,8 +20,19 @@ function generateRandomMultiplier(): number {
 }
 
 function buildPeriodKey(date: Date) {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: LEADERBOARD_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  const year = values.year;
+  const month = values.month;
+
   return `${year}-${month}`;
 }
 
@@ -37,7 +48,8 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const periodKey = buildPeriodKey(new Date());
+  const now = new Date();
+  const periodKey = buildPeriodKey(now);
   const jobKey = buildJobRunKey({ jobName: 'monthly-random-multiplier', periodKey });
 
   try {
@@ -49,33 +61,72 @@ export async function POST(request: NextRequest) {
           select: { cooperativeId: true },
         });
 
-        // Period boundary: start of the current year-month in UTC.
-        const now = new Date();
-        const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-
         let skippedCount = 0;
         let updatedCount = 0;
 
         for (const coop of cooperatives) {
-          // Skip cooperatives already assigned a multiplier this period to prevent
-          // re-randomizing on redeploy or scheduler retry within the same month.
-          const existing = await prisma.cooperativeRandomMultiplier.findFirst({
-            where: { cooperativeId: coop.cooperativeId, lastUpdated: { gte: periodStart } },
-            select: { cooperativeRandomMultiplierId: true },
+          const inserted = await prisma.$transaction(async (tx) => {
+            const existingCurrent = await tx.cooperativeRandomMultiplier.findUnique({
+              where: { cooperativeId: coop.cooperativeId },
+              select: {
+                multiplierValue: true,
+                lastUpdated: true,
+              },
+            });
+            const currentMatchesPeriod =
+              existingCurrent && buildPeriodKey(existingCurrent.lastUpdated) === periodKey;
+            const candidateMultiplier = currentMatchesPeriod
+              ? existingCurrent.multiplierValue
+              : generateRandomMultiplier();
+            const candidateUpdatedAt = currentMatchesPeriod
+              ? existingCurrent.lastUpdated
+              : now;
+            const created = await tx.cooperativeRandomMultiplierHistory.createMany({
+              data: [
+                {
+                  cooperativeId: coop.cooperativeId,
+                  yearMonth: periodKey,
+                  multiplierValue: candidateMultiplier,
+                  updatedAt: candidateUpdatedAt,
+                },
+              ],
+              skipDuplicates: true,
+            });
+            const periodMultiplier =
+              await tx.cooperativeRandomMultiplierHistory.findUniqueOrThrow({
+                where: {
+                  cooperativeId_yearMonth: {
+                    cooperativeId: coop.cooperativeId,
+                    yearMonth: periodKey,
+                  },
+                },
+                select: {
+                  multiplierValue: true,
+                  updatedAt: true,
+                },
+              });
+
+            await tx.cooperativeRandomMultiplier.upsert({
+              where: { cooperativeId: coop.cooperativeId },
+              create: {
+                cooperativeId: coop.cooperativeId,
+                multiplierValue: periodMultiplier.multiplierValue,
+                lastUpdated: periodMultiplier.updatedAt,
+              },
+              update: {
+                multiplierValue: periodMultiplier.multiplierValue,
+                lastUpdated: periodMultiplier.updatedAt,
+              },
+            });
+
+            return created.count > 0;
           });
 
-          if (existing) {
+          if (inserted) {
+            updatedCount += 1;
+          } else {
             skippedCount += 1;
-            continue;
           }
-
-          const multiplier = generateRandomMultiplier();
-          await prisma.cooperativeRandomMultiplier.upsert({
-            where: { cooperativeId: coop.cooperativeId },
-            create: { cooperativeId: coop.cooperativeId, multiplierValue: multiplier },
-            update: { multiplierValue: multiplier, lastUpdated: now },
-          });
-          updatedCount += 1;
         }
 
         logInfo('job.random-multiplier.applied', context, {

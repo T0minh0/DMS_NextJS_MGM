@@ -21,6 +21,7 @@ model Cooperative {
   notices                     NoticeBoard[]
   materialMultipliers         CooperativeMaterialMultiplier[]
   randomMultiplier            CooperativeRandomMultiplier?
+  randomMultiplierHistory     CooperativeRandomMultiplierHistory[]
   achievementXpOverrides      AchievementXpOverride[]
   workerAchievements          WorkerAchievement[]
   leaderboardSnapshots        LeaderboardSnapshot[]
@@ -262,6 +263,19 @@ model CooperativeRandomMultiplier {
   cooperative                   Cooperative @relation(fields: [cooperativeId], references: [cooperativeId], map: "cooperative_random_multiplier_cooperative_id_fkey")
 
   @@map("cooperative_random_multiplier")
+}
+
+model CooperativeRandomMultiplierHistory {
+  cooperativeRandomMultiplierHistoryId String      @id @default(dbgenerated("gen_random_uuid()")) @map("cooperative_random_multiplier_history_id") @db.Uuid
+  cooperativeId                        BigInt      @map("cooperative_id")
+  yearMonth                            String      @map("year_month") @db.Char(7)
+  multiplierValue                      Decimal     @map("multiplier_value") @db.Decimal(5, 3)
+  updatedAt                            DateTime    @default(now()) @map("updated_at") @db.Timestamp(6)
+  cooperative                          Cooperative @relation(fields: [cooperativeId], references: [cooperativeId], map: "cooperative_random_multiplier_history_cooperative_id_fkey")
+
+  @@unique([cooperativeId, yearMonth], map: "cooperative_random_multiplier_history_cooperative_month_key")
+  @@index([yearMonth], map: "cooperative_random_multiplier_history_year_month_idx")
+  @@map("cooperative_random_multiplier_history")
 }
 
 model AchievementDefinition {

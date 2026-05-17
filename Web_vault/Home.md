@@ -26,6 +26,7 @@ Vault operacional do projeto DMS Web. Esta documentacao reflete o codigo observa
 - [[Operacao/PDF-e-sanitizacao]]: engine PDF, headers, locale e sanitizacao server-side de notices.
 - [[Operacao/Seed-e-dados-locais]]: seed Prisma, contas de teste e dados criados.
 - [[Operacao/Qualidade-e-riscos]]: riscos tecnicos observados.
+- [[Operacao/Deprecacao-network-management-system]]: matriz final de paridade e checklist para congelar/deprecar o repo Java legado.
 - [[Planejamento/Tony]]: configuracao ClickUp, agentes e runtime.
 - [[Planejamento/Jornadas-gerenciais-IA]]: papeis de produto, jornadas gerenciais, IA alvo e evidencias browser para UI.
 - [[Planejamento/Matriz-fixtures-UAT]]: fixtures sinteticos por papel, jornada, material, venda e negativos cross-coop.

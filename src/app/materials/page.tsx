@@ -1,308 +1,685 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import {
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaSearch,
-  FaFilter,
-  FaSave,
-  FaTimes,
   FaBoxes,
+  FaCheckCircle,
+  FaEdit,
+  FaExclamationTriangle,
+  FaFilter,
   FaLayerGroup,
-  FaTag
+  FaPlus,
+  FaRedo,
+  FaSave,
+  FaSearch,
+  FaTimes,
+  FaTrash,
+  FaWarehouse,
 } from 'react-icons/fa';
 
 interface Material {
   _id: string;
   material_id: string;
   material: string;
+  name?: string;
   group: string;
+  isGroup?: boolean;
 }
 
-interface MaterialFormData {
-  material: string;
+interface SessionUser {
+  id: string;
+  full_name: string;
+  role: 'admin' | 'manager';
+  cooperative_id: string;
+  cooperative_name?: string | null;
+}
+
+interface CooperativeMaterialStock {
+  material_id: string;
+  name: string;
   group: string;
+  cooperative_id: string;
+  stock_kg: number;
+  total_collected_kg: number;
+  total_sold_kg: number;
+}
+
+interface CooperativeMaterialsPayload {
+  materials?: CooperativeMaterialStock[];
+  count?: number;
+  total?: number;
+  limit?: number;
+  has_more?: boolean;
+  truncated?: boolean;
+}
+
+type FieldErrors = Partial<Record<'material' | 'group' | 'amount', string>>;
+type StockStatus = 'empty' | 'critical' | 'stable' | 'unavailable';
+type MaterialRow = Material & {
+  stockKg: number | null;
+  totalCollectedKg: number | null;
+  totalSoldKg: number | null;
+  status: StockStatus;
+};
+
+const LOW_STOCK_KG = 25;
+const fieldClass = 'block h-11 w-full rounded-lg border border-outline bg-surface px-3 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0 disabled:bg-surface-elevated disabled:text-text-secondary';
+const labelClass = 'mb-1 block text-sm font-medium text-text-secondary';
+
+function materialId(material: Material) {
+  return material.material_id || material._id;
+}
+
+function materialName(material: Material) {
+  return material.name || material.material || `Material ${materialId(material)}`;
+}
+
+function parseAmount(value: string) {
+  const normalized = value.trim().replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function formatWeight(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatStockWeight(value: number | null) {
+  return value === null ? 'Indisponível' : `${formatWeight(value)} kg`;
+}
+
+function statusForStock(stockKg: number): StockStatus {
+  if (stockKg <= 0) return 'empty';
+  if (stockKg <= LOW_STOCK_KG) return 'critical';
+  return 'stable';
+}
+
+function statusLabel(status: StockStatus) {
+  return {
+    empty: 'Sem saldo',
+    critical: 'Crítico',
+    stable: 'Operacional',
+    unavailable: 'Indisponível',
+  }[status];
+}
+
+function statusTone(status: StockStatus) {
+  return {
+    empty: 'border-outline bg-surface-elevated text-text-secondary',
+    critical: 'border-warning/35 bg-warning/12 text-warning',
+    stable: 'border-success/35 bg-success/12 text-success',
+    unavailable: 'border-error/35 bg-error/10 text-error',
+  }[status];
+}
+
+async function readJson<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof data.message === 'string' ? data.message : fallbackMessage;
+    throw new Error(message);
+  }
+  return data as T;
 }
 
 export default function MaterialsPage() {
+  const router = useRouter();
+  const requestSeq = useRef(0);
+  const stockSubmitInFlight = useRef(false);
+
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [groups, setGroups] = useState<string[]>([]);
+  const [stockRows, setStockRows] = useState<CooperativeMaterialStock[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [stockError, setStockError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const [showMaterialForm, setShowMaterialForm] = useState(false);
-  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-  const [newGroup, setNewGroup] = useState('');
+  const [materialSubmitting, setMaterialSubmitting] = useState(false);
+  const [materialForm, setMaterialForm] = useState({ material: '', group: '' });
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const [formData, setFormData] = useState<MaterialFormData>({
-    material: '',
-    group: ''
-  });
+  const [stockMaterial, setStockMaterial] = useState<MaterialRow | null>(null);
+  const [stockAmount, setStockAmount] = useState('');
+  const [stockConfirming, setStockConfirming] = useState(false);
+  const [stockSubmitting, setStockSubmitting] = useState(false);
+  const [stockSubmitError, setStockSubmitError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState({
-    group: '',
-    search: ''
-  });
+  const [deleteMaterial, setDeleteMaterial] = useState<Material | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  const [loading, setLoading] = useState({
-    materials: true,
-    saving: false
-  });
+  const canManageMaterials = sessionUser?.role === 'admin';
+  const canAdjustStock = Boolean(sessionUser);
+  const stockReadAvailable = !stockError;
 
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
+  const loadMaterials = useCallback(async (initial = false) => {
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
 
-  const fetchMaterials = async () => {
-    try {
-      const response = await fetch('/api/materials');
-      if (!response.ok) throw new Error('Failed to fetch materials');
-      const data = await response.json();
-
-      // Filter out groups and get only materials
-      const materialsOnly = data.filter((item: { material_id?: string; isGroup?: boolean }) => item.material_id && !item.isGroup);
-      const uniqueGroups = Array.from(new Set(materialsOnly.map((m: Material) => m.group))) as string[];
-
-      setMaterials(materialsOnly);
-      setGroups(uniqueGroups.sort());
-    } catch (error) {
-      console.error('Error fetching materials:', error);
-    } finally {
-      setLoading(prev => ({ ...prev, materials: false }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validation
-    if (!formData.material.trim() || !formData.group.trim()) {
-      alert('Por favor, preencha todos os campos obrigatórios');
-      return;
-    }
-
-    setLoading(prev => ({ ...prev, saving: true }));
+    if (initial) setLoading(true);
+    else setRefreshing(true);
+    setPageError(null);
+    setStockError(null);
 
     try {
-      const materialData = {
-        material: formData.material.trim(),
-        group: formData.group.trim()
-      };
+      const [sessionResponse, materialsResponse] = await Promise.all([
+        fetch('/api/auth/session'),
+        fetch('/api/materials'),
+      ]);
 
-      const url = editingMaterial ? `/api/materials/${editingMaterial._id}` : '/api/materials';
-      const method = editingMaterial ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(materialData)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to save material');
+      if (sessionResponse.status === 401) {
+        router.push('/login');
+        return;
       }
 
-      await fetchMaterials();
-      resetForm();
+      const [sessionData, materialsData] = await Promise.all([
+        readJson<SessionUser>(sessionResponse, 'Sessão indisponível'),
+        readJson<Material[]>(materialsResponse, 'Falha ao carregar materiais'),
+      ]);
 
+      let nextStockRows: CooperativeMaterialStock[] = [];
+      let nextStockError: string | null = null;
+      try {
+        const stockParams = new URLSearchParams({ cooperative_id: sessionData.cooperative_id });
+        const stockResponse = await fetch(`/api/cooperative/materials?${stockParams.toString()}`);
+        const stockPayload = await readJson<CooperativeMaterialsPayload>(stockResponse, 'Falha ao carregar estoque');
+        nextStockRows = Array.isArray(stockPayload.materials) ? stockPayload.materials : [];
+        const stockTruncated = stockPayload.truncated === true ||
+          stockPayload.has_more === true ||
+          (typeof stockPayload.total === 'number' &&
+            typeof stockPayload.count === 'number' &&
+            stockPayload.total > stockPayload.count);
+        if (stockTruncated) {
+          nextStockRows = [];
+          nextStockError = 'Leitura parcial do estoque. Recarregue antes de ajustar saldos.';
+        }
+      } catch (error) {
+        nextStockError = error instanceof Error ? error.message : 'Falha ao carregar estoque';
+      }
+
+      if (requestId !== requestSeq.current) return;
+
+      setSessionUser(sessionData);
+      setMaterials(materialsData.filter((item) => item.material_id && !item.isGroup));
+      setStockRows(nextStockRows);
+      setStockError(nextStockError);
     } catch (error) {
-      console.error('Error saving material:', error);
-      alert(error instanceof Error ? error.message : 'Erro ao salvar material');
+      if (requestId !== requestSeq.current) return;
+      setPageError(error instanceof Error ? error.message : 'Não foi possível carregar materiais e estoque');
+      setMaterials([]);
+      setStockRows([]);
     } finally {
-      setLoading(prev => ({ ...prev, saving: false }));
+      if (requestId === requestSeq.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [router]);
 
-  const handleAddGroup = async () => {
-    if (!newGroup.trim()) {
-      alert('Por favor, digite o nome do grupo');
-      return;
-    }
+  useEffect(() => {
+    void loadMaterials(true);
+  }, [loadMaterials]);
 
-    if (groups.includes(newGroup.trim().toLowerCase())) {
-      alert('Este grupo já existe');
-      return;
-    }
+  const groups = useMemo(() => (
+    Array.from(new Set(materials.map((material) => material.group).filter(Boolean))).sort()
+  ), [materials]);
 
-    // Just add to local state - groups are created when materials are saved
-    setGroups(prev => [...prev, newGroup.trim()].sort());
-    setFormData(prev => ({ ...prev, group: newGroup.trim() }));
-    setNewGroup('');
-    setShowGroupForm(false);
-  };
-
-  const handleEdit = (material: Material) => {
-    setEditingMaterial(material);
-    setFormData({
-      material: material.material,
-      group: material.group
+  const stockByMaterialId = useMemo(() => {
+    const map = new Map<string, CooperativeMaterialStock>();
+    stockRows.forEach((row) => {
+      map.set(row.material_id, row);
     });
-    setShowMaterialForm(true);
+    return map;
+  }, [stockRows]);
+
+  const materialRows = useMemo(() => materials.map((material) => {
+    const stock = stockByMaterialId.get(material.material_id);
+    const stockKg = stockReadAvailable ? stock?.stock_kg ?? 0 : null;
+    const status = stockKg === null ? 'unavailable' : statusForStock(stockKg);
+
+    return {
+      ...material,
+      stockKg,
+      totalCollectedKg: stockReadAvailable ? stock?.total_collected_kg ?? 0 : null,
+      totalSoldKg: stockReadAvailable ? stock?.total_sold_kg ?? 0 : null,
+      status,
+    };
+  }), [materials, stockByMaterialId, stockReadAvailable]);
+
+  const filteredMaterials = useMemo(() => {
+    const query = searchTerm.trim().toLocaleLowerCase('pt-BR');
+
+    return materialRows.filter((material) => {
+      const matchesGroup = !groupFilter || material.group === groupFilter;
+      const matchesSearch = !query ||
+        materialName(material).toLocaleLowerCase('pt-BR').includes(query) ||
+        material.group.toLocaleLowerCase('pt-BR').includes(query) ||
+        material.material_id.includes(query);
+
+      return matchesGroup && matchesSearch;
+    });
+  }, [groupFilter, materialRows, searchTerm]);
+
+  const totalStock = stockReadAvailable
+    ? materialRows.reduce((sum, material) => sum + (material.stockKg ?? 0), 0)
+    : null;
+  const criticalCount = stockReadAvailable
+    ? materialRows.filter((material) => material.status === 'critical').length
+    : null;
+  const emptyCount = stockReadAvailable
+    ? materialRows.filter((material) => material.status === 'empty').length
+    : null;
+
+  const resetMaterialForm = () => {
+    setEditingMaterial(null);
+    setMaterialForm({ material: '', group: '' });
+    setFieldErrors({});
+    setShowMaterialModal(false);
   };
 
-  const handleDelete = async (materialId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este material?')) return;
+  const openCreateMaterial = () => {
+    if (!canManageMaterials) return;
+    setEditingMaterial(null);
+    setMaterialForm({ material: '', group: groupFilter || groups[0] || '' });
+    setFieldErrors({});
+    setShowMaterialModal(true);
+  };
 
+  const openEditMaterial = (material: Material) => {
+    if (!canManageMaterials) return;
+    setEditingMaterial(material);
+    setMaterialForm({ material: materialName(material), group: material.group });
+    setFieldErrors({});
+    setShowMaterialModal(true);
+  };
+
+  const openStockModal = (material: MaterialRow) => {
+    if (stockError) return;
+    setStockMaterial(material);
+    setStockAmount('');
+    setStockConfirming(false);
+    setStockSubmitError(null);
+    setFieldErrors({});
+    setSuccess(null);
+    setPageError(null);
+  };
+
+  const closeStockModal = () => {
+    setStockMaterial(null);
+    setStockAmount('');
+    setStockConfirming(false);
+    setStockSubmitError(null);
+    stockSubmitInFlight.current = false;
+    setFieldErrors({});
+  };
+
+  const validateMaterialForm = () => {
+    const nextErrors: FieldErrors = {};
+    if (!materialForm.material.trim()) nextErrors.material = 'Informe o nome do material.';
+    if (!materialForm.group.trim()) nextErrors.group = 'Informe ou selecione o grupo.';
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleMaterialSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSuccess(null);
+    setPageError(null);
+
+    if (!canManageMaterials) {
+      setPageError('Apenas administradores podem alterar o catálogo de materiais.');
+      return;
+    }
+
+    if (!validateMaterialForm()) return;
+
+    setMaterialSubmitting(true);
     try {
-      const response = await fetch(`/api/materials/${materialId}`, {
-        method: 'DELETE'
+      const endpoint = editingMaterial ? `/api/materials/${materialId(editingMaterial)}` : '/api/materials';
+      const response = await fetch(endpoint, {
+        method: editingMaterial ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          material: materialForm.material.trim(),
+          group: materialForm.group.trim(),
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to delete material');
-
-      await fetchMaterials();
-
+      await readJson(response, 'Não foi possível salvar o material');
+      resetMaterialForm();
+      setSuccess(editingMaterial ? 'Material atualizado com sucesso.' : 'Material criado com sucesso.');
+      await loadMaterials(false);
     } catch (error) {
-      console.error('Error deleting material:', error);
-      alert('Erro ao excluir material');
+      setPageError(error instanceof Error ? error.message : 'Não foi possível salvar o material');
+    } finally {
+      setMaterialSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      material: '',
-      group: ''
-    });
-    setEditingMaterial(null);
-    setShowMaterialForm(false);
+  const handleStockSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!stockMaterial || stockSubmitInFlight.current) return;
+
+    setSuccess(null);
+    setPageError(null);
+    setStockSubmitError(null);
+    const parsedAmount = parseAmount(stockAmount);
+    if (!parsedAmount) {
+      setFieldErrors({ amount: 'Informe um peso positivo com até 2 casas decimais.' });
+      return;
+    }
+
+    setFieldErrors({});
+    if (!stockConfirming) {
+      setStockConfirming(true);
+      return;
+    }
+
+    stockSubmitInFlight.current = true;
+    setStockSubmitting(true);
+    try {
+      const response = await fetch('/api/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          materialId: materialId(stockMaterial),
+          cooperative_id: sessionUser?.cooperative_id,
+          amount: parsedAmount.toFixed(2),
+        }),
+      });
+
+      await readJson(response, 'Não foi possível ajustar o estoque');
+      closeStockModal();
+      setSuccess(`Estoque de ${materialName(stockMaterial)} ajustado com sucesso.`);
+      await loadMaterials(false);
+    } catch (error) {
+      setStockSubmitError(error instanceof Error ? error.message : 'Não foi possível ajustar o estoque');
+    } finally {
+      stockSubmitInFlight.current = false;
+      setStockSubmitting(false);
+    }
   };
 
-  const filteredMaterials = materials.filter(material => {
-    const matchesGroup = filters.group === '' || material.group === filters.group;
-    const matchesSearch = filters.search === '' ||
-      material.material.toLowerCase().includes(filters.search.toLowerCase()) ||
-      material.group.toLowerCase().includes(filters.search.toLowerCase());
+  const handleDeleteMaterial = async () => {
+    if (!deleteMaterial || !canManageMaterials) return;
 
-    return matchesGroup && matchesSearch;
-  });
+    setDeleteSubmitting(true);
+    setSuccess(null);
+    setPageError(null);
+    try {
+      const response = await fetch(`/api/materials/${materialId(deleteMaterial)}`, {
+        method: 'DELETE',
+      });
 
-  const materialsByGroup = filteredMaterials.reduce((acc, material) => {
-    if (!acc[material.group]) {
-      acc[material.group] = [];
+      await readJson(response, 'Não foi possível excluir o material');
+      setSuccess('Material excluído com sucesso.');
+      setDeleteMaterial(null);
+      await loadMaterials(false);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'Não foi possível excluir o material');
+    } finally {
+      setDeleteSubmitting(false);
     }
-    acc[material.group].push(material);
-    return acc;
-  }, {} as Record<string, Material[]>);
+  };
+
+  const renderFieldError = (field: keyof FieldErrors) => (
+    fieldErrors[field] ? <p className="mt-1 text-xs text-error">{fieldErrors[field]}</p> : null
+  );
+
+  const stockImpact = stockMaterial && stockMaterial.stockKg !== null && parseAmount(stockAmount)
+    ? stockMaterial.stockKg + (parseAmount(stockAmount) ?? 0)
+    : null;
 
   return (
     <Layout activePath="/materials">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#c15079]">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-[#7a1c44] mb-2">
-                Gestão de Materiais
-              </h1>
-              <p className="text-gray-600">
-                Gerencie materiais e grupos do sistema
-              </p>
-            </div>
-            <button
-              onClick={() => setShowMaterialForm(true)}
-              className="bg-[#c15079] text-white px-6 py-3 rounded-lg hover:bg-[#a03d63] transition-colors flex items-center"
-            >
-              <FaPlus className="mr-2" />
-              Novo Material
-            </button>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-            <FaFilter className="mr-2 text-[#c15079]" />
-            Filtros
-          </h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[#7a1c44] mb-2">
-                Buscar
-              </label>
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Nome do material ou grupo..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                />
+      <main className="mx-auto max-w-6xl space-y-6">
+        <section className="surface-panel rounded-xl p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/25 bg-primary/12 px-3 py-1 text-xs font-semibold uppercase text-primary">
+                <FaWarehouse className="h-3.5 w-3.5" />
+                Materiais e estoque
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground">Operação de materiais</h1>
+                <p className="mt-2 max-w-3xl text-sm text-text-secondary">
+                  Saldo atual, grupos, ações permitidas e ajustes de estoque dentro do escopo da cooperativa.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-text-secondary">
+                <span className="rounded-full border border-outline/70 bg-surface px-3 py-1">
+                  {sessionUser?.cooperative_name || 'Escopo da sessão'}
+                </span>
+                <span className="rounded-full border border-outline/70 bg-surface px-3 py-1">
+                  {canManageMaterials ? 'Catálogo administrável' : 'Catálogo somente leitura'}
+                </span>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => void loadMaterials(false)}
+                disabled={refreshing}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-outline bg-surface px-4 text-sm font-semibold text-foreground hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <FaRedo className="h-4 w-4" />
+                {refreshing ? 'Atualizando...' : 'Atualizar'}
+              </button>
+              {canManageMaterials && (
+                <button
+                  type="button"
+                  onClick={openCreateMaterial}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background shadow-glow hover:bg-primary/90"
+                >
+                  <FaPlus className="h-4 w-4" />
+                  Novo material
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Materiais</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{loading ? '...' : materialRows.length}</p>
+          </div>
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Grupos</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{loading ? '...' : groups.length}</p>
+          </div>
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Estoque total</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{loading ? '...' : formatStockWeight(totalStock)}</p>
+          </div>
+          <div className="rounded-xl border border-outline bg-surface p-4">
+            <p className="text-xs uppercase text-text-secondary">Atenção</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">
+              {loading ? '...' : criticalCount === null || emptyCount === null ? 'Indisponível' : criticalCount + emptyCount}
+            </p>
+          </div>
+        </section>
+
+        {(pageError || stockError || success) && (
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              pageError || stockError
+                ? 'border-error/35 bg-error/12 text-foreground'
+                : 'border-success/35 bg-success/12 text-foreground'
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              {pageError || stockError ? (
+                <FaExclamationTriangle className="mt-0.5 shrink-0 text-error" />
+              ) : (
+                <FaCheckCircle className="mt-0.5 shrink-0 text-success" />
+              )}
+              <span>{pageError || stockError || success}</span>
+            </div>
+          </div>
+        )}
+
+        <section className="surface-panel rounded-xl p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-xl">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+              <input
+                type="text"
+                className="h-11 w-full rounded-lg border border-outline bg-surface px-10 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0"
+                placeholder="Buscar material, grupo ou ID"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-foreground"
+                  aria-label="Limpar busca"
+                >
+                  <FaTimes />
+                </button>
+              )}
+            </div>
+
+            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:items-center">
+              <div className="flex items-center gap-2 text-sm text-text-secondary">
+                <FaFilter className="h-4 w-4 text-primary" />
                 Grupo
-              </label>
+              </div>
               <select
-                className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
-                value={filters.group}
-                onChange={(e) => setFilters(prev => ({ ...prev, group: e.target.value }))}
+                value={groupFilter}
+                onChange={(event) => setGroupFilter(event.target.value)}
+                className="h-11 rounded-lg border border-outline bg-surface px-3 text-foreground focus:border-primary focus:ring-0"
               >
                 <option value="">Todos os grupos</option>
                 {groups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
+                  <option key={group} value={group}>{group}</option>
                 ))}
               </select>
             </div>
           </div>
-        </div>
 
-        {/* Materials by Group */}
-        <div className="space-y-6">
-          {Object.keys(materialsByGroup).sort().map((group) => (
-            <div key={group} className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                <h3 className="text-xl font-semibold text-[#7a1c44] flex items-center">
-                  <FaLayerGroup className="mr-2 text-[#c15079]" />
-                  {group} ({materialsByGroup[group].length})
-                </h3>
-              </div>
+          {!canManageMaterials && (
+            <div className="mt-4 rounded-lg border border-outline/70 bg-surface px-4 py-3 text-sm text-text-secondary">
+              Gerentes ajustam saldos da própria cooperativa. Criação, edição e exclusão do catálogo global ficam restritas a administradores.
+            </div>
+          )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
+          {loading ? (
+            <div className="mt-6 flex min-h-40 items-center justify-center rounded-lg border border-outline bg-surface text-sm text-text-secondary">
+              Carregando materiais e estoque...
+            </div>
+          ) : pageError && materialRows.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-error/35 bg-error/10 p-8 text-center">
+              <p className="text-sm font-semibold text-error">Materiais indisponíveis</p>
+              <p className="mt-2 text-sm text-text-secondary">{pageError}</p>
+              <button
+                type="button"
+                onClick={() => void loadMaterials(false)}
+                className="mt-4 inline-flex min-h-10 items-center justify-center rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          ) : filteredMaterials.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-dashed border-outline bg-surface p-8 text-center">
+              <FaBoxes className="mx-auto h-10 w-10 text-text-secondary" />
+              <p className="mt-3 text-sm font-semibold text-foreground">
+                {searchTerm || groupFilter ? 'Nenhum material encontrado' : 'Nenhum material cadastrado'}
+              </p>
+              <p className="mt-2 text-sm text-text-secondary">
+                {searchTerm || groupFilter ? 'Ajuste os filtros ou recarregue a lista.' : 'O catálogo aparecerá aqui quando houver material ativo.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 hidden overflow-x-auto rounded-lg border border-outline md:block">
+                <table className="min-w-[64rem] w-full divide-y divide-outline bg-surface">
+                  <thead className="bg-surface-elevated">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ID
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Material
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Ações
-                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Material</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Grupo</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Saldo</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Coletado / vendido</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-text-secondary">Status</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-text-secondary">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {materialsByGroup[group].map((material) => (
-                      <tr key={material._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.material_id}
+                  <tbody className="divide-y divide-outline">
+                    {filteredMaterials.map((material) => (
+                      <tr key={materialId(material)} className="hover:bg-surface-alt">
+                        <td className="px-4 py-4">
+                          <p className="text-sm font-semibold text-foreground">{materialName(material)}</p>
+                          <p className="mt-1 text-xs text-text-secondary">ID {material.material_id} · unidade kg</p>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {material.material}
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center gap-2 rounded-full border border-outline/70 bg-surface px-2.5 py-1 text-xs font-semibold text-text-secondary">
+                            <FaLayerGroup className="h-3 w-3" />
+                            {material.group || 'Sem grupo'}
+                          </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleEdit(material)}
-                              className="text-[#c15079] hover:text-[#a03d63] transition-colors"
-                            >
-                              <FaEdit />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(material._id)}
-                              className="text-red-600 hover:text-red-900 transition-colors"
-                            >
-                              <FaTrash />
-                            </button>
+                        <td className="px-4 py-4 text-sm font-semibold text-foreground">
+                          {formatStockWeight(material.stockKg)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-text-secondary">
+                          {material.totalCollectedKg === null || material.totalSoldKg === null
+                            ? 'Indisponível'
+                            : `${formatWeight(material.totalCollectedKg)} kg / ${formatWeight(material.totalSoldKg)} kg`}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(material.status)}`}>
+                            {statusLabel(material.status)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex justify-end gap-2">
+                            {canAdjustStock && (
+                              <button
+                                type="button"
+                                disabled={Boolean(stockError)}
+                                title={stockError ? 'Recarregue o estoque antes de ajustar' : 'Ajustar estoque'}
+                                onClick={() => openStockModal(material)}
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-primary/35 px-3 text-sm font-semibold text-primary hover:bg-primary/12 disabled:cursor-not-allowed disabled:border-outline disabled:text-text-secondary disabled:opacity-70"
+                              >
+                                <FaPlus className="h-3.5 w-3.5" />
+                                Ajustar
+                              </button>
+                            )}
+                            {canManageMaterials && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditMaterial(material)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-secondary/35 text-secondary hover:bg-secondary/12"
+                                  aria-label={`Editar ${materialName(material)}`}
+                                  title="Editar material"
+                                >
+                                  <FaEdit />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteMaterial(material)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-error/35 text-error hover:bg-error/12"
+                                  aria-label={`Excluir ${materialName(material)}`}
+                                  title="Excluir material sem dependências"
+                                >
+                                  <FaTrash />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -310,162 +687,288 @@ export default function MaterialsPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          ))}
 
-          {Object.keys(materialsByGroup).length === 0 && !loading.materials && (
-            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-              <FaBoxes className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Nenhum material encontrado
-              </h3>
-              <p className="text-gray-500">
-                {filters.search || filters.group ? 'Tente ajustar os filtros' : 'Adicione o primeiro material'}
-              </p>
-            </div>
+              <div className="mt-6 grid gap-3 md:hidden">
+                {filteredMaterials.map((material) => (
+                  <article key={materialId(material)} className="rounded-lg border border-outline bg-surface p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{materialName(material)}</p>
+                        <p className="mt-1 text-xs text-text-secondary">ID {material.material_id} · kg</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2 py-1 text-xs font-semibold ${statusTone(material.status)}`}>
+                        {statusLabel(material.status)}
+                      </span>
+                    </div>
+                    <dl className="mt-4 grid gap-2 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">Grupo</dt>
+                        <dd className="text-right text-foreground">{material.group || 'Sem grupo'}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">Saldo</dt>
+                        <dd className="text-right font-semibold text-foreground">{formatStockWeight(material.stockKg)}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">Coletado</dt>
+                        <dd className="text-right text-foreground">
+                          {material.totalCollectedKg === null ? 'Indisponível' : `${formatWeight(material.totalCollectedKg)} kg`}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-text-secondary">Vendido</dt>
+                        <dd className="text-right text-foreground">
+                          {material.totalSoldKg === null ? 'Indisponível' : `${formatWeight(material.totalSoldKg)} kg`}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 grid gap-2">
+                      {canAdjustStock && (
+                        <button
+                          type="button"
+                          disabled={Boolean(stockError)}
+                          title={stockError ? 'Recarregue o estoque antes de ajustar' : 'Ajustar estoque'}
+                          onClick={() => openStockModal(material)}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-primary/35 px-3 text-sm font-semibold text-primary hover:bg-primary/12 disabled:cursor-not-allowed disabled:border-outline disabled:text-text-secondary disabled:opacity-70"
+                        >
+                          <FaPlus className="h-4 w-4" />
+                          Ajustar estoque
+                        </button>
+                      )}
+                      {canManageMaterials && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditMaterial(material)}
+                            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-secondary/35 px-3 text-sm font-semibold text-secondary hover:bg-secondary/12"
+                          >
+                            <FaEdit className="h-4 w-4" />
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteMaterial(material)}
+                            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-error/35 px-3 text-sm font-semibold text-error hover:bg-error/12"
+                          >
+                            <FaTrash className="h-4 w-4" />
+                            Excluir
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
           )}
-        </div>
+        </section>
+      </main>
 
-        {/* Material Form Modal */}
-        {showMaterialForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-[#7a1c44]">
-                  {editingMaterial ? 'Editar Material' : 'Novo Material'}
+      {showMaterialModal && canManageMaterials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-background/80 p-4">
+          <div className="w-full max-w-xl overflow-hidden rounded-xl border border-outline bg-surface shadow-xl">
+            <div className="flex items-center justify-between border-b border-outline bg-surface-elevated px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {editingMaterial ? 'Editar material' : 'Novo material'}
                 </h2>
-                <button
-                  onClick={resetForm}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <FaTimes size={24} />
-                </button>
+                <p className="mt-1 text-xs text-text-secondary">Catálogo global usado por vendas, pesagens e relatórios.</p>
+              </div>
+              <button
+                type="button"
+                onClick={resetMaterialForm}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:bg-surface hover:text-foreground"
+                aria-label="Fechar modal"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <form onSubmit={handleMaterialSubmit} className="space-y-4 p-6">
+              <div>
+                <label htmlFor="materialName" className={labelClass}>Nome do material *</label>
+                <input
+                  id="materialName"
+                  type="text"
+                  value={materialForm.material}
+                  onChange={(event) => setMaterialForm((current) => ({ ...current, material: event.target.value }))}
+                  className={fieldClass}
+                  placeholder="Ex.: Papelão, PET transparente"
+                />
+                {renderFieldError('material')}
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">
-                    <FaTag className="inline mr-1" />
-                    Nome do Material *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
-                    value={formData.material}
-                    onChange={(e) => setFormData(prev => ({ ...prev, material: e.target.value }))}
-                    placeholder="Ex: papel branco, pet colorido..."
-                  />
-                </div>
+              <div>
+                <label htmlFor="materialGroup" className={labelClass}>Grupo *</label>
+                <input
+                  id="materialGroup"
+                  type="text"
+                  value={materialForm.group}
+                  onChange={(event) => setMaterialForm((current) => ({ ...current, group: event.target.value }))}
+                  className={fieldClass}
+                  placeholder="Ex.: Papéis, Plásticos, Metais"
+                  list="material-groups"
+                />
+                <datalist id="material-groups">
+                  {groups.map((group) => <option key={group} value={group} />)}
+                </datalist>
+                {renderFieldError('group')}
+              </div>
 
+              <div className="rounded-lg border border-outline/70 bg-surface-alt px-4 py-3 text-sm text-text-secondary">
+                Alterar nome ou grupo afeta filtros, vendas, estoque e relatórios que usam este material.
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-outline pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={resetMaterialForm}
+                  className="min-h-11 rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={materialSubmitting}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <FaSave className="h-4 w-4" />
+                  {materialSubmitting ? 'Salvando...' : editingMaterial ? 'Salvar alterações' : 'Criar material'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {stockMaterial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-background/80 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-outline bg-surface shadow-xl">
+            <div className="flex items-center justify-between border-b border-outline bg-surface-elevated px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Ajustar estoque</h2>
+                <p className="mt-1 text-xs text-text-secondary">{materialName(stockMaterial)} · {sessionUser?.cooperative_name || 'cooperativa da sessão'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeStockModal}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:bg-surface hover:text-foreground"
+                aria-label="Fechar ajuste de estoque"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <form onSubmit={handleStockSubmit} className="space-y-4 p-6">
+              <div className="grid gap-3 rounded-lg border border-outline/70 bg-surface-alt p-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">
-                    <FaLayerGroup className="inline mr-1" />
-                    Grupo *
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
-                      value={formData.group}
-                      onChange={(e) => setFormData(prev => ({ ...prev, group: e.target.value }))}
-                    >
-                      <option value="">Selecione um grupo</option>
-                      {groups.map((group) => (
-                        <option key={group} value={group}>
-                          {group}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowGroupForm(true)}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                    >
-                      <FaPlus />
-                    </button>
+                  <p className="text-xs uppercase text-text-secondary">Saldo atual</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{formatStockWeight(stockMaterial.stockKg)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-text-secondary">Status</p>
+                  <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(stockMaterial.status)}`}>
+                    {statusLabel(stockMaterial.status)}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="stockAmount" className={labelClass}>Peso a adicionar (kg) *</label>
+                <input
+                  id="stockAmount"
+                  type="text"
+                  inputMode="decimal"
+                  value={stockAmount}
+                  onChange={(event) => {
+                    setStockAmount(event.target.value);
+                    setStockConfirming(false);
+                  }}
+                  className={fieldClass}
+                  placeholder="Ex.: 12,50"
+                />
+                {renderFieldError('amount')}
+              </div>
+
+              {stockConfirming && stockImpact !== null && (
+                <div className="rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-foreground">
+                  <div className="flex items-start gap-2">
+                    <FaExclamationTriangle className="mt-0.5 shrink-0 text-warning" />
+                    <p>
+                      Confirmar este ajuste elevará o saldo de {formatStockWeight(stockMaterial.stockKg)} para {formatWeight(stockImpact)} kg.
+                    </p>
                   </div>
                 </div>
+              )}
 
-                <div className="flex justify-end space-x-4 pt-4">
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading.saving}
-                    className="px-6 py-2 bg-[#c15079] text-white rounded-lg hover:bg-[#a03d63] transition-colors disabled:opacity-50 flex items-center"
-                  >
-                    {loading.saving ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <FaSave className="mr-2" />
-                        {editingMaterial ? 'Atualizar' : 'Salvar'}
-                      </>
-                    )}
-                  </button>
+              {stockSubmitError && (
+                <div className="rounded-lg border border-error/35 bg-error/10 px-4 py-3 text-sm text-foreground">
+                  <div className="flex items-start gap-2">
+                    <FaExclamationTriangle className="mt-0.5 shrink-0 text-error" />
+                    <p>{stockSubmitError}</p>
+                  </div>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
+              )}
 
-        {/* Add Group Modal */}
-        {showGroupForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-[#7a1c44]">
-                  Novo Grupo
-                </h3>
+              <div className="rounded-lg border border-outline/70 bg-surface-alt px-4 py-3 text-sm text-text-secondary">
+                A API efetiva limita o ajuste à cooperativa da sessão e rejeita valores inválidos ou invariantes de estoque.
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-outline pt-4 sm:flex-row sm:justify-end">
                 <button
-                  onClick={() => setShowGroupForm(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  type="button"
+                  onClick={closeStockModal}
+                  className="min-h-11 rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
                 >
-                  <FaTimes />
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={stockSubmitting}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-background hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {stockSubmitting ? 'Ajustando...' : stockConfirming ? 'Confirmar ajuste' : 'Revisar impacto'}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">
-                    Nome do Grupo
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
-                    value={newGroup}
-                    onChange={(e) => setNewGroup(e.target.value)}
-                    placeholder="Ex: papéis, plásticos, metais..."
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-4">
-                  <button
-                    onClick={() => setShowGroupForm(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleAddGroup}
-                    className="px-4 py-2 bg-[#c15079] text-white rounded-lg hover:bg-[#a03d63] transition-colors"
-                  >
-                    Adicionar
-                  </button>
-                </div>
+      {deleteMaterial && canManageMaterials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="w-full max-w-md rounded-xl border border-outline bg-surface p-6 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-error/35 bg-error/12 text-error">
+                <FaTrash />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Excluir material</h2>
+                <p className="mt-2 text-sm text-text-secondary">
+                  {materialName(deleteMaterial)} só será excluído se não houver vendas, estoque, medições ou contribuições associadas.
+                </p>
               </div>
             </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteMaterial(null)}
+                className="min-h-11 rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteMaterial()}
+                disabled={deleteSubmitting}
+                className="min-h-11 rounded-lg bg-error px-4 text-sm font-semibold text-background hover:bg-error/90 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {deleteSubmitting ? 'Excluindo...' : 'Excluir material'}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </Layout>
   );
 }

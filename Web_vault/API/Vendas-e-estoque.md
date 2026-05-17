@@ -44,6 +44,10 @@ Arquivo: `src/app/api/stock/route.ts`
 
 Adiciona estoque manualmente para a cooperativa alvo. Requer `manager` ou `admin` e permissao `stock:manage:cooperative`.
 
+Ajuste manual: o contrato atual aceita apenas incremento positivo de estoque. Correcoes negativas, ajuste absoluto, motivo persistido ou trilha auditavel dedicada ficam fora deste endpoint e devem virar tarefa propria se forem exigidos operacionalmente.
+
+A tela `/materials` usa `POST /api/stock` para o ajuste gerencial, sempre mostrando confirmacao de impacto antes do envio, enviando a cooperativa da sessao e bloqueando reenvio enquanto uma submissao esta em andamento. O backend continua sendo a regra efetiva de escopo e integridade.
+
 ### Body
 
 | Campo | Obrigatorio | Observacao |

@@ -56,14 +56,22 @@ A resposta e um array misto:
 ```json
 {
   "_id": "1",
-  "material_id": 1,
+  "material_id": "1",
   "material": "Papelão",
   "name": "Papelão",
   "group": "Papéis"
 }
 ```
 
-Observacao: algumas telas esperam `material_id` como string; o endpoint retorna number.
+Observacao: `material_id` como string e o contrato esperado pelas telas para evitar perda de precisao em IDs grandes.
+
+### Uso pela tela `/materials`
+
+A tela `/materials` usa `/api/materials` e `/api/cooperative/materials?cooperative_id=<id-da-sessao>` em conjunto: o primeiro fornece o catalogo global de materiais/grupos, e o segundo fornece o saldo operacional da cooperativa da sessao por `material_id`.
+
+`/api/cooperative/materials` tambem devolve `count`, `total`, `limit`, `has_more` e `truncated`. Quando `has_more=true`, `truncated=true` ou `total > count`, a tela trata a leitura como parcial e exibe saldos como indisponiveis em vez de assumir `0 kg` para materiais ausentes no payload.
+
+Para gestores, o catalogo fica em leitura e a acao principal e ajuste manual de estoque dentro da cooperativa da sessao. Para administradores, a tela tambem exibe criacao, edicao e exclusao de material, sempre sujeitas aos bloqueios do backend.
 
 ## `POST /api/materials`
 

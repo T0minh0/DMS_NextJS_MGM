@@ -30,16 +30,21 @@ export async function GET(request: NextRequest) {
       targetCooperativeId ? 'cooperative' : 'global',
     );
 
-    const stockRows = await prisma.stock.findMany({
-      where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
-      take: MATERIALS_QUERY_CEILING,
-      include: {
-        materialRef: {
-          include: { group: true },
+    const stockWhere = targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined;
+    const [stockRows, total] = await Promise.all([
+      prisma.stock.findMany({
+        where: stockWhere,
+        take: MATERIALS_QUERY_CEILING,
+        include: {
+          materialRef: {
+            include: { group: true },
+          },
         },
-      },
-      orderBy: { materialRef: { materialName: 'asc' } },
-    });
+        orderBy: { materialRef: { materialName: 'asc' } },
+      }),
+      prisma.stock.count({ where: stockWhere }),
+    ]);
+    const truncated = total > stockRows.length;
 
     return NextResponse.json({
       materials: stockRows.map((row) => ({
@@ -52,6 +57,10 @@ export async function GET(request: NextRequest) {
         total_sold_kg: Number((decimalToNumber(row.totalSoldKg) ?? 0).toFixed(2)),
       })),
       count: stockRows.length,
+      total,
+      limit: MATERIALS_QUERY_CEILING,
+      has_more: truncated,
+      truncated,
     });
   } catch (error) {
     const authResponse = authErrorResponse(error, context);

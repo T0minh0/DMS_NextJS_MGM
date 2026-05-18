@@ -1,0 +1,55 @@
+{
+  "base": "http://localhost:3001",
+  "generatedAt": "2026-05-17T05:29:38.963Z",
+  "flow": "S5-01 dashboard manager surface and worker direct-route denial",
+  "fallback": "Playwright used because in-app Browser tools did not expose cookie/API interception in this session.",
+  "manager": {
+    "url": "http://localhost:3001/",
+    "status": 200,
+    "title": "Painel DMS",
+    "bodyLength": 2280,
+    "materialOptions": [
+      "Todos os materiais",
+      "UAT Papelao Ondulado",
+      "UAT Aluminio Prensado",
+      "UAT Vidro Misto Sem Estoque"
+    ],
+    "desktopNavLinks": [
+      "Painel DMSGestão diária de cooperativas",
+      "Bem-vindoGerente UAT HorizonteCooperativa UAT Horizonte",
+      "Visão geral",
+      "Materiais e estoque",
+      "Vendas",
+      "Coletivas",
+      "Equipe",
+      "Produtividade",
+      "Gamificação",
+      "Avisos",
+      "Meu perfil"
+    ],
+    "groupPlaceholderPresent": false,
+    "mobileNavSelectVisible": true,
+    "devIndicatorVisibleCount": 0,
+    "missingRequiredTexts": [],
+    "forbiddenTexts": [],
+    "desktopOverflowPx": 0,
+    "mobileOverflowPx": 0,
+    "consoleMessages": [],
+    "requestFailures": [],
+    "screenshots": {
+      "desktop": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s5-01-dashboard-desktop.png",
+      "mobile": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s5-01-dashboard-mobile.png"
+    }
+  },
+  "worker": {
+    "sessionStatus": 403,
+    "sessionBody": "{\"error\":\"Acesso restrito a gestores\",\"message\":\"Acesso restrito a gestores\",\"code\":\"MANAGER_REQUIRED\",\"requestId\":\"100d1b9f-771b-424d-8479-037be0cea235\"}",
+    "pageUrl": "http://localhost:3001/login?reason=web-role-denied",
+    "pageStatus": 200,
+    "redirectedToLoginReason": true,
+    "bodyLength": 124,
+    "screenshot": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s5-01-worker-direct-denied.png"
+  },
+  "result": "PASS",
+  "failures": []
+}

@@ -1,27 +1,30 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 
-interface BirthdayRow {
-  workerName: string;
-  birthDate: Date;
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'notices', 'read', targetCooperativeId ? 'cooperative' : 'global');
+
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
 
-    const birthdays = await prisma.$queryRaw<BirthdayRow[]>`
-      SELECT
-        "Worker_name" AS "workerName",
-        "Birth_date"  AS "birthDate"
-      FROM "Workers"
-      WHERE EXTRACT(MONTH FROM "Birth_date") = ${currentMonth}
-        AND UPPER("User_type") IN ('1', 'W', 'C')
-      ORDER BY EXTRACT(DAY FROM "Birth_date") ASC;
-    `;
+    const birthdays = await prisma.workers.findMany({
+      where: {
+        userType: { in: ['1', 'W', 'w', 'C', 'c'] },
+        ...(targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : {}),
+      },
+      select: {
+        workerName: true,
+        birthDate: true,
+      },
+      orderBy: { birthDate: 'asc' },
+    });
 
-    const formatted = birthdays.map((item) => {
+    const formatted = birthdays.filter((item) => item.birthDate.getMonth() + 1 === currentMonth).map((item) => {
       const birthdate = new Date(item.birthDate);
       const day = birthdate.getDate().toString().padStart(2, '0');
       const month = (birthdate.getMonth() + 1).toString().padStart(2, '0');
@@ -34,13 +37,18 @@ export async function GET() {
 
     return NextResponse.json(formatted);
   } catch (error) {
-    console.error('Error fetching birthdays:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch birthdays data',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch birthdays data',
+      code: 'BIRTHDAYS_READ_FAILED',
+      route: '/api/birthdays',
+      method: 'GET',
+      request,
+    });
   }
 }

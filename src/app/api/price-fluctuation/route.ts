@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import { SOLD_SALE_WHERE } from '@/lib/sales/lifecycle';
 
 type MaterialContext = {
   nameMap: Map<bigint, string>;
@@ -57,13 +60,21 @@ async function resolveMaterialIds(
     return { ids: [BigInt(materialParam)] };
   } catch {
     return {
-      error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }),
+      error: apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+      }),
     };
   }
 }
 
 export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
+
     const { searchParams } = new URL(request.url);
     const materialParam = searchParams.get('material_id');
     const context = await loadMaterialContext();
@@ -76,7 +87,15 @@ export async function GET(request: Request) {
       const materialIds = resolved.ids!;
 
       const sales = await prisma.sales.findMany({
-        where: { material: { in: materialIds } },
+        where: {
+          ...SOLD_SALE_WHERE,
+          material: { in: materialIds },
+          ...(targetCooperativeId
+            ? {
+              cooperativeId: BigInt(targetCooperativeId),
+            }
+            : {}),
+        },
         orderBy: { date: 'desc' },
         take: materialIds.length > 1 ? 200 : 10,
         select: {
@@ -148,6 +167,14 @@ export async function GET(request: Request) {
 
     const recentMaterials = await prisma.sales.groupBy({
       by: ['material'],
+      where: {
+        ...SOLD_SALE_WHERE,
+        ...(targetCooperativeId
+          ? {
+            cooperativeId: BigInt(targetCooperativeId),
+          }
+          : {}),
+      },
       _max: { date: true },
       orderBy: { _max: { date: 'desc' } },
       take: 5,
@@ -164,7 +191,15 @@ export async function GET(request: Request) {
       recentMaterials.map(async (entry) => {
         const materialId = entry.material;
         const materialSales = await prisma.sales.findMany({
-          where: { material: materialId },
+          where: {
+            ...SOLD_SALE_WHERE,
+            material: materialId,
+            ...(targetCooperativeId
+              ? {
+                cooperativeId: BigInt(targetCooperativeId),
+              }
+              : {}),
+          },
           orderBy: { date: 'desc' },
           take: 10,
           select: {
@@ -220,13 +255,18 @@ export async function GET(request: Request) {
       priceData,
     });
   } catch (error) {
-    console.error('Error fetching price fluctuation:', error);
-    return NextResponse.json(
-      {
-        noData: true,
-        message: 'Erro ao buscar dados de preços',
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao buscar dados de preços',
+      code: 'PRICE_FLUCTUATION_READ_FAILED',
+      route: '/api/price-fluctuation',
+      method: 'GET',
+      request,
+    });
   }
 }

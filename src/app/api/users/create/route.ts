@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
-import { sanitizeDigits } from '@/lib/db-utils';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  requireManagerOrAdmin,
+  requireScopedPermission,
+} from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
+import { normalizeCpfDigits, normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
     const {
       full_name,
       CPF,
@@ -21,90 +29,148 @@ export async function POST(request: Request) {
     } = await request.json();
 
     if (!full_name || !CPF || !password || !birth_date || !enter_date || !cooperative_id || !PIS || !RG) {
-      return NextResponse.json(
-        { message: 'Nome, CPF, senha, datas, cooperativa, PIS e RG são obrigatórios' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nome, CPF, senha, datas, cooperativa, PIS e RG são obrigatórios',
+        code: 'REQUIRED_USER_FIELDS',
+        status: 400,
+      });
     }
 
     const userTypeNumber = Number(user_type);
     if (!Number.isFinite(userTypeNumber) || (userTypeNumber !== 0 && userTypeNumber !== 1)) {
-      return NextResponse.json({ message: 'Tipo de usuário inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Tipo de usuário inválido',
+        code: 'INVALID_USER_TYPE',
+        status: 400,
+      });
     }
+
+    const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
+    requireScopedPermission(
+      session,
+      'users',
+      'create',
+      session.role === 'admin' && targetCooperativeId !== session.cooperativeId ? 'global' : 'cooperative',
+    );
 
     let cooperativeBigInt: bigint;
     try {
-      cooperativeBigInt = BigInt(cooperative_id);
+      cooperativeBigInt = BigInt(targetCooperativeId);
     } catch {
-      return NextResponse.json({ message: 'Cooperativa inválida' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Cooperativa inválida',
+        code: 'INVALID_COOPERATIVE',
+        status: 400,
+      });
     }
 
-    const cpfDigits = sanitizeDigits(CPF);
-    const pisDigits = sanitizeDigits(PIS);
-    const rgDigits = sanitizeDigits(RG);
+    const cpfDigits = normalizeCpfDigits(CPF);
+    const pisDigits = normalizePisDigits(PIS);
+    const rgDigits = normalizeRgDigits(RG);
 
     if (!cpfDigits || !pisDigits || !rgDigits) {
-      return NextResponse.json({ message: 'CPF, PIS e RG devem conter apenas números' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'CPF e PIS devem conter 11 dígitos; RG deve conter 8 ou 9 dígitos',
+        code: 'INVALID_DOCUMENTS',
+        status: 400,
+      });
     }
 
     const birthDateObj = new Date(birth_date);
     const enterDateObj = new Date(enter_date);
     if (Number.isNaN(birthDateObj.getTime()) || Number.isNaN(enterDateObj.getTime())) {
-      return NextResponse.json({ message: 'Datas inválidas' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Datas inválidas',
+        code: 'INVALID_DATES',
+        status: 400,
+      });
     }
 
     let exitDateObj: Date | null = null;
     if (exit_date) {
       exitDateObj = new Date(exit_date);
       if (Number.isNaN(exitDateObj.getTime())) {
-        return NextResponse.json({ message: 'Data de saída inválida' }, { status: 400 });
+        return apiErrorResponse({
+          message: 'Data de saída inválida',
+          code: 'INVALID_EXIT_DATE',
+          status: 400,
+        });
       }
     }
 
-    const existing = await prisma.workers.findFirst({
-      where: { cpf: Buffer.from(cpfDigits, 'utf8') },
-    });
-
-    if (existing) {
-      return NextResponse.json({ message: 'Já existe um usuário com este CPF' }, { status: 409 });
-    }
-
+    const cpfBuffer = Buffer.from(cpfDigits, 'utf8');
+    const pisBuffer = Buffer.from(pisDigits, 'utf8');
+    const rgBuffer = Buffer.from(rgDigits, 'utf8');
     const passwordHash = await bcrypt.hash(password, 10);
-    const now = new Date();
 
-    const created = await prisma.workers.create({
-      data: {
-        workerName: full_name.trim(),
-        cooperative: cooperativeBigInt,
-        cpf: Buffer.from(cpfDigits, 'utf8'),
-        userType: String(userTypeNumber),
-        birthDate: birthDateObj,
-        enterDate: enterDateObj,
-        exitDate: exitDateObj,
-        pis: Buffer.from(pisDigits, 'utf8'),
-        rg: Buffer.from(rgDigits, 'utf8'),
-        gender: gender?.trim() || null,
-        password: Buffer.from(passwordHash, 'utf8'),
-        email: email?.trim() || 'sem-email@coop.local',
-        lastUpdate: now,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`LOCK TABLE "Workers" IN SHARE ROW EXCLUSIVE MODE`;
+
+      const existing = await tx.workers.findFirst({
+        where: { cpf: cpfBuffer },
+        select: { workerId: true },
+      });
+
+      if (existing) {
+        return { created: null };
+      }
+
+      const now = new Date();
+
+      const created = await tx.workers.create({
+        data: {
+          workerName: full_name.trim(),
+          cooperative: cooperativeBigInt,
+          cpf: cpfBuffer,
+          userType: String(userTypeNumber),
+          birthDate: birthDateObj,
+          enterDate: enterDateObj,
+          exitDate: exitDateObj,
+          pis: pisBuffer,
+          rg: rgBuffer,
+          gender: gender?.trim() || null,
+          password: Buffer.from(passwordHash, 'utf8'),
+          email: email?.trim() || 'sem-email@coop.local',
+          lastUpdate: now,
+        },
+      });
+
+      return { created };
     });
+
+    if (!result.created) {
+      return apiErrorResponse({
+        message: 'Não foi possível concluir o cadastro com os dados informados',
+        code: 'USER_CREATE_CONFLICT',
+        status: 409,
+      });
+    }
 
     return NextResponse.json(
       {
-        message: userTypeNumber === 1 ? 'Catador criado com sucesso!' : 'Usuário de gerência criado com sucesso!',
+        message: userTypeNumber === 1 ? 'Integrante operacional cadastrado com sucesso!' : 'Usuário de gestão cadastrado com sucesso!',
         user: {
-          id: created.workerId.toString(),
-          full_name: created.workerName,
-          cpf: cpfDigits,
-          cooperative_id: created.cooperative.toString(),
+          id: result.created.workerId.toString(),
+          full_name: result.created.workerName,
+          cooperative_id: result.created.cooperative.toString(),
           user_type: userTypeNumber,
         },
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error('Error creating user:', error);
-    return NextResponse.json({ message: 'Erro ao criar usuário' }, { status: 500 });
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao criar usuário',
+      code: 'USER_CREATE_FAILED',
+      route: '/api/users/create',
+      method: 'POST',
+      request,
+    });
   }
 }

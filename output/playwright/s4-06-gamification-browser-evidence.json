@@ -1,0 +1,51 @@
+{
+  "url": "http://localhost:3001/gamification",
+  "title": "Painel DMS",
+  "textLength": 3295,
+  "consoleIssues": [],
+  "requestFailures": [],
+  "expectedUnavailableConsole": [
+    {
+      "page": "unavailable",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "apiChecks": {
+    "managerUsesSlimUsersEndpoint": true,
+    "workerGamificationApiHits": []
+  },
+  "evidence": [
+    {
+      "name": "desktop-current",
+      "path": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-desktop-current.png"
+    },
+    {
+      "name": "desktop-empty-snapshot",
+      "path": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-desktop-empty-snapshot.png"
+    },
+    {
+      "name": "desktop-history-drilldown",
+      "path": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-desktop-history-drilldown.png"
+    },
+    {
+      "name": "mobile-current",
+      "path": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-mobile-current.png"
+    },
+    {
+      "name": "feature-unavailable",
+      "path": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-feature-unavailable.png"
+    },
+    {
+      "name": "worker-blocked",
+      "path": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-worker-blocked.png"
+    }
+  ],
+  "browserValidation": {
+    "normalFlowsConsoleClean": true,
+    "requestFailuresClean": true,
+    "domNonEmpty": true,
+    "expectedUnavailableSimulation": true,
+    "workerBlockedBeforeGamificationApis": true
+  }
+}

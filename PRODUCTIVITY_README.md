@@ -36,7 +36,7 @@ The system implements intelligent calculation logic to handle the following scen
 #### Solution
 The calculation logic implements the following rules:
 
-1. **Worker Identification**: 
+1. **Worker Identification**:
    - New workers automatically get wastepicker_id (WP001, WP002, etc.)
    - Existing workers can be updated via admin migration tool
    - Only workers (user_type = 1) receive wastepicker_ids
@@ -73,7 +73,7 @@ The calculation logic implements the following rules:
 #### `/api/users/create`
 - **Method**: POST
 - **Purpose**: Create new users with automatic wastepicker_id assignment
-- **Features**: 
+- **Features**:
   - Automatically assigns wastepicker_id to workers (user_type = 1)
   - Sequential ID generation (WP001, WP002, etc.)
   - Management users (user_type = 0) don't receive wastepicker_id
@@ -82,7 +82,7 @@ The calculation logic implements the following rules:
 - **Method**: POST
 - **Purpose**: Migration tool to assign IDs to existing workers
 - **Access**: Admin only
-- **Features**: 
+- **Features**:
   - Finds workers without wastepicker_id
   - Assigns sequential IDs avoiding duplicates
   - Bulk update operation
@@ -92,7 +92,7 @@ The calculation logic implements the following rules:
 - **Parameters**:
   - `material_id`: Optional filter for specific material
 - **Returns**: Current stock levels (collected - sold) by material
-- **Features**: 
+- **Features**:
   - Automatically detects sales collection structure
   - Handles various weight field names (weight_sold, weight, quantity, amount)
   - Shows only materials with available stock
@@ -104,7 +104,7 @@ The calculation logic implements the following rules:
   - `material_id`: Filter by material
   - `start_date` / `end_date`: Date range filtering
   - `limit`: Maximum records to return
-- **Features**: 
+- **Features**:
   - Stock validation before allowing sales
   - Automatic total value calculation
   - Sales history and summary statistics
@@ -141,7 +141,7 @@ The calculation logic implements the following rules:
 {
   _id: ObjectId("..."),
   full_name: "João Silva",
-  CPF: "12345678901",
+  CPF: "00000000011",
   email: "joao@example.com",
   phone: "+5511999999999",
   user_type: 1, // 1 = Worker, 0 = Management
@@ -239,7 +239,7 @@ The calculation logic implements the following rules:
 - **User Type Filtering**: Only workers (user_type = 1) receive wastepicker_ids
 
 #### Stock Calculation Examples
-- **Scenario 1**: 
+- **Scenario 1**:
   - Material collected: 500kg
   - Material sold: 200kg
   - **Available stock**: 300kg
@@ -272,4 +272,4 @@ The system automatically detects sales collection structure by checking for:
 - Advanced reporting with profit margins and efficiency metrics
 - Worker performance ranking and incentive systems
 - QR code generation for worker IDs
-- Mobile check-in system for workers 
+- Mobile check-in system for workers

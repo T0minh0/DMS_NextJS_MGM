@@ -1,0 +1,81 @@
+{
+  "browserBackend": "playwright",
+  "fallbackReason": "Browser MCP navigate/screenshot tools were not exposed by tool_search; npx and Playwright runtime were available.",
+  "desktop": {
+    "managerReadOnlyVisible": true,
+    "managerNoCatalogCreate": true,
+    "criticalVisible": true,
+    "stableVisible": true,
+    "emptyVisible": true,
+    "impactVisible": true,
+    "stockPostBody": {
+      "materialId": "1",
+      "cooperative_id": "7",
+      "amount": "8.00"
+    }
+  },
+  "stockErrorModal": {
+    "visibleInModal": true
+  },
+  "stockReadFailure": {
+    "unavailableVisible": true,
+    "noFalseZeroTotal": true,
+    "adjustButtonsDisabled": true
+  },
+  "mobile": {
+    "mobileStatusVisible": true,
+    "mobileAdjustmentVisible": true,
+    "mobileNoHorizontalOverflow": true
+  },
+  "adminCatalog": {
+    "adminCatalogCreateVisible": true
+  },
+  "dashboard": {
+    "dashboardStockTotalVisible": true,
+    "dashboardRealNameVisible": true,
+    "dashboardFallbackHidden": true
+  },
+  "workerDenied": {
+    "finalUrl": "http://localhost:3106/login?reason=web-role-denied",
+    "redirectedToDeniedLogin": true
+  },
+  "consoleClean": true,
+  "unexpectedConsoleEntries": [],
+  "expectedNetworkErrors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    }
+  ],
+  "stockTruncated": {
+    "partialReadBannerVisible": true,
+    "unavailableVisible": true,
+    "noFalseZeroVisible": true,
+    "adjustButtonsDisabled": true,
+    "managerReadOnlyVisible": true,
+    "screenshot": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s5-06-materials-stock-truncated.png"
+  },
+  "consoleCleanAfterTruncation": true,
+  "truncationConsoleEntries": [],
+  "adminScopedStock": {
+    "scopedReadUsesSessionCoop": true,
+    "stockReadUrls": [
+      "http://localhost:3106/api/cooperative/materials?cooperative_id=7",
+      "http://localhost:3106/api/cooperative/materials?cooperative_id=7"
+    ],
+    "stockPostCount": 1,
+    "stockPostBody": {
+      "materialId": "1",
+      "cooperative_id": "7",
+      "amount": "5.00"
+    },
+    "duplicateSubmitBlocked": true,
+    "screenshot": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s5-06-materials-admin-scoped-submit.png"
+  },
+  "consoleCleanAfterAdminScopedStock": true,
+  "adminScopedStockConsoleEntries": []
+}

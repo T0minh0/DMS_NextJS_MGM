@@ -1,25 +1,29 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
-const TEST_CPF = '12345678900';
+const TEST_CPF = '00000000999';
 const TEST_PASSWORD = 'test123';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        { message: 'This route is not available in production' },
-        { status: 403 },
-      );
+    await requireAdmin();
+
+    const disabledResponse = getDebugRouteDisabledResponse({ allowProductionOverride: false });
+    if (disabledResponse) {
+      return disabledResponse;
     }
 
     const cooperative = await prisma.cooperative.findFirst();
     if (!cooperative) {
-      return NextResponse.json(
-        { message: 'Nenhuma cooperativa cadastrada. Execute o seed primeiro.' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nenhuma cooperativa cadastrada. Execute o seed primeiro.',
+        code: 'DEBUG_COOPERATIVE_REQUIRED',
+        status: 400,
+      });
     }
 
     const hashedPassword = await bcrypt.hash(TEST_PASSWORD, 10);
@@ -58,8 +62,8 @@ export async function GET() {
         birthDate: new Date('1990-01-01'),
         enterDate: now,
         exitDate: null,
-        pis: Buffer.from('12345678901', 'utf8'),
-        rg: Buffer.from('123456789', 'utf8'),
+        pis: Buffer.from('90000000999', 'utf8'),
+        rg: Buffer.from('990000999', 'utf8'),
         gender: 'Não informado',
         password: Buffer.from(hashedPassword, 'utf8'),
         email: 'test.user@example.com',
@@ -75,10 +79,18 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error('Error creating test user:', error);
-    return NextResponse.json(
-      { message: 'Server error', error: String(error) },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Server error',
+      code: 'DEBUG_TEST_USER_FAILED',
+      route: '/api/debug/create-test-user',
+      method: 'GET',
+      request,
+    });
   }
 }

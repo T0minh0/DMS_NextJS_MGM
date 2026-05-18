@@ -1,71 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import jwt from 'jsonwebtoken';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  determineTargetWorker,
+  requireManagerOrAdmin,
+  requireScopedPermission,
+} from '@/lib/auth/server';
+import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'dms-dashboard-secret-key';
-
-interface AuthTokenPayload {
-  id: string;
-  name: string;
-  cpf: string;
-  userType: number;
-  iat?: number;
-  exp?: number;
-}
-
-async function getAuthenticatedManager() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth_token')?.value;
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
-    const workerId = BigInt(payload.id);
-    const worker = await prisma.workers.findUnique({
-      where: { workerId },
-    });
-    if (!worker) {
-      return null;
-    }
-    return worker;
-  } catch (error) {
-    console.error('Failed to decode auth token:', error);
-    return null;
-  }
-}
+import { decimalToJsonNumber, formatDecimal, parsePositiveDecimal2 } from '@/lib/decimal';
+import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
+import { getSaleLifecycleStatus, summarizeSoldSales } from '@/lib/sales/lifecycle';
 
 export async function GET(request: NextRequest) {
+  const context = createLogContext(request, { domain: 'sales' });
+
   try {
+    const session = await requireManagerOrAdmin();
     const { searchParams } = new URL(request.url);
     const materialId = searchParams.get('material_id');
     const cooperativeId = searchParams.get('cooperative_id');
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
+    const statusFilter = searchParams.get('status');
     const limit = Number.parseInt(searchParams.get('limit') || '100', 10);
 
     const where: Prisma.SalesWhereInput = {};
+    const targetCooperativeId = determineTargetCooperative(session, cooperativeId);
+    requireScopedPermission(
+      session,
+      'sales',
+      'read',
+      targetCooperativeId ? 'cooperative' : 'global',
+    );
 
     if (materialId) {
       try {
         where.material = BigInt(materialId);
       } catch {
-        return NextResponse.json({ error: 'Material inválido' }, { status: 400 });
+        return apiErrorResponse({
+          message: 'Material inválido',
+          code: 'INVALID_MATERIAL',
+          status: 400,
+          requestId: context.requestId,
+        });
       }
     }
 
-    if (cooperativeId) {
-      try {
-        where.responsibleRef = {
-          cooperative: BigInt(cooperativeId),
-        };
-      } catch {
-        return NextResponse.json({ error: 'Cooperativa inválida' }, { status: 400 });
-      }
+    if (targetCooperativeId) {
+      where.cooperativeId = BigInt(targetCooperativeId);
+    }
+
+    if (statusFilter === 'ACTIVE') {
+      where.soldAt = null;
+      where.cancelledAt = null;
+    } else if (statusFilter === 'HISTORY') {
+      where.soldAt = { not: null };
+      where.cancelledAt = null;
+    } else if (statusFilter === 'CANCELLED') {
+      where.soldAt = null;
+      where.cancelledAt = { not: null };
+    } else if (statusFilter !== null && statusFilter !== undefined && statusFilter !== '') {
+      return apiErrorResponse({
+        message: 'Status inválido. Use ACTIVE, HISTORY ou CANCELLED',
+        code: 'INVALID_STATUS_FILTER',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     if (startDate || endDate) {
@@ -73,14 +76,24 @@ export async function GET(request: NextRequest) {
       if (startDate) {
         const start = new Date(startDate);
         if (Number.isNaN(start.getTime())) {
-          return NextResponse.json({ error: 'Data inicial inválida' }, { status: 400 });
+          return apiErrorResponse({
+            message: 'Data inicial inválida',
+            code: 'INVALID_START_DATE',
+            status: 400,
+            requestId: context.requestId,
+          });
         }
         where.date.gte = start;
       }
       if (endDate) {
         const end = new Date(endDate);
         if (Number.isNaN(end.getTime())) {
-          return NextResponse.json({ error: 'Data final inválida' }, { status: 400 });
+          return apiErrorResponse({
+            message: 'Data final inválida',
+            code: 'INVALID_END_DATE',
+            status: 400,
+            requestId: context.requestId,
+          });
         }
         where.date.lte = end;
       }
@@ -103,168 +116,249 @@ export async function GET(request: NextRequest) {
       return {
         _id: sale.saleId.toString(),
         material_id: sale.material.toString(),
-        cooperative_id: sale.responsibleRef.cooperative.toString(),
+        cooperative_id: sale.cooperativeId.toString(),
+        status: getSaleLifecycleStatus(sale),
         'price/kg': Number(price.toFixed(2)),
         weight_sold: Number(weight.toFixed(2)),
         date: sale.date.toISOString(),
+        created_at: sale.createdAt.toISOString(),
+        sold_at: sale.soldAt?.toISOString() ?? null,
+        cancelled_at: sale.cancelledAt?.toISOString() ?? null,
+        expected_sale_date: sale.expectedSaleDate.toISOString(),
         Buyer: sale.buyerRef.buyerName,
       };
     });
 
     const totalSales = formattedSales.length;
-    const totalWeight = formattedSales.reduce((sum, sale) => sum + sale.weight_sold, 0);
-    const totalValue = formattedSales.reduce(
-      (sum, sale) => sum + sale.weight_sold * sale['price/kg'],
-      0,
-    );
+    const soldSummary = summarizeSoldSales(formattedSales);
+
+    logInfo('sales.read.succeeded', context, {
+      role: session.role,
+      cooperativeId: targetCooperativeId,
+      totalSales,
+      totalSoldSales: soldSummary.totalSoldSales,
+      totalWeight: soldSummary.totalWeight,
+    });
 
     return NextResponse.json({
       sales: formattedSales,
       summary: {
         totalSales,
-        totalWeight: Number(totalWeight.toFixed(2)),
-        totalValue: Number(totalValue.toFixed(2)),
+        totalSoldSales: soldSummary.totalSoldSales,
+        totalWeight: soldSummary.totalWeight,
+        totalValue: soldSummary.totalValue,
       },
     });
   } catch (error) {
-    console.error('Error fetching sales:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch sales',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, context);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiInternalErrorResponse({
+      message: 'Failed to fetch sales',
+      code: 'SALES_READ_FAILED',
+      context,
+      event: 'sales.read.failed',
+      error,
+    });
   }
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const manager = await getAuthenticatedManager();
-    if (!manager) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+  const context = createLogContext(request, { domain: 'sales' });
 
+  try {
+    const session = await requireManagerOrAdmin();
     const body = await request.json();
+    const targetCooperativeId = determineTargetCooperative(
+      session,
+      body.cooperative_id ?? session.cooperativeId,
+      { required: true },
+    );
+    const targetWorkerId = determineTargetWorker(
+      session,
+      session.role === 'admin' ? body.responsible_worker_id ?? session.workerId : session.workerId,
+      { required: true },
+    );
+    requireScopedPermission(session, 'sales', 'create', 'cooperative');
 
     const requiredFields = ['material_id', 'price/kg', 'weight_sold', 'date', 'Buyer'];
     for (const field of requiredFields) {
-      if (!body[field]) {
-        return NextResponse.json({ error: `Campo obrigatório: ${field}` }, { status: 400 });
+      if (body[field] === undefined || body[field] === null || body[field] === '') {
+        return apiErrorResponse({
+          message: `Campo obrigatório: ${field}`,
+          code: 'REQUIRED_FIELD',
+          status: 400,
+          requestId: context.requestId,
+        });
       }
+    }
+
+    let targetCooperativeBigInt: bigint;
+    try {
+      targetCooperativeBigInt = BigInt(targetCooperativeId);
+    } catch {
+      return apiErrorResponse({
+        message: 'Cooperativa inválida',
+        code: 'INVALID_COOPERATIVE',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     let materialId: bigint;
     try {
       materialId = BigInt(body.material_id);
     } catch {
-      return NextResponse.json({ error: 'Material inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
-    const pricePerKg = Number(body['price/kg']);
-    const weightSold = Number(body.weight_sold);
-    if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) {
-      return NextResponse.json({ error: 'Preço por kg deve ser maior que zero' }, { status: 400 });
+    let pricePerKg: Prisma.Decimal;
+    try {
+      pricePerKg = parsePositiveDecimal2(body['price/kg'], 'price/kg');
+    } catch {
+      return apiErrorResponse({
+        message: 'Preço por kg deve ser maior que zero e ter no máximo 2 casas decimais',
+        code: 'INVALID_PRICE',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
-    if (!Number.isFinite(weightSold) || weightSold <= 0) {
-      return NextResponse.json({ error: 'Peso vendido deve ser maior que zero' }, { status: 400 });
+
+    let weightSold: Prisma.Decimal;
+    try {
+      weightSold = parsePositiveDecimal2(body.weight_sold, 'weight_sold');
+    } catch {
+      return apiErrorResponse({
+        message: 'Peso vendido deve ser maior que zero e ter no máximo 2 casas decimais',
+        code: 'INVALID_WEIGHT',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     const saleDate = new Date(body.date);
     if (Number.isNaN(saleDate.getTime())) {
-      return NextResponse.json({ error: 'Data inválida' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'Data inválida',
+        code: 'INVALID_DATE',
+        status: 400,
+        requestId: context.requestId,
+      });
     }
 
     const buyerName = body.Buyer?.trim();
     if (!buyerName) {
-      return NextResponse.json({ error: 'Comprador é obrigatório' }, { status: 400 });
-    }
-
-    let buyer = await prisma.buyers.findFirst({
-      where: {
-        buyerName: {
-          equals: buyerName,
-          mode: 'insensitive',
-        },
-      },
-    });
-
-    if (!buyer) {
-      buyer = await prisma.buyers.create({
-        data: {
-          buyerName,
-        },
+      return apiErrorResponse({
+        message: 'Comprador é obrigatório',
+        code: 'REQUIRED_BUYER',
+        status: 400,
+        requestId: context.requestId,
       });
     }
 
-    const stockRecord = await prisma.stock.findFirst({
-      where: {
-        cooperative: manager.cooperative,
-        material: materialId,
-      },
+    const responsibleWorker = await prisma.workers.findUnique({
+      where: { workerId: BigInt(targetWorkerId) },
+      select: { workerId: true, cooperative: true },
     });
 
-    if (!stockRecord) {
-      return NextResponse.json(
-        { error: 'Não há estoque registrado para este material nesta cooperativa' },
-        { status: 400 },
-      );
+    if (!responsibleWorker || responsibleWorker.cooperative.toString() !== targetCooperativeId) {
+      logWarn('sales.create.scope_denied', context, {
+        role: session.role,
+        cooperativeId: targetCooperativeId,
+        targetWorkerId,
+      });
+      return apiErrorResponse({
+        message: 'Responsável fora do escopo da cooperativa',
+        code: 'RESPONSIBLE_SCOPE_DENIED',
+        status: 403,
+        requestId: context.requestId,
+      });
     }
 
-    const currentStock = decimalToNumber(stockRecord.currentStockKg) ?? 0;
-    if (weightSold > currentStock) {
-      return NextResponse.json(
-        { error: `Estoque insuficiente! Disponível: ${currentStock.toFixed(2)} kg` },
-        { status: 400 },
-      );
-    }
+    const sale = await prisma.$transaction(async (tx) => {
+      let buyer = await tx.buyers.findFirst({
+        where: { buyerName: { equals: buyerName, mode: 'insensitive' } },
+      });
 
-    const sale = await prisma.sales.create({
-      data: {
-        material: materialId,
-        priceKg: pricePerKg.toFixed(2),
-        weight: weightSold.toFixed(2),
-        date: saleDate,
-        buyer: buyer.buyerId,
-        responsible: manager.workerId,
-      },
+      if (!buyer) {
+        try {
+          buyer = await tx.buyers.create({ data: { buyerName } });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+            buyer = await tx.buyers.findFirst({
+              where: { buyerName: { equals: buyerName, mode: 'insensitive' } },
+            });
+            if (!buyer) throw e;
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      return tx.sales.create({
+        data: {
+          material: materialId,
+          priceKg: formatDecimal(pricePerKg),
+          weight: formatDecimal(weightSold),
+          date: saleDate,
+          buyer: buyer.buyerId,
+          responsible: responsibleWorker.workerId,
+          cooperativeId: targetCooperativeBigInt,
+          expectedSaleDate: saleDate,
+        },
+        include: { buyerRef: true },
+      });
     });
 
-    const totalSold = (decimalToNumber(stockRecord.totalSoldKg) ?? 0) + weightSold;
-    const newCurrentStock = currentStock - weightSold;
-
-    await prisma.stock.update({
-      where: { stockId: stockRecord.stockId },
-      data: {
-        totalSoldKg: totalSold.toFixed(2),
-        currentStockKg: newCurrentStock.toFixed(2),
-      },
+    logInfo('sales.create.succeeded', context, {
+      role: session.role,
+      saleId: sale.saleId.toString(),
+      cooperativeId: targetCooperativeId,
+      materialId: materialId.toString(),
+      weightSold: decimalToJsonNumber(weightSold),
+      status: 'ACTIVE',
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Venda registrada com sucesso',
+        message: 'Venda criada com sucesso',
         sale: {
           _id: sale.saleId.toString(),
           material_id: sale.material.toString(),
-          cooperative_id: manager.cooperative.toString(),
-          'price/kg': pricePerKg,
-          weight_sold: weightSold,
+          cooperative_id: targetCooperativeId,
+          status: getSaleLifecycleStatus(sale),
+          'price/kg': decimalToJsonNumber(pricePerKg),
+          weight_sold: decimalToJsonNumber(weightSold),
           date: sale.date.toISOString(),
-          Buyer: buyer.buyerName,
+          created_at: sale.createdAt.toISOString(),
+          sold_at: sale.soldAt?.toISOString() ?? null,
+          cancelled_at: sale.cancelledAt?.toISOString() ?? null,
+          expected_sale_date: sale.expectedSaleDate.toISOString(),
+          Buyer: sale.buyerRef.buyerName,
         },
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error('Error creating sale:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao registrar venda',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, context);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiInternalErrorResponse({
+      message: 'Erro ao registrar venda',
+      code: 'SALES_CREATE_FAILED',
+      context,
+      event: 'sales.create.failed',
+      error,
+    });
   }
 }

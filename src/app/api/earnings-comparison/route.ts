@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, determineTargetCooperative, requireManagerOrAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import { SOLD_SALE_WHERE } from '@/lib/sales/lifecycle';
 
 type PeriodType = 'weekly' | 'monthly' | 'yearly';
 
@@ -28,7 +31,14 @@ async function resolveMaterialIds(materialParam: string) {
   try {
     return { ids: [BigInt(materialParam)] };
   } catch {
-    return { ids: null, error: NextResponse.json({ noData: true, message: 'Material inválido' }, { status: 400 }) };
+    return {
+      ids: null,
+      error: apiErrorResponse({
+        message: 'Material inválido',
+        code: 'INVALID_MATERIAL',
+        status: 400,
+      }),
+    };
   }
 }
 
@@ -46,6 +56,10 @@ function formatPeriodLabel(periodType: PeriodType, start: Date, end: Date) {
 
 export async function GET(request: Request) {
   try {
+    const session = await requireManagerOrAdmin();
+    const targetCooperativeId = determineTargetCooperative(session);
+    requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
+
     const { searchParams } = new URL(request.url);
     const materialParam = searchParams.get('material_id');
     const periodType = (searchParams.get('period_type') as PeriodType) || 'monthly';
@@ -79,6 +93,7 @@ export async function GET(request: Request) {
 
       const sales = await prisma.sales.findMany({
         where: {
+          ...SOLD_SALE_WHERE,
           date: {
             gte: start,
             lte: end,
@@ -88,6 +103,11 @@ export async function GET(request: Request) {
               material: {
                 in: materialIds.ids,
               },
+            }
+            : {}),
+          ...(targetCooperativeId
+            ? {
+              cooperativeId: BigInt(targetCooperativeId),
             }
             : {}),
         },
@@ -120,13 +140,18 @@ export async function GET(request: Request) {
 
     return NextResponse.json(periods);
   } catch (error) {
-    console.error('Error fetching earnings comparison:', error);
-    return NextResponse.json(
-      {
-        noData: true,
-        message: 'Erro ao buscar dados de vendas. Por favor, tente novamente mais tarde.',
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao buscar dados de vendas. Por favor, tente novamente mais tarde.',
+      code: 'EARNINGS_READ_FAILED',
+      route: '/api/earnings-comparison',
+      method: 'GET',
+      request,
+    });
   }
 }

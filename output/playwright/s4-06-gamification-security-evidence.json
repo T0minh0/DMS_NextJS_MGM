@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-05-17T04:48:40.405Z",
+  "base": "http://localhost:3001",
+  "scenario": "worker auth cookie with localStorage user absent/tampered",
+  "screenshot": "/Users/cammis/Repositorio/UNB/DMS/Web/DMS_NextJS_MGM/output/playwright/s4-06-gamification-worker-storage-tampered.png",
+  "bodyTextIncludesUnavailable": true,
+  "calls": [
+    {
+      "url": "http://localhost:3001/api/users?view=gamification",
+      "status": 403,
+      "ok": false
+    },
+    {
+      "url": "http://localhost:3001/api/levels?view=gamification",
+      "status": 403,
+      "ok": false
+    },
+    {
+      "url": "http://localhost:3001/api/leaderboard?view=gamification",
+      "status": 403,
+      "ok": false
+    },
+    {
+      "url": "http://localhost:3001/api/achievements?view=gamification",
+      "status": 403,
+      "ok": false
+    }
+  ],
+  "consoleIssues": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    }
+  ],
+  "checks": {
+    "workerTamperedUsesManagerView": true,
+    "workerTamperedAllManagerViewsForbidden": true,
+    "workerTamperedNoGamificationSuccess": true,
+    "unavailableStateRendered": true
+  }
+}

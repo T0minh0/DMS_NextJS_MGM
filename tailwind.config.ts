@@ -9,29 +9,58 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'dms-primary': '#2e7d32',
-        'dms-secondary': '#4caf50',
-        'dms-accent': '#8bc34a',
-        'dms-text': '#333333',
-        'dms-light-gray': '#f8f9fa',
-        'dms-background': '#f1f8e9',
-        // Chart colors (alpha is handled by opacity utilities)
-        'dms-chart-green-dark': 'rgb(46, 125, 50)',
-        'dms-chart-green-medium': 'rgb(76, 175, 80)',
-        'dms-chart-green-light': 'rgb(139, 195, 74)',
-        'dms-chart-green-olive': 'rgb(102, 187, 106)',
-        'dms-chart-teal-dark': 'rgb(38, 166, 154)',
-        'dms-chart-teal-medium': 'rgb(0, 150, 136)',
-        'dms-chart-forest-green': 'rgb(67, 160, 71)',
-        'dms-chart-olive-green': 'rgb(104, 159, 56)',
+        background: 'var(--background)',
+        foreground: 'var(--text)',
+        surface: 'var(--surface)',
+        'surface-alt': 'var(--surface-alt)',
+        'surface-elevated': 'var(--surface-elevated)',
+        card: 'var(--card)',
+        primary: 'var(--primary)',
+        'on-primary': 'var(--on-primary)',
+        secondary: 'var(--secondary)',
+        success: 'var(--success)',
+        warning: 'var(--warning)',
+        energy: 'var(--energy)',
+        error: 'var(--error)',
+        neutral: 'var(--neutral)',
+        outline: 'var(--outline)',
+        'on-surface': 'var(--on-surface)',
+        'text-secondary': 'var(--text-secondary)',
+        'dms-primary': 'var(--dms-primary)',
+        'dms-secondary': 'var(--dms-secondary)',
+        'dms-accent': 'var(--dms-accent)',
+        'dms-text': 'var(--dms-text-color)',
+        'dms-light-gray': 'var(--dms-light-gray)',
+        'dms-background': 'var(--dms-background-color)',
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic':
-          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+      fontFamily: {
+        sans: ['var(--font-sans-ui)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono-ui)', 'monospace'],
+      },
+      spacing: {
+        xxs: 'var(--space-xxs)',
+        xs: 'var(--space-xs)',
+        sm: 'var(--space-sm)',
+        md: 'var(--space-md)',
+        lg: 'var(--space-lg)',
+        xl: 'var(--space-xl)',
+        xxl: 'var(--space-xxl)',
+      },
+      borderRadius: {
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+        full: 'var(--radius-full)',
+      },
+      boxShadow: {
+        soft: 'var(--shadow-soft)',
+        glow: 'var(--shadow-glow)',
+        'glow-hover': 'var(--shadow-glow-hover)',
       },
     },
   },
   plugins: [],
 }
-export default config 
+
+export default config

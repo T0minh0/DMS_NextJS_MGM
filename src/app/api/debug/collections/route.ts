@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { decimalToNumber } from '@/lib/db-utils';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdmin();
+    const disabledResponse = getDebugRouteDisabledResponse();
+    if (disabledResponse) {
+      return disabledResponse;
+    }
+
     const samples = await Promise.all([
       prisma.workers.findFirst({
         orderBy: { workerId: 'asc' },
@@ -33,7 +42,6 @@ export async function GET() {
             workerId: samples[0]!.workerId.toString(),
             workerName: samples[0]!.workerName,
             userType: samples[0]!.userType,
-            email: samples[0]!.email,
           }
           : null,
       },
@@ -103,10 +111,18 @@ export async function GET() {
       }, {}),
     });
   } catch (error) {
-    console.error('Error fetching collections:', error);
-    return NextResponse.json(
-      { message: 'Error fetching collections', error: String(error) },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Error fetching collections',
+      code: 'DEBUG_COLLECTIONS_FAILED',
+      route: '/api/debug/collections',
+      method: 'GET',
+      request,
+    });
   }
 }

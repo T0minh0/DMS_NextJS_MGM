@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { formatWorkerId, decodeBytes } from '@/lib/db-utils';
+import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
+import { formatWorkerId } from '@/lib/db-utils';
+import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
+
+const DEBUG_WORKER_CPF = '00000000999';
 
 const MODEL_LIST = [
   'Workers',
@@ -15,25 +20,29 @@ const MODEL_LIST = [
   'Groups',
 ];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAdmin();
+    const disabledResponse = getDebugRouteDisabledResponse();
+    if (disabledResponse) {
+      return disabledResponse;
+    }
+
     const [byId, byCpf] = await Promise.all([
       prisma.workers.findFirst({
         where: { workerId: BigInt(5) },
         select: {
           workerId: true,
           workerName: true,
-          cpf: true,
           cooperative: true,
           userType: true,
         },
       }),
       prisma.workers.findFirst({
-        where: { cpf: Buffer.from('56789012345', 'utf8') },
+        where: { cpf: Buffer.from(DEBUG_WORKER_CPF, 'utf8') },
         select: {
           workerId: true,
           workerName: true,
-          cpf: true,
           cooperative: true,
           userType: true,
         },
@@ -46,7 +55,6 @@ export async function GET() {
           workerId: byId.workerId.toString(),
           wastepicker_id: formatWorkerId(byId.workerId),
           workerName: byId.workerName,
-          cpf: decodeBytes(byId.cpf),
           cooperative: byId.cooperative.toString(),
           userType: byId.userType,
         }
@@ -56,7 +64,6 @@ export async function GET() {
           workerId: byCpf.workerId.toString(),
           wastepicker_id: formatWorkerId(byCpf.workerId),
           workerName: byCpf.workerName,
-          cpf: decodeBytes(byCpf.cpf),
           cooperative: byCpf.cooperative.toString(),
           userType: byCpf.userType,
         }
@@ -68,10 +75,18 @@ export async function GET() {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Error in debug endpoint:', error);
-    return NextResponse.json(
-      { message: 'Error in debug endpoint', error: String(error) },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Error in debug endpoint',
+      code: 'DEBUG_WASTEPICKERS_FAILED',
+      route: '/api/debug/wastepickers',
+      method: 'GET',
+      request,
+    });
   }
 }

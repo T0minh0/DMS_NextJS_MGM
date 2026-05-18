@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { authErrorResponse, requireAdmin, requireScopedPermission } from '@/lib/auth/server';
+import { apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 
 type MeasurementRecord = {
@@ -92,8 +94,11 @@ function calculateDailyContributions(measurements: MeasurementRecord[]) {
   return contributions;
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const session = await requireAdmin();
+    requireScopedPermission(session, 'reports', 'recalculate', 'global');
+
     const prismaMeasurements = await prisma.measurments.findMany({
       select: {
         wastepicker: true,
@@ -183,13 +188,18 @@ export async function POST() {
       processed: weeklyContributions.length,
     });
   } catch (error) {
-    console.error('Error recalculating contributions:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to recalculate contributions',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to recalculate contributions',
+      code: 'CONTRIBUTIONS_RECALCULATE_FAILED',
+      route: '/api/recalculate-contributions',
+      method: 'POST',
+      request,
+    });
   }
 }

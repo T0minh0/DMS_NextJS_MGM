@@ -1,30 +1,59 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { sanitizeDigits } from '@/lib/db-utils';
+import {
+  authErrorResponse,
+  determineTargetCooperative,
+  requireAuth,
+  requireScopedPermission,
+} from '@/lib/auth/server';
+import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
+import { normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
+
+function isMaskedDocument(value: unknown) {
+  return typeof value === 'string' && value.includes('*');
+}
 
 export async function POST(request: Request) {
   try {
+    const session = await requireAuth();
     const { id, full_name, email, PIS, RG } = await request.json();
 
     if (!id) {
-      return NextResponse.json({ message: 'ID do usuário é obrigatório' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID do usuário é obrigatório',
+        code: 'REQUIRED_USER_ID',
+        status: 400,
+      });
     }
 
     let workerId: bigint;
     try {
       workerId = BigInt(id);
     } catch {
-      return NextResponse.json({ message: 'ID inválido' }, { status: 400 });
+      return apiErrorResponse({
+        message: 'ID inválido',
+        code: 'INVALID_USER_ID',
+        status: 400,
+      });
     }
 
-    const worker = await prisma.workers.findUnique({
-      where: { workerId },
+    const worker = await prisma.workers.findFirst({
+      where: scopedWorkerWhere(session, workerId),
     });
 
     if (!worker) {
-      return NextResponse.json({ message: 'Usuário não encontrado' }, { status: 404 });
+      return apiErrorResponse({
+        message: 'Usuário não encontrado',
+        code: 'USER_NOT_FOUND',
+        status: 404,
+      });
     }
+
+    const isSelfUpdate = worker.workerId.toString() === session.workerId;
+    determineTargetCooperative(session, worker.cooperative);
+    requireScopedPermission(session, 'users', 'update', isSelfUpdate ? 'self' : 'cooperative');
 
     const updateData: Prisma.WorkersUpdateInput = {
       lastUpdate: new Date(),
@@ -36,17 +65,27 @@ export async function POST(request: Request) {
     if (email) {
       updateData.email = email.trim();
     }
-    if (PIS) {
-      const pisDigits = sanitizeDigits(PIS);
-      if (pisDigits) {
-        updateData.pis = Buffer.from(pisDigits, 'utf8');
+    if (PIS && !isMaskedDocument(PIS)) {
+      const pisDigits = normalizePisDigits(PIS);
+      if (!pisDigits) {
+        return apiErrorResponse({
+          message: 'PIS deve conter 11 dígitos',
+          code: 'INVALID_DOCUMENTS',
+          status: 400,
+        });
       }
+      updateData.pis = Buffer.from(pisDigits, 'utf8');
     }
-    if (RG) {
-      const rgDigits = sanitizeDigits(RG);
-      if (rgDigits) {
-        updateData.rg = Buffer.from(rgDigits, 'utf8');
+    if (RG && !isMaskedDocument(RG)) {
+      const rgDigits = normalizeRgDigits(RG);
+      if (!rgDigits) {
+        return apiErrorResponse({
+          message: 'RG deve conter 8 ou 9 dígitos',
+          code: 'INVALID_DOCUMENTS',
+          status: 400,
+        });
       }
+      updateData.rg = Buffer.from(rgDigits, 'utf8');
     }
 
     await prisma.workers.update({
@@ -59,7 +98,18 @@ export async function POST(request: Request) {
       updated: true,
     });
   } catch (error) {
-    console.error('Error updating user profile:', error);
-    return NextResponse.json({ message: 'Erro ao atualizar perfil' }, { status: 500 });
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao atualizar perfil',
+      code: 'USER_PROFILE_UPDATE_FAILED',
+      route: '/api/user/update',
+      method: 'POST',
+      request,
+    });
   }
 }

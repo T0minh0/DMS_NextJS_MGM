@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-05-17T06:11:52.538Z",
+  "base_url": "http://localhost:3105",
+  "desktop": {
+    "screenshot": "output/playwright/s5-05-manage-workers-desktop.png",
+    "maskedCpfVisible": true,
+    "maskedPisValue": "***.*****.**-1",
+    "revealedPisValue": "90000000011",
+    "piiWarningVisible": true,
+    "cooperativeOptionCount": 1,
+    "inlineValidationVisible": true
+  },
+  "mobile": {
+    "screenshot": "output/playwright/s5-05-manage-workers-mobile.png",
+    "offboardedStatusVisible": true,
+    "exitDateVisible": true,
+    "labelledActionsVisible": true
+  },
+  "workerDenied": {
+    "screenshot": "output/playwright/s5-05-manage-workers-worker-denied.png",
+    "finalUrl": "http://localhost:3105/login?reason=web-role-denied",
+    "redirectedToDeniedLogin": true
+  },
+  "consoleClean": true,
+  "consoleErrors": []
+}

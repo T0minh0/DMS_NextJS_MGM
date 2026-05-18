@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { authErrorResponse, requireAdmin, requireManagerOrAdmin } from '@/lib/auth/server';
+import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
 type MaterialWithGroup = Prisma.MaterialsGetPayload<{
   include: { group: true };
@@ -9,15 +11,16 @@ type MaterialWithGroup = Prisma.MaterialsGetPayload<{
 function formatMaterial(material: MaterialWithGroup) {
   return {
     _id: material.materialId.toString(),
-    material_id: Number(material.materialId),
+    material_id: material.materialId.toString(),
     material: material.materialName,
     name: material.materialName,
     group: material.group?.groupName ?? '',
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireManagerOrAdmin();
     const materials = await prisma.materials.findMany({
       include: { group: true },
       orderBy: { materialName: 'asc' },
@@ -43,28 +46,35 @@ export async function GET() {
 
     return NextResponse.json([...groupObjects, ...formattedMaterials]);
   } catch (error) {
-    console.error('Error fetching materials:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch materials',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Failed to fetch materials',
+      code: 'MATERIALS_READ_FAILED',
+      route: '/api/materials',
+      method: 'GET',
+      request,
+    });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAdmin();
     const body = await request.json();
     const materialName = body.material?.trim();
     const groupName = body.group?.trim();
 
     if (!materialName || !groupName) {
-      return NextResponse.json(
-        { error: 'Nome do material e grupo são obrigatórios' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Nome do material e grupo são obrigatórios',
+        code: 'REQUIRED_MATERIAL_FIELDS',
+        status: 400,
+      });
     }
 
     const existingMaterial = await prisma.materials.findFirst({
@@ -77,10 +87,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingMaterial) {
-      return NextResponse.json(
-        { error: 'Este material já existe' },
-        { status: 400 },
-      );
+      return apiErrorResponse({
+        message: 'Este material já existe',
+        code: 'MATERIAL_NAME_CONFLICT',
+        status: 400,
+      });
     }
 
     let group = await prisma.groups.findFirst({
@@ -116,13 +127,18 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error('Error creating material:', error);
-    return NextResponse.json(
-      {
-        error: 'Erro ao criar material',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    const authResponse = authErrorResponse(error, request);
+    if (authResponse) {
+      return authResponse;
+    }
+
+    return apiRouteErrorResponse({
+      error,
+      message: 'Erro ao criar material',
+      code: 'MATERIAL_CREATE_FAILED',
+      route: '/api/materials',
+      method: 'POST',
+      request,
+    });
   }
 }

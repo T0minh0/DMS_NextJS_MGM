@@ -15,6 +15,7 @@ Espelho operacional de `.tony/improvement-log.md`.
 | 2026-05-13 | missing_test | QA da S0-09 encontrou respostas 4xx diretas em rotas API tocadas, sem `code`, `requestId` e header `x-request-id`, apesar de `npm run quality` passar. | Adicionado teste estático em `tests/observability.test.ts` bloqueando `NextResponse.json(..., { status: 4xx/5xx })` fora dos helpers de erro. | concluido |
 | 2026-05-14 | security | Peer review da S1-03 encontrou FKs independentes permitindo registros cross-coop em tabelas novas de gamificacao/notices. | Usar FKs compostas de tenant e smoke negativo cross-coop em migrations que combinam `worker_id` e `cooperative_id`. | concluido |
 | 2026-05-14 | missing_test | S1-04 fecha invariantes de estoque na aplicacao, mas o banco ainda nao tem check constraint para `current <= collected - sold`. | Criar task futura de constraint/backfill de estoque antes de permitir mutacoes fora dos helpers canonicos. | aberto |
+| 2026-05-17 | security | S3-04 round 1 permitia que participante `INVITED` lesse relatorio coletivo completo com pesos e revenue_share. | Relatorio completo deve usar helper compartilhado e permitir somente admin, cooperativa criadora ou participante `ACCEPTED`; testes devem cobrir `INVITED` negado em JSON/PDF. | concluido |
 | 2026-05-17 | missing_test | S5-03 fechou corridas conhecidas de venda coletiva por lock order, mas a cobertura de concorrencia ainda e estrutural/estatica, nao multi-transacao real em Postgres. | Criar smoke futuro com Postgres descartavel exercitando intercalacoes reais de `edit`/`invite`/`join`/`contribution`/`cancel`/`complete`. | pendente |
 
 ## Entradas detalhadas
@@ -86,6 +87,93 @@ Espelho operacional de `.tony/improvement-log.md`.
 - **Sugestao:** abrir task futura para backfill/constraint de estoque e exigir em review que novas mutacoes de estoque passem pelos helpers canonicos ate a constraint existir.
 - **Acao sistemica:** task futura
 - **Dono/prazo:** backlog Tony DMS / antes de qualquer nova rota ou job que escreva em `Stock`.
+- **Status:** pendente
+
+### [security] Relatorio coletivo completo nao pode ser aberto por convite pendente
+
+- **Data:** 2026-05-17
+- **Agente:** codex-peer-reviewer + dev-tony + security-auditor
+- **Task:** 86e136cd1 (S3-04)
+- **Fonte:** peer_review
+- **Sinal:** FAIL round 1, corrigido antes do QA
+- **Descricao:** O endpoint JSON de relatorio coletivo aceitava contributions com status `INVITED` como participante suficiente para ler o relatorio completo, expondo `contributed_weight` e `revenue_share` de todas as cooperativas antes do convite ser aceito. O mesmo padrao existia no PDF coletivo.
+- **Causa raiz:** A regra de acesso confundia "convite visivel" com "participacao aceita"; testes estaticos verificavam apenas a existencia de logica de participante, nao o status autorizado.
+- **Impacto:** IDOR/scoping leak para manager convidado ainda nao aceito, com dados operacionais e financeiros de outras cooperativas.
+- **Sugestao:** Centralizar acesso de relatorio completo em helper compartilhado e exigir testes com `INVITED`/`LEFT` negados e `ACCEPTED` permitido para qualquer novo formato de relatorio coletivo.
+- **Acao sistemica:** helper `src/lib/reports/collective-access.ts` e testes S3-04/S3-05.
+- **Status:** concluido
+
+### [bug_pattern] Validacao de API deve refletir constraints fisicas antes do banco
+
+- **Data:** 2026-05-17
+- **Agente:** codex-peer-reviewer + dev-tony
+- **Task:** 86e136cdp (S4-03)
+- **Fonte:** peer_review
+- **Sinal:** FAIL rounds 1 e 2, corrigido antes do QA
+- **Descricao:** O PATCH de override XP aceitava valores incompativeis com schema (`0` contra `CHECK > 0`, overflow de `Int`) e nao mapeava JSON invalido para 400, podendo virar 500.
+- **Causa raiz:** Validacao de payload incompleta contra migration/schema e contrato central de erro API.
+- **Impacto:** Input ruim poderia gerar erro interno e esconder erro de cliente.
+- **Sugestao:** Para novas escritas, revisar schema/migration junto do DTO e cobrir limites numericos, checks, FKs compostas e `ApiRequestError`.
+- **Acao sistemica:** convencao
+- **Resolucao:** S4-03 valida `xpReward` em `1..2147483647`, bloqueia cross-coop antes da FK composta e usa `apiRequestErrorResponse`.
+- **Status:** concluido
+
+### [missing_test] Dashboard async precisa de teste comportamental de resposta obsoleta
+
+- **Data:** 2026-05-17
+- **Agente:** codex-peer-reviewer + dev-tony
+- **Task:** 86e136ck7 (S5-01)
+- **Fonte:** peer_review_delta
+- **Sinal:** PASS com warning
+- **Descricao:** S5-01 adicionou guard `dashboardRequestSeq` contra respostas antigas de `loadDashboard()`, mas a cobertura automatizada ainda valida esse contrato por teste estatico.
+- **Causa raiz:** Falta harness de componente/fetch controlavel para UI client-side.
+- **Impacto:** O guard atual foi revisado e aceito, mas regressao futura poderia passar se preservasse os nomes e quebrasse a semantica.
+- **Sugestao:** Adicionar teste comportamental com promises mockadas para provar que resposta antiga nao sobrescreve o recorte novo.
+- **Acao sistemica:** teste
+- **Status:** pendente
+
+### [accepted_risk] Identidade client-side ainda e espelhada em localStorage fora do dashboard
+
+- **Data:** 2026-05-17
+- **Agente:** security-auditor + dev-tony
+- **Task:** 86e136ck7 (S5-01)
+- **Fonte:** security_audit_delta
+- **Sinal:** PASS com warning
+- **Descricao:** Dashboard e nav agora derivam sessao do servidor, mas `Layout` ainda espelha essa sessao em `localStorage` para compatibilidade com telas legadas.
+- **Causa raiz:** A migracao completa das telas gerenciais para `/api/auth/session` ficou fora do escopo da S5-01.
+- **Impacto:** APIs seguem protegidas no servidor, mas UX legada pode ler estado client-side adulteravel/desatualizado.
+- **Sugestao:** Migrar telas S5 restantes para sessao server-derived ou endpoints escopados e remover o espelho de role/cooperativa em `localStorage`.
+- **Acao sistemica:** task futura
+- **Status:** pendente
+
+### [accepted_risk] Ajuste manual de estoque ainda nao possui ledger imutavel dedicado
+
+- **Data:** 2026-05-17
+- **Agente:** security-auditor + dev-tony
+- **Task:** 86e1c9eqx (S5-06)
+- **Fonte:** security_audit
+- **Sinal:** PASS com warning baixo
+- **Descricao:** A tela `/materials` exige confirmacao de impacto e o endpoint `POST /api/stock` valida RBAC, cooperativa e integridade de estoque, mas o ajuste manual ainda nao persiste motivo, saldo anterior/posterior, ator e requestId em uma tabela ledger dedicada.
+- **Causa raiz:** O contrato atual de ajuste manual reutiliza helper canonico de incremento e logs estruturados; trilha auditavel operacional ficou fora do escopo da UX S5-06.
+- **Impacto:** Operacao consegue ajustar saldo com seguranca de escopo, mas auditoria posterior depende de logs e estado agregado.
+- **Sugestao:** Criar task futura para `stock_adjustment_ledger` com ator, cooperativa, material, delta, saldo anterior, saldo posterior, motivo, requestId e timestamp.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de uso operacional real de ajustes manuais como processo auditavel.
+- **Status:** pendente
+
+### [accepted_risk] JWT ainda carrega CPF do usuario
+
+- **Data:** 2026-05-17
+- **Agente:** security-auditor + dev-tony
+- **Task:** 86e1c9eqx (S5-06)
+- **Fonte:** security_audit
+- **Sinal:** PASS com warning baixo
+- **Descricao:** O token de autenticacao assinado no login ainda inclui `cpf` no payload. O cookie e `httpOnly`, `sameSite` e `secure` em producao, e a S5-06 nao altera login/session, mas o principio de minimizacao recomenda remover esse dado se nenhuma rota server-side precisar dele no JWT.
+- **Causa raiz:** Payload legado de autenticacao carrega documento pessoal por conveniencia historica; S5-05/S5-06 reduziram exposicao de PII na UI, mas nao redesenharam o token.
+- **Impacto:** Em caso de vazamento de token, ha mais PII do que o necessario dentro do payload assinado.
+- **Sugestao:** Criar task futura para remover `cpf` de `signAuthToken`, ajustar `AuthTokenPayload` e validar que rotas que precisam de documento consultem o banco com RBAC.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de endurecimento final de privacidade para producao.
 - **Status:** pendente
 
 ### [missing_test] Concorrencia coletiva precisa de smoke multi-transacao real

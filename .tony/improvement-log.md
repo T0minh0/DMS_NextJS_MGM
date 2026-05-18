@@ -17,6 +17,13 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 | 2026-05-14 | missing_test | S1-04 fecha invariantes de estoque na aplicacao, mas o banco ainda nao tem check constraint para `current <= collected - sold`. | Criar task futura de constraint/backfill de estoque antes de permitir mutacoes fora dos helpers canonicos. | aberto |
 | 2026-05-16 | bug_pattern | P2002 capturado sem verificar `e.meta.target` pode silenciar constraint errada em endpoints de buyers. | Sempre checar `meta.target` antes de emitir resposta 409 de negocio; pattern canonico adicionado como convencao. | pendente |
 | 2026-05-16 | accepted_risk | `/api/buyers` retorna todos os buyers sem filtro por cooperativa — catálogo global consistente com legado, mas pode ser problema se buyers forem scopados no futuro. | Criar task futura para avaliar scoping de buyers por cooperativa. | pendente |
+| 2026-05-16 | bug_pattern | S3-01 round 1 usou status 'PENDING' no codigo que nunca existia no CHECK constraint do banco ('INVITED','ACCEPTED','LEFT'). Bug silencioso: passa no typecheck (string), falha em runtime com P2002. | Gate: script de smoke que valida valores literais de status contra a migration antes de submeter ao QA. Ou constraint enum no Prisma schema. | pendente |
+
+| 2026-05-16 | bug_pattern | Codigo usou `'PENDING'` mas migration SQL define `CHECK status IN ('INVITED', 'ACCEPTED', 'LEFT')`. Prisma `String @db.VarChar(20)` e testes estaticos sao cegos a esta constraint. | Toda nova escrita em status de enum SQL deve ter teste de integracao ou constante compartilhada derivada da migration; nunca confiar apenas em testes de regex sobre codigo fonte. | pendente |
+| 2026-05-16 | accepted_risk | S3-02 cancel/leave race estreita: cancel lê contribuicoes ACCEPTED apos updateMany mas antes de adquirir lock por coop; leave concorrente pode comitar LEFT+stock antes do lock do cancel, causando double stock return. | Apos `lockStockAggregateForUpdate` no loop do cancel, re-checar status da contribution antes de chamar adjustStock. Janela muito estreita e impacto e estoque em excesso (nao falta), mas vale fechar numa task de hardening. | pendente |
+
+| 2026-05-16 | dx_friction | S3-06: `getMaterialName` (page.tsx:228) definida e nunca chamada — material_name ja vem no payload da API, funcao e dead code. | Remover funcao em cleanup/refactor proximo; nao re-criar se o design da API ja enriquece o payload no backend. | pendente |
+| 2026-05-17 | security | S3-04 round 1 permitia que participante `INVITED` lesse relatorio coletivo completo com pesos e revenue_share. | Relatorio completo deve usar helper compartilhado e permitir somente admin, cooperativa criadora ou participante `ACCEPTED`; testes devem cobrir `INVITED` negado em JSON/PDF. | concluido |
 | 2026-05-17 | missing_test | S5-03 fechou corridas conhecidas de venda coletiva por lock order, mas a cobertura de concorrencia ainda e estrutural/estatica, nao multi-transacao real em Postgres. | Criar smoke futuro com Postgres descartavel exercitando intercalacoes reais de `edit`/`invite`/`join`/`contribution`/`cancel`/`complete`. | pendente |
 
 ## Entradas detalhadas
@@ -103,6 +110,20 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 - **Acao sistemica:** convencao — revisao de todos os handlers P2002 existentes no projeto para verificar se ha outros sem meta.target check.
 - **Status:** pendente
 
+### [bug_pattern] Status enum em CHECK SQL invisivel para Prisma schema e testes estaticos
+
+- **Data:** 2026-05-16
+- **Agente:** qa-reviewer
+- **Task:** 86e136ccn (S3-01)
+- **Fonte:** qa_final — inspecao manual de migration vs codigo
+- **Sinal:** FAIL
+- **Descricao:** Migration `20260513233000_s1_02_collective_sales/migration.sql` cria `CONSTRAINT "collective_sale_contribution_status_check" CHECK ("status" IN ('INVITED', 'ACCEPTED', 'LEFT'))`. O codigo da S3-01 usa `'PENDING'` em todos os paths de invite e invitations. Nenhuma migration posterior altera esta constraint. Qualquer insert com `'PENDING'` seria rejeitado pelo banco com erro de CHECK violation, resultando em 500 nos endpoints `/invite` e `/join`.
+- **Causa raiz:** Prisma nao modela raw CHECK constraints — o schema declara `status String @db.VarChar(20)` sem restricao de valores. Testes estaticos (regex sobre codigo fonte) sao cegos ao que o banco vai aceitar. O dev nao verificou a migration original ao escolher o valor `'PENDING'`.
+- **Impacto:** AC #4 (invite) e AC #5 (join) nao funcionam em producao — qualquer convite retorna 500; flow PENDING→ACCEPTED e inacessivel.
+- **Sugestao:** Opcao A — renomear `'PENDING'` para `'INVITED'` no codigo (valor ja permitido pela constraint existente); Opcao B — nova migration que altera o CHECK para incluir `'PENDING'`. Adicionalmente: criar constante compartilhada (`CONTRIBUTION_STATUSES`) que derive do enum da migration e seja importada tanto no codigo quanto nos testes, tornando o drift detectavel em typecheck.
+- **Acao sistemica:** convencao — toda nova tabela com campo de status deve ter: (1) enum ou constante compartilhada no codigo, (2) teste de integracao que escreva no banco, ou (3) assertion explicitica no peer review checklist "valores de status batem com a migration SQL".
+- **Status:** pendente
+
 ### [accepted_risk] RBAC scope de buyers nao filtra por cooperativa
 
 - **Data:** 2026-05-16
@@ -118,6 +139,20 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 - **Dono/prazo:** backlog Tony DMS / antes de multi-tenant buyers.
 - **Status:** pendente
 
+### [security] Relatorio coletivo completo nao pode ser aberto por convite pendente
+
+- **Data:** 2026-05-17
+- **Agente:** codex-peer-reviewer + dev-tony + security-auditor
+- **Task:** 86e136cd1 (S3-04)
+- **Fonte:** peer_review
+- **Sinal:** FAIL round 1, corrigido antes do QA
+- **Descricao:** O endpoint JSON de relatorio coletivo aceitava contributions com status `INVITED` como participante suficiente para ler o relatorio completo, expondo `contributed_weight` e `revenue_share` de todas as cooperativas antes do convite ser aceito. O mesmo padrao existia no PDF coletivo.
+- **Causa raiz:** A regra de acesso confundia "convite visivel" com "participacao aceita"; testes estaticos verificavam apenas a existencia de logica de participante, nao o status autorizado.
+- **Impacto:** IDOR/scoping leak para manager convidado ainda nao aceito, com dados operacionais e financeiros de outras cooperativas.
+- **Sugestao:** Centralizar acesso de relatorio completo em helper compartilhado e exigir testes com `INVITED`/`LEFT` negados e `ACCEPTED` permitido para qualquer novo formato de relatorio coletivo.
+- **Acao sistemica:** helper `src/lib/reports/collective-access.ts` e testes S3-04/S3-05.
+- **Status:** concluido
+
 ### [missing_test] invariante fisica de estoque ainda depende dos helpers
 - **Data:** 2026-05-14
 - **Agente:** qa-reviewer
@@ -130,6 +165,79 @@ Registro de aprendizados recorrentes, friccoes e melhorias para o loop Tony nest
 - **Sugestao:** abrir task futura para backfill/constraint de estoque e exigir em review que novas mutacoes de estoque passem pelos helpers canonicos ate a constraint existir.
 - **Acao sistemica:** task futura
 - **Dono/prazo:** backlog Tony DMS / antes de qualquer nova rota ou job que escreva em `Stock`.
+- **Status:** pendente
+
+### [bug_pattern] Validacao de API deve refletir constraints fisicas antes do banco
+
+- **Data:** 2026-05-17
+- **Agente:** codex-peer-reviewer + dev-tony
+- **Task:** 86e136cdp (S4-03)
+- **Fonte:** peer_review
+- **Sinal:** FAIL rounds 1 e 2, corrigido antes do QA
+- **Descricao:** O PATCH de override XP inicialmente aceitava `xpReward = 0`, embora a migration exija `xp_reward_override > 0`; depois tambem aceitava inteiros acima do range `Int` do Prisma/Postgres e nao mapeava `ApiRequestError` de JSON invalido, podendo transformar input ruim em 500.
+- **Causa raiz:** A validacao de payload foi escrita contra o DTO esperado, mas nao contra todos os limites fisicos do schema (`CHECK > 0`, tipo `Int`) nem contra o contrato central de erro API.
+- **Impacto:** Requests malformados ou fora do range poderiam gerar erro interno, mascarar problema de cliente e poluir logs operacionais.
+- **Sugestao:** Em endpoints que escrevem no banco, conferir migration/schema antes de liberar payload: limites numericos, checks, FKs compostas e shape JSON. Sempre mapear `ApiRequestError` antes de `apiInternalErrorResponse`.
+- **Acao sistemica:** convencao
+- **Resolucao:** S4-03 passou a validar `xpReward` em `1..2147483647`, negar escrita cross-coop antes da FK composta e mapear JSON invalido com `apiRequestErrorResponse`.
+- **Status:** concluido
+
+### [missing_test] Dashboard async precisa de teste comportamental de resposta obsoleta
+
+- **Data:** 2026-05-17
+- **Agente:** codex-peer-reviewer + dev-tony
+- **Task:** 86e136ck7 (S5-01)
+- **Fonte:** peer_review_delta
+- **Sinal:** PASS com warning
+- **Descricao:** A S5-01 adicionou `dashboardRequestSeq` para impedir que respostas antigas de `loadDashboard()` sobrescrevam filtros mais recentes, mas a cobertura automatizada ainda e estatica por string em `tests/dashboard-s501-ui.test.ts`.
+- **Causa raiz:** O projeto ainda nao tem harness de componente com fetch controlavel para provar ordering de promessas em UI client-side.
+- **Impacto:** O guard atual foi revisado e validado por peer review, mas uma regressao futura poderia passar se mantivesse os nomes de variaveis e removesse a semantica correta.
+- **Sugestao:** Criar teste comportamental de dashboard com promises mockadas: disparar duas cargas, resolver a mais nova primeiro e a antiga depois, e assertar que o estado renderizado permanece no recorte mais recente.
+- **Acao sistemica:** teste
+- **Status:** pendente
+
+### [accepted_risk] Identidade client-side ainda e espelhada em localStorage fora do dashboard
+
+- **Data:** 2026-05-17
+- **Agente:** security-auditor + dev-tony
+- **Task:** 86e136ck7 (S5-01)
+- **Fonte:** security_audit_delta
+- **Sinal:** PASS com warning
+- **Descricao:** A S5-01 removeu a dependencia do dashboard em `localStorage` e passou a usar `/api/auth/session`, mas `Layout` ainda espelha a sessao derivada do servidor em `localStorage` para compatibilidade com paginas legadas que leem dados de usuario para UX/body defaults.
+- **Causa raiz:** A migracao de todas as telas para sessao server-derived ainda nao ocorreu; S5-01 focou dashboard, navegacao e bloqueio de acesso direto.
+- **Impacto:** APIs seguem sendo a fronteira real de autorizacao, mas paginas legadas podem exibir estado client-side desatualizado ou confiavel demais para UX se o storage for adulterado.
+- **Sugestao:** Nas proximas tasks S5, migrar telas gerenciais legadas para `/api/auth/session` ou dados retornados por endpoints escopados e remover gradualmente a persistencia de role/cooperativa em `localStorage`.
+- **Acao sistemica:** task futura
+- **Status:** pendente
+
+### [accepted_risk] Ajuste manual de estoque ainda nao possui ledger imutavel dedicado
+
+- **Data:** 2026-05-17
+- **Agente:** security-auditor + dev-tony
+- **Task:** 86e1c9eqx (S5-06)
+- **Fonte:** security_audit
+- **Sinal:** PASS com warning baixo
+- **Descricao:** A tela `/materials` exige confirmacao de impacto e o endpoint `POST /api/stock` valida RBAC, cooperativa e integridade de estoque, mas o ajuste manual ainda nao persiste motivo, saldo anterior/posterior, ator e requestId em uma tabela ledger dedicada.
+- **Causa raiz:** O contrato atual de ajuste manual reutiliza o helper canonico de incremento de estoque e logs estruturados; trilha auditavel operacional ficou fora do escopo da UX S5-06.
+- **Impacto:** Operacao consegue ajustar saldo com seguranca de escopo, mas auditoria posterior depende de logs e do estado agregado, nao de um historico imutavel por ajuste.
+- **Sugestao:** Criar task futura para `stock_adjustment_ledger` com ator, cooperativa, material, delta, saldo anterior, saldo posterior, motivo, requestId e timestamp; exigir motivo na UI quando essa tabela existir.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de uso operacional real de ajustes manuais como processo auditavel.
+- **Status:** pendente
+
+### [accepted_risk] JWT ainda carrega CPF do usuario
+
+- **Data:** 2026-05-17
+- **Agente:** security-auditor + dev-tony
+- **Task:** 86e1c9eqx (S5-06)
+- **Fonte:** security_audit
+- **Sinal:** PASS com warning baixo
+- **Descricao:** O token de autenticacao assinado no login ainda inclui `cpf` no payload. O cookie e `httpOnly`, `sameSite` e `secure` em producao, e a S5-06 nao altera login/session, mas o principio de minimizacao recomenda remover esse dado se nenhuma rota server-side precisar dele no JWT.
+- **Causa raiz:** Payload legado de autenticacao carrega documento pessoal por conveniencia historica; S5-05/S5-06 reduziram exposicao de PII na UI, mas nao redesenharam o token.
+- **Impacto:** Em caso de vazamento de token, ha mais PII do que o necessario dentro do payload assinado.
+- **Sugestao:** Criar task futura para remover `cpf` de `signAuthToken`, ajustar `AuthTokenPayload` e validar que rotas que precisam de documento consultem o banco com RBAC em vez de confiar no token.
+- **Acao sistemica:** task futura
+- **Dono/prazo:** backlog Tony DMS / antes de endurecimento final de privacidade para producao.
 - **Status:** pendente
 
 ### [missing_test] Concorrencia coletiva precisa de smoke multi-transacao real

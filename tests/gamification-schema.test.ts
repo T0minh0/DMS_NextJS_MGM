@@ -10,6 +10,12 @@ const s103Migration = readFileSync(
   ),
   'utf8',
 );
+const noticePriorityRangeMigration = readFileSync(
+  path.resolve(
+    'prisma/migrations/20260519170000_expand_notice_priority_range/migration.sql',
+  ),
+  'utf8',
+);
 const seedSource = readFileSync(path.resolve('prisma/seed.ts'), 'utf8');
 
 test('S1-03 Prisma schema maps notice, multiplier and gamification tables', () => {
@@ -104,6 +110,12 @@ test('S1-03 migration encodes uniqueness and value constraints', () => {
   assert.match(s103Migration, /CHECK \("year_month" ~ '\^\[0-9\]\{4\}-/);
   assert.match(s103Migration, /CHECK \("multiplier_value" >= 0\.100 AND "multiplier_value" <= 10\.000\)/);
   assert.match(s103Migration, /CHECK \("multiplier_value" >= 0\.800 AND "multiplier_value" <= 1\.500\)/);
+});
+
+test('notice priority follow-up migration expands range to 1 through 5', () => {
+  assert.match(noticePriorityRangeMigration, /DROP CONSTRAINT "notice_board_priority_check"/);
+  assert.match(noticePriorityRangeMigration, /ADD CONSTRAINT "notice_board_priority_check"/);
+  assert.match(noticePriorityRangeMigration, /CHECK \("priority" BETWEEN 1 AND 5\)/);
 });
 
 test('S1-03 migration seeds fixed levels and achievements idempotently', () => {

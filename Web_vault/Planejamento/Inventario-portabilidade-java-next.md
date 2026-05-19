@@ -379,7 +379,7 @@ Gaps:
 | `GET /api/notices` | query `cooperativeId` | Portar | `/api/notices` | Lista global + cooperativa ativa. |
 | `GET /api/notices/global` | none | Portar | `/api/notices/global` | Admin only. |
 | `GET /api/notices/{noticeId}` | none | Portar | `/api/notices/[noticeId]` | Escopo por global/propria coop/admin. |
-| `GET /api/notices/filter` | `priority`, `cooperativeId` | Portar | `/api/notices/filter` | Prioridade 1-3. |
+| `GET /api/notices/filter` | `priority`, `cooperativeId` | Portar | `/api/notices/filter` | Prioridade 1-5. |
 | `POST /api/notices` | `NoticeDTO` | Portar | `/api/notices` | Manager cria propria coop; admin pode global. |
 | `PUT /api/notices/{noticeId}` | `NoticeDTO` | Portar | `/api/notices/[noticeId]` | Sanitizar. |
 | `DELETE /api/notices/{noticeId}` | none | Portar | `/api/notices/[noticeId]` | Escopo de escrita. |

@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
     }
 
     const priorityNum = priority !== undefined ? Number(priority) : 1;
-    if (!Number.isInteger(priorityNum) || priorityNum < 1) {
-      return apiErrorResponse({ message: 'Prioridade deve ser um inteiro >= 1', code: 'INVALID_PRIORITY', status: 400, requestId: context.requestId });
+    if (!Number.isInteger(priorityNum) || priorityNum < 1 || priorityNum > 5) {
+      return apiErrorResponse({ message: 'Prioridade deve ser um inteiro entre 1 e 5', code: 'INVALID_PRIORITY', status: 400, requestId: context.requestId });
     }
 
     let expiresAt: Date | null = null;

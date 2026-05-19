@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
     }
 
     const priority = Number(priorityParam);
-    if (!Number.isInteger(priority) || priority < 1) {
-      return apiErrorResponse({ message: 'Prioridade deve ser um inteiro >= 1', code: 'INVALID_PRIORITY', status: 400, requestId: context.requestId });
+    if (!Number.isInteger(priority) || priority < 1 || priority > 5) {
+      return apiErrorResponse({ message: 'Prioridade deve ser um inteiro entre 1 e 5', code: 'INVALID_PRIORITY', status: 400, requestId: context.requestId });
     }
 
     const scopeWhere = buildScopeWhere(session);

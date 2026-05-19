@@ -75,9 +75,11 @@ test('POST route sanitizes title and content', () => {
   assert.match(source, /sanitizeNoticeContent/);
 });
 
-test('POST route validates priority >= 1', () => {
+test('POST route validates priority between 1 and 5', () => {
   const source = readSource(ROUTE);
-  assert.match(source, /priority.*>=.*1|priorityNum.*<.*1/);
+  assert.match(source, /priorityNum.*<.*1/);
+  assert.match(source, /priorityNum.*>.*5/);
+  assert.match(source, /Prioridade deve ser um inteiro entre 1 e 5/);
 });
 
 test('POST route rejects expires_at in the past', () => {
@@ -126,9 +128,12 @@ test('filter route returns 400 when priority missing', () => {
   assert.match(source, /MISSING_PRIORITY/);
 });
 
-test('filter route validates priority >= 1', () => {
+test('filter route validates priority between 1 and 5', () => {
   const source = readSource(FILTER);
   assert.match(source, /INVALID_PRIORITY/);
+  assert.match(source, /priority.*<.*1/);
+  assert.match(source, /priority.*>.*5/);
+  assert.match(source, /Prioridade deve ser um inteiro entre 1 e 5/);
 });
 
 test('filter route applies scope and active filters', () => {
@@ -171,6 +176,13 @@ test('PATCH blocks manager from cross-coop notice with 404', () => {
 test('PATCH updates lastUpdated timestamp', () => {
   const source = readSource(ID_ROUTE);
   assert.match(source, /lastUpdated.*new Date|lastUpdated.*Date/);
+});
+
+test('PATCH validates priority between 1 and 5', () => {
+  const source = readSource(ID_ROUTE);
+  assert.match(source, /p.*<.*1/);
+  assert.match(source, /p.*>.*5/);
+  assert.match(source, /Prioridade deve ser um inteiro entre 1 e 5/);
 });
 
 test('PATCH allows null expires_at to remove expiry', () => {

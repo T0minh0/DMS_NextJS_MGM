@@ -129,8 +129,8 @@ export async function PATCH(
 
     if ('priority' in patch) {
       const p = Number(patch.priority);
-      if (!Number.isInteger(p) || p < 1) {
-        return apiErrorResponse({ message: 'Prioridade deve ser um inteiro >= 1', code: 'INVALID_PRIORITY', status: 400, requestId: context.requestId });
+      if (!Number.isInteger(p) || p < 1 || p > 5) {
+        return apiErrorResponse({ message: 'Prioridade deve ser um inteiro entre 1 e 5', code: 'INVALID_PRIORITY', status: 400, requestId: context.requestId });
       }
       data.priority = p;
     }

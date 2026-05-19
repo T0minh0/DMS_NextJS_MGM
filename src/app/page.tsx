@@ -23,6 +23,7 @@ type PeriodFilter = 'weekly' | 'monthly' | 'yearly';
 type DashboardSection =
   | 'session'
   | 'materials'
+  | 'materialGroups'
   | 'workers'
   | 'stock'
   | 'earnings'
@@ -50,7 +51,13 @@ interface MaterialItem {
   material_id?: string | number;
   name?: string;
   material?: string;
+  group?: string;
   isGroup?: boolean;
+}
+
+interface MaterialGroupItem {
+  group_id: string;
+  group: string;
 }
 
 interface WorkerItem {
@@ -136,6 +143,7 @@ const LOW_STOCK_KG = 25;
 const initialLoading: Record<DashboardSection, boolean> = {
   session: true,
   materials: true,
+  materialGroups: true,
   workers: true,
   stock: true,
   earnings: true,
@@ -286,9 +294,11 @@ function MetricCard({
 export default function HomePage() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('monthly');
   const [materialFilter, setMaterialFilter] = useState('');
+  const [materialGroupFilter, setMaterialGroupFilter] = useState('');
   const [workerFilter, setWorkerFilter] = useState('');
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [materialGroups, setMaterialGroups] = useState<MaterialGroupItem[]>([]);
   const [workers, setWorkers] = useState<WorkerItem[]>([]);
   const [stockData, setStockData] = useState<StockPayload>({});
   const [earningsData, setEarningsData] = useState<EarningsItem[]>([]);
@@ -316,6 +326,12 @@ export default function HomePage() {
     return response.json() as Promise<T>;
   }, []);
 
+  const effectiveMaterialFilter = useMemo(() => {
+    if (materialFilter) return materialFilter;
+    if (materialGroupFilter) return `group_${materialGroupFilter}`;
+    return '';
+  }, [materialFilter, materialGroupFilter]);
+
   const loadDashboard = useCallback(async () => {
     const requestId = dashboardRequestSeq.current + 1;
     dashboardRequestSeq.current = requestId;
@@ -323,22 +339,23 @@ export default function HomePage() {
     setLoading(initialLoading);
     setErrors({});
 
-    const stockUrl = materialFilter
-      ? `/api/stock?material_id=${encodeURIComponent(materialFilter)}`
+    const stockUrl = effectiveMaterialFilter
+      ? `/api/stock?material_id=${encodeURIComponent(effectiveMaterialFilter)}`
       : '/api/stock';
-    const earningsUrl = materialFilter
-      ? `/api/earnings-comparison?period_type=${periodFilter}&material_id=${encodeURIComponent(materialFilter)}`
+    const earningsUrl = effectiveMaterialFilter
+      ? `/api/earnings-comparison?period_type=${periodFilter}&material_id=${encodeURIComponent(effectiveMaterialFilter)}`
       : `/api/earnings-comparison?period_type=${periodFilter}`;
     const workerCollectionsUrl = new URLSearchParams({
       period_type: periodFilter,
     });
 
     if (workerFilter) workerCollectionsUrl.set('worker_id', workerFilter);
-    if (materialFilter) workerCollectionsUrl.set('material_id', materialFilter);
+    if (effectiveMaterialFilter) workerCollectionsUrl.set('material_id', effectiveMaterialFilter);
 
     const [
       sessionResult,
       materialsResult,
+      materialGroupsResult,
       workersResult,
       stockResult,
       earningsResult,
@@ -351,13 +368,14 @@ export default function HomePage() {
     ] = await Promise.allSettled([
       fetchJson<SessionUser>('/api/auth/session'),
       fetchJson<unknown>('/api/materials'),
+      fetchJson<unknown>('/api/material-groups'),
       fetchJson<unknown>('/api/users'),
       fetchJson<StockPayload>(stockUrl),
       fetchJson<unknown>(earningsUrl),
       fetchJson<WorkerCollectionsPayload>(`/api/worker-collections?${workerCollectionsUrl.toString()}`),
       fetchJson<PriceFluctuationPayload>(
-        materialFilter
-          ? `/api/price-fluctuation?material_id=${encodeURIComponent(materialFilter)}`
+        effectiveMaterialFilter
+          ? `/api/price-fluctuation?material_id=${encodeURIComponent(effectiveMaterialFilter)}`
           : '/api/price-fluctuation',
       ),
       fetchJson<unknown>('/api/birthdays'),
@@ -388,6 +406,13 @@ export default function HomePage() {
     } else {
       setMaterials([]);
       markError('materials', materialsResult);
+    }
+
+    if (materialGroupsResult.status === 'fulfilled') {
+      setMaterialGroups(asArray<MaterialGroupItem>(materialGroupsResult.value, ['groups', 'data']));
+    } else {
+      setMaterialGroups([]);
+      markError('materialGroups', materialGroupsResult);
     }
 
     if (workersResult.status === 'fulfilled') {
@@ -456,6 +481,7 @@ export default function HomePage() {
     setLoading({
       session: false,
       materials: false,
+      materialGroups: false,
       workers: false,
       stock: false,
       earnings: false,
@@ -466,7 +492,7 @@ export default function HomePage() {
       sales: false,
       collectiveInvitations: false,
     });
-  }, [fetchJson, materialFilter, periodFilter, workerFilter]);
+  }, [effectiveMaterialFilter, fetchJson, periodFilter, workerFilter]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -485,9 +511,19 @@ export default function HomePage() {
     return map;
   }, [materials]);
   const filterableMaterials = useMemo(
-    () => materials.filter((material) => !material.isGroup && getMaterialId(material)),
-    [materials],
+    () => materials.filter((material) => (
+      !material.isGroup &&
+      getMaterialId(material) &&
+      (!materialGroupFilter || material.group === materialGroupFilter)
+    )),
+    [materialGroupFilter, materials],
   );
+
+  useEffect(() => {
+    if (!materialFilter) return;
+    if (filterableMaterials.some((material) => getMaterialId(material) === materialFilter)) return;
+    setMaterialFilter('');
+  }, [filterableMaterials, materialFilter]);
 
   const stockEntries = useMemo(() => (
     Object.entries(stockData)
@@ -522,7 +558,9 @@ export default function HomePage() {
   const operationalErrorCount = Object.keys(errors).filter((key) => key !== 'session').length;
   const materialFilterLabel = materialFilter
     ? materialNameById.get(materialFilter) || 'Material selecionado'
-    : 'Todos os materiais';
+    : materialGroupFilter
+      ? `Grupo ${materialGroupFilter}`
+      : 'Todos os materiais';
 
   return (
     <Layout activePath="/">
@@ -643,10 +681,22 @@ export default function HomePage() {
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase text-text-secondary">Cooperativa</p>
-              <div className="flex h-11 items-center rounded-lg border border-outline bg-surface px-3 text-sm text-foreground">
-                {sessionUser?.cooperative_name || 'Escopo da sessão'}
-              </div>
+              <label htmlFor="materialGroupFilter" className="mb-2 block text-xs font-semibold uppercase text-text-secondary">
+                Grupo de materiais
+              </label>
+              <select
+                id="materialGroupFilter"
+                value={materialGroupFilter}
+                onChange={(event) => setMaterialGroupFilter(event.target.value)}
+                className="h-11 w-full rounded-lg border border-outline bg-surface px-3 text-foreground focus:border-primary focus:ring-0"
+              >
+                <option value="">Todos os grupos</option>
+                {materialGroups.map((materialGroup) => (
+                  <option key={materialGroup.group_id} value={materialGroup.group}>
+                    {materialGroup.group}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

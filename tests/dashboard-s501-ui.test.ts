@@ -58,7 +58,28 @@ test('dashboard keeps material filters to individual materials, not group placeh
 
   assert.match(source, /filterableMaterials/);
   assert.match(source, /!material\.isGroup/);
-  assert.match(source, /encodeURIComponent\(materialFilter\)/);
+  assert.match(source, /material\.group === materialGroupFilter/);
+  assert.match(source, /setMaterialFilter\(''\)/);
+});
+
+test('dashboard replaces cooperative operational filter with material group filter', () => {
+  const source = readSource(PAGE);
+
+  assert.match(source, /\/api\/material-groups/);
+  assert.match(source, /MaterialGroupItem/);
+  assert.match(source, /id="materialGroupFilter"/);
+  assert.match(source, /Grupo de materiais/);
+  assert.match(source, /Todos os grupos/);
+  assert.doesNotMatch(source, /<p className="mb-2 text-xs font-semibold uppercase text-text-secondary">Cooperativa<\/p>/);
+});
+
+test('dashboard applies material group filter to operational API reads', () => {
+  const source = readSource(PAGE);
+
+  assert.match(source, /effectiveMaterialFilter/);
+  assert.match(source, /`group_\$\{materialGroupFilter\}`/);
+  assert.match(source, /encodeURIComponent\(effectiveMaterialFilter\)/);
+  assert.match(source, /workerCollectionsUrl\.set\('material_id', effectiveMaterialFilter\)/);
 });
 
 test('Layout loads authenticated session from the server and gates manager nav items', () => {

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <rect width="200" height="200" rx="34" fill="#0A0E1A"/>
+  <rect x="22" y="22" width="156" height="156" rx="30" fill="#1A1F2E" stroke="#2A3441" stroke-width="4"/>
+  <path d="M54 64h74c18 0 32 14 32 32v40H86c-18 0-32-14-32-32V64Z" fill="#00D4FF" opacity=".16"/>
+  <path d="M72 48h58c20 0 36 16 36 36v4H96c-13 0-24 11-24 24v40h-4c-20 0-36-16-36-36V88c0-22 18-40 40-40Z" fill="#FF00D4" opacity=".22"/>
+  <text x="100" y="119" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="800" text-anchor="middle" fill="#F5F8FF">DMS</text>
+  <path d="M42 154h116" stroke="#00D4FF" stroke-width="8" stroke-linecap="round"/>
+</svg>

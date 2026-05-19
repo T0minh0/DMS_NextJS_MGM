@@ -109,7 +109,7 @@ test('S1-03 migration encodes uniqueness and value constraints', () => {
 test('S1-03 migration seeds fixed levels and achievements idempotently', () => {
   assert.match(s103Migration, /INSERT INTO "level_definition"/);
   assert.match(s103Migration, /ON CONFLICT \("level_number"\) DO UPDATE SET/);
-  assert.match(s103Migration, /'Lenda',\s+10000/);
+  assert.match(s103Migration, /'Legend',\s+10000/);
   assert.match(s103Migration, /INSERT INTO "achievement_definition"/);
   assert.match(s103Migration, /ON CONFLICT \("achievement_key"\) DO UPDATE SET/);
   assert.match(s103Migration, /'WEIGHT_50KG'/);

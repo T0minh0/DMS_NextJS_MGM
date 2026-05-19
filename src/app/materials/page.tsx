@@ -156,6 +156,7 @@ export default function MaterialsPage() {
   const [groupFilter, setGroupFilter] = useState('');
 
   const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [materialSubmitting, setMaterialSubmitting] = useState(false);
   const [materialForm, setMaterialForm] = useState({ material: '', groupId: '' });
@@ -428,6 +429,7 @@ export default function MaterialsPage() {
 
       await readJson(response, 'Nao foi possivel criar o grupo de materiais');
       setGroupForm({ group: '' });
+      setShowGroupModal(false);
       setSuccess('Grupo de materiais criado com sucesso.');
       await loadMaterials(false);
     } catch (error) {
@@ -616,30 +618,25 @@ export default function MaterialsPage() {
               </p>
             </div>
 
-            {canManageMaterials && (
-              <form onSubmit={handleGroupSubmit} className="w-full max-w-xl">
-                <label htmlFor="materialGroupName" className={labelClass}>Novo grupo</label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    id="materialGroupName"
-                    type="text"
-                    value={groupForm.group}
-                    onChange={(event) => setGroupForm({ group: event.target.value })}
-                    className={fieldClass}
-                    placeholder="Ex.: Papeis"
-                  />
-                  <button
-                    type="submit"
-                    disabled={groupSubmitting}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    <FaPlus className="h-4 w-4" />
-                    {groupSubmitting ? 'Criando...' : 'Criar grupo'}
-                  </button>
-                </div>
-                {renderFieldError('groupName')}
-              </form>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!canManageMaterials) {
+                  setPageError('Apenas administradores podem criar grupos de materiais.');
+                  setSuccess(null);
+                  return;
+                }
+
+                setGroupForm({ group: '' });
+                setFieldErrors({});
+                setPageError(null);
+                setShowGroupModal(true);
+              }}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background shadow-glow hover:bg-primary/90 sm:w-auto"
+            >
+              <FaPlus className="h-4 w-4" />
+              Novo grupo
+            </button>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -965,6 +962,75 @@ export default function MaterialsPage() {
                 >
                   <FaSave className="h-4 w-4" />
                   {materialSubmitting ? 'Salvando...' : editingMaterial ? 'Salvar alterações' : 'Criar material'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showGroupModal && canManageMaterials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-background/80 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-outline bg-surface shadow-xl">
+            <div className="flex items-center justify-between border-b border-outline bg-surface-elevated px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Novo grupo de materiais</h2>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Cadastre grupos antes de criar materiais para manter a lista padronizada.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGroupModal(false);
+                  setGroupForm({ group: '' });
+                  setFieldErrors({});
+                }}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary hover:bg-surface hover:text-foreground"
+                aria-label="Fechar modal"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <form onSubmit={handleGroupSubmit} className="space-y-4 p-6">
+              <div>
+                <label htmlFor="materialGroupName" className={labelClass}>Nome do grupo *</label>
+                <input
+                  id="materialGroupName"
+                  type="text"
+                  value={groupForm.group}
+                  onChange={(event) => setGroupForm({ group: event.target.value })}
+                  className={fieldClass}
+                  placeholder="Ex.: Papeis"
+                  autoFocus
+                />
+                {renderFieldError('groupName')}
+              </div>
+
+              <div className="rounded-lg border border-outline/70 bg-surface-alt px-4 py-3 text-sm text-text-secondary">
+                Depois de criado, o grupo fica disponivel no dropdown de cadastro e edicao de materiais.
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-outline pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGroupModal(false);
+                    setGroupForm({ group: '' });
+                    setFieldErrors({});
+                  }}
+                  className="min-h-11 rounded-lg border border-outline px-4 text-sm font-semibold text-foreground hover:bg-surface-alt"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={groupSubmitting}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <FaSave className="h-4 w-4" />
+                  {groupSubmitting ? 'Criando...' : 'Criar grupo'}
                 </button>
               </div>
             </form>

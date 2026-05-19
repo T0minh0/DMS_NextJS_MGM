@@ -18,6 +18,9 @@ ChartJS.register(
   Legend
 );
 
+ChartJS.defaults.color = '#94a3c7';
+ChartJS.defaults.borderColor = '#2a3441';
+
 interface Worker {
   wastepicker_id: string;
   full_name: string;
@@ -58,6 +61,12 @@ interface ProductivityStats {
     totalWeight: number;
   }>;
 }
+
+const panelClass = 'surface-panel rounded-xl p-6';
+const fieldClass = 'w-full rounded-lg border border-outline bg-surface-alt px-4 py-3 text-foreground shadow-sm focus:border-primary focus:ring-0';
+const labelClass = 'block text-sm font-semibold text-on-surface mb-2';
+const metricCardClass = 'rounded-lg border border-outline bg-surface-alt p-3 text-center';
+const detailCardClass = 'rounded-lg border border-outline bg-surface-alt p-4';
 
 export default function WorkerProductivityPage() {
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -171,29 +180,29 @@ export default function WorkerProductivityPage() {
     <Layout activePath="/worker-productivity">
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#c15079]">
-          <h1 className="text-3xl font-bold text-[#7a1c44] mb-2">
+        <div className={panelClass}>
+          <h1 className="text-3xl font-bold text-primary mb-2">
             Produtividade dos Trabalhadores
           </h1>
-          <p className="text-gray-600">
+          <p className="text-text-secondary">
             Acompanhe o desempenho individual e contribuições semanais dos catadores
           </p>
         </div>
 
         {/* Filters */}
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-            <FaFilter className="mr-2 text-[#c15079]" />
+        <div className={panelClass}>
+          <h3 className="text-xl font-semibold text-on-surface mb-4 flex items-center">
+            <FaFilter className="mr-2 text-primary" />
             Filtros
           </h3>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="workerSelect" className="block text-sm font-semibold text-[#7a1c44] mb-2">
+              <label htmlFor="workerSelect" className={labelClass}>
                 Selecionar Trabalhador
               </label>
               <select
                 id="workerSelect"
-                className="w-full py-3 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25 transition-colors duration-150"
+                className={fieldClass}
                 value={selectedWorkerId}
                 onChange={(e) => setSelectedWorkerId(e.target.value)}
               >
@@ -206,12 +215,12 @@ export default function WorkerProductivityPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="periodSelect" className="block text-sm font-semibold text-[#7a1c44] mb-2">
+              <label htmlFor="periodSelect" className={labelClass}>
                 Período (Semanas)
               </label>
               <select
                 id="periodSelect"
-                className="w-full py-3 px-4 border border-gray-300 rounded-lg shadow-sm focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25 transition-colors duration-150"
+                className={fieldClass}
                 value={selectedPeriod}
                 onChange={(e) => setSelectedPeriod(Number(e.target.value))}
               >
@@ -230,19 +239,19 @@ export default function WorkerProductivityPage() {
             {/* Worker Info & Stats */}
             <div className="grid md:grid-cols-2 gap-6">
               {/* Worker Info */}
-              <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-                  <FaUser className="mr-2 text-[#c15079]" />
+              <div className={panelClass}>
+                <h3 className="text-xl font-semibold text-on-surface mb-4 flex items-center">
+                  <FaUser className="mr-2 text-primary" />
                   Informações do Trabalhador
                 </h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Nome:</span>
-                    <span className="font-semibold text-[#7a1c44]">{selectedWorker.full_name}</span>
+                    <span className="text-text-secondary">Nome:</span>
+                    <span className="font-semibold text-foreground">{selectedWorker.full_name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">ID:</span>
-                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                    <span className="text-text-secondary">ID:</span>
+                    <span className="font-mono text-sm rounded border border-outline bg-surface-alt px-2 py-1 text-primary">
                       {selectedWorker.wastepicker_id}
                     </span>
                   </div>
@@ -251,35 +260,35 @@ export default function WorkerProductivityPage() {
 
               {/* Stats Overview */}
               {productivityStats && (
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                  <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-                    <FaTrophy className="mr-2 text-[#c15079]" />
+                <div className={panelClass}>
+                  <h3 className="text-xl font-semibold text-on-surface mb-4 flex items-center">
+                    <FaTrophy className="mr-2 text-primary" />
                     Estatísticas do Período
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-[#7a1c44]">
+                    <div className={metricCardClass}>
+                      <div className="text-2xl font-bold text-primary">
                         {formatWeight(productivityStats.totalWeight)}
                       </div>
-                      <div className="text-sm text-gray-600">kg Total</div>
+                      <div className="text-sm text-text-secondary">kg Total</div>
                     </div>
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-[#7a1c44]">
+                    <div className={metricCardClass}>
+                      <div className="text-2xl font-bold text-primary">
                         {formatWeight(productivityStats.averageWeekly)}
                       </div>
-                      <div className="text-sm text-gray-600">kg/Semana</div>
+                      <div className="text-sm text-text-secondary">kg/Semana</div>
                     </div>
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-[#7a1c44]">
+                    <div className={metricCardClass}>
+                      <div className="text-2xl font-bold text-primary">
                         {productivityStats.totalWeeks}
                       </div>
-                      <div className="text-sm text-gray-600">Semanas Ativas</div>
+                      <div className="text-sm text-text-secondary">Semanas Ativas</div>
                     </div>
-                    <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-[#7a1c44]">
+                    <div className={metricCardClass}>
+                      <div className="text-2xl font-bold text-primary">
                         {formatWeight(productivityStats.bestWeek.weight)}
                       </div>
-                      <div className="text-sm text-gray-600">Melhor Semana</div>
+                      <div className="text-sm text-text-secondary">Melhor Semana</div>
                     </div>
                   </div>
                 </div>
@@ -288,9 +297,9 @@ export default function WorkerProductivityPage() {
 
             {/* Charts */}
             {loading.contributions ? (
-              <div className="bg-white p-6 rounded-xl shadow-lg">
+              <div className={panelClass}>
                 <div className="flex justify-center items-center h-64">
-                  <div className="text-[#c15079] animate-spin text-2xl">
+                  <div className="text-primary animate-spin text-2xl">
                     <svg className="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -301,9 +310,9 @@ export default function WorkerProductivityPage() {
             ) : weeklyContributions.length > 0 ? (
               <div className="grid lg:grid-cols-2 gap-6">
                 {/* Weekly Contributions Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                  <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-                    <FaCalendarWeek className="mr-2 text-[#c15079]" />
+                <div className={panelClass}>
+                  <h3 className="text-xl font-semibold text-on-surface mb-4 flex items-center">
+                    <FaCalendarWeek className="mr-2 text-primary" />
                     Contribuições Semanais
                   </h3>
                   <div className="h-72">
@@ -340,9 +349,9 @@ export default function WorkerProductivityPage() {
                 </div>
 
                 {/* Material Trends Chart */}
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                  <h3 className="text-xl font-semibold text-[#7a1c44] mb-4 flex items-center">
-                    <FaChartLine className="mr-2 text-[#c15079]" />
+                <div className={panelClass}>
+                  <h3 className="text-xl font-semibold text-on-surface mb-4 flex items-center">
+                    <FaChartLine className="mr-2 text-primary" />
                     Tendência por Material
                   </h3>
                   <div className="h-72">
@@ -385,10 +394,10 @@ export default function WorkerProductivityPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-6 rounded-xl shadow-lg">
+              <div className={panelClass}>
                 <div className="text-center py-12">
-                  <FaWeightHanging className="mx-auto text-6xl text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-lg">
+                  <FaWeightHanging className="mx-auto text-6xl text-text-secondary/50 mb-4" />
+                  <p className="text-text-secondary text-lg">
                     Nenhuma contribuição encontrada para este trabalhador no período selecionado.
                   </p>
                 </div>
@@ -397,34 +406,34 @@ export default function WorkerProductivityPage() {
 
             {/* Detailed Weekly Breakdown */}
             {weeklyContributions.length > 0 && (
-              <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-semibold text-[#7a1c44] mb-4">
+              <div className={panelClass}>
+                <h3 className="text-xl font-semibold text-on-surface mb-4">
                   Detalhamento Semanal
                 </h3>
                 <div className="space-y-4">
                   {weeklyContributions.map((week, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div key={index} className={detailCardClass}>
                       <div className="flex justify-between items-center mb-3">
-                        <h4 className="font-semibold text-[#7a1c44]">
+                        <h4 className="font-semibold text-foreground">
                           Semana {week.week}
                         </h4>
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-text-secondary">
                           {week.weekStart} a {week.weekEnd}
                         </div>
-                        <div className="font-bold text-[#c15079]">
+                        <div className="font-bold text-primary">
                           {formatWeight(week.totalWeight)} kg
                         </div>
                       </div>
                       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {Object.entries(week.materials).map(([materialId, material]) => (
-                          <div key={materialId} className="bg-gray-50 p-3 rounded">
-                            <div className="font-medium text-sm text-[#7a1c44] mb-1">
+                          <div key={materialId} className="rounded border border-outline bg-surface p-3">
+                            <div className="font-medium text-sm text-foreground mb-1">
                               {material.materialName}
                             </div>
-                            <div className="text-lg font-bold text-[#c15079]">
+                            <div className="text-lg font-bold text-primary">
                               {formatWeight(material.weight)} kg
                             </div>
-                            <div className="text-xs text-gray-600">
+                            <div className="text-xs text-text-secondary">
                               {material.measurements.length} medições
                             </div>
                           </div>
@@ -439,10 +448,10 @@ export default function WorkerProductivityPage() {
         )}
 
         {!selectedWorker && (
-          <div className="bg-white p-6 rounded-xl shadow-lg">
+          <div className={panelClass}>
             <div className="text-center py-12">
-              <FaUser className="mx-auto text-6xl text-gray-300 mb-4" />
-              <p className="text-gray-500 text-lg">
+              <FaUser className="mx-auto text-6xl text-text-secondary/50 mb-4" />
+              <p className="text-text-secondary text-lg">
                 Selecione um trabalhador para visualizar sua produtividade.
               </p>
             </div>

@@ -108,6 +108,17 @@ const formatDate = (s: string | null) => {
   return `${day}/${month}/${year}`;
 };
 
+const panelClass = 'surface-panel rounded-xl p-6';
+const tablePanelClass = 'surface-panel rounded-xl overflow-hidden';
+const fieldClass = 'rounded-lg border border-outline bg-surface-alt px-3 py-2 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0';
+const labelClass = 'block text-sm font-semibold text-on-surface mb-2';
+const modalClass = 'surface-panel rounded-xl p-6 w-full shadow-2xl';
+const primaryButtonClass = 'rounded-lg bg-primary px-6 py-3 font-semibold text-on-primary shadow-glow hover:bg-primary/90 disabled:opacity-50';
+const secondaryButtonClass = 'rounded-lg border border-outline px-4 py-2 font-semibold text-foreground hover:bg-surface-alt';
+const tableHeaderClass = 'bg-surface-elevated';
+const tableHeadCellClass = 'px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider';
+const tableCellClass = 'px-4 py-4 text-sm text-foreground';
+
 export default function CollectiveSalesPage() {
   const [myCoopId, setMyCoopId] = useState('');
   const [myCoopName, setMyCoopName] = useState('');
@@ -224,11 +235,6 @@ export default function CollectiveSalesPage() {
     };
     void fetchMeta();
   }, []);
-
-  const getMaterialName = (id: string) => {
-    const m = materials.find((mat) => mat.material_id === id || mat._id === id);
-    return m?.material ?? m?.name ?? id;
-  };
 
   // ── Create sale ──────────────────────────────────────────────────────────────
 
@@ -422,29 +428,29 @@ export default function CollectiveSalesPage() {
   const renderInvitations = () => (
     <div className="overflow-x-auto">
       {loadingSales ? (
-        <div className="p-12 text-center flex items-center justify-center gap-2 text-gray-500">
+        <div className="p-12 text-center flex items-center justify-center gap-2 text-text-secondary">
           <FaSpinner className="animate-spin" />
           <span>Carregando...</span>
         </div>
       ) : invitations.length === 0 ? (
-        <div className="p-12 text-center text-gray-500">Nenhum convite pendente</div>
+        <div className="p-12 text-center text-text-secondary">Nenhum convite pendente</div>
       ) : (
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className={tableHeaderClass}>
             <tr>
               {['Material', 'Comprador', 'Criador', 'Preço/kg', 'Data prevista', 'Ação'].map((h) => (
-                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
+                <th key={h} className={tableHeadCellClass}>{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-outline bg-surface">
             {invitations.map((inv) => (
-              <tr key={inv.contribution_id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{inv.material_name}</td>
-                <td className="px-6 py-4 text-sm text-gray-700">{inv.buyer_name}</td>
-                <td className="px-6 py-4 text-sm text-gray-700">{inv.creator_cooperative_name}</td>
-                <td className="px-6 py-4 text-sm text-gray-700">{formatCurrency(inv['price/kg'])}/kg</td>
-                <td className="px-6 py-4 text-sm text-gray-700">{formatDate(inv.expected_sale_date)}</td>
+              <tr key={inv.contribution_id} className="hover:bg-surface-alt">
+                <td className="px-6 py-4 text-sm font-semibold text-foreground">{inv.material_name}</td>
+                <td className="px-6 py-4 text-sm text-foreground">{inv.buyer_name}</td>
+                <td className="px-6 py-4 text-sm text-foreground">{inv.creator_cooperative_name}</td>
+                <td className="px-6 py-4 text-sm text-foreground">{formatCurrency(inv['price/kg'])}/kg</td>
+                <td className="px-6 py-4 text-sm text-foreground">{formatDate(inv.expected_sale_date)}</td>
                 <td className="px-6 py-4">
                   <button
                     onClick={() => confirmJoin(inv)}
@@ -466,24 +472,24 @@ export default function CollectiveSalesPage() {
   const renderSales = () => (
     <div className="overflow-x-auto">
       {loadingSales ? (
-        <div className="p-12 text-center flex items-center justify-center gap-2 text-gray-500">
+        <div className="p-12 text-center flex items-center justify-center gap-2 text-text-secondary">
           <FaSpinner className="animate-spin" />
           <span>Carregando...</span>
         </div>
       ) : sales.length === 0 ? (
-        <div className="p-12 text-center text-gray-500">
+        <div className="p-12 text-center text-text-secondary">
           Nenhuma venda {TAB_LABELS[activeTab].toLowerCase()} encontrada
         </div>
       ) : (
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className={tableHeaderClass}>
             <tr>
               {['Material', 'Criador', 'Comprador', 'Preço/kg', 'Peso total', 'Data prevista', 'Status', 'Minha participação', 'Ações'].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
+                <th key={h} className={tableHeadCellClass}>{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-outline bg-surface">
             {sales.map((sale) => {
               const expanded = expandedSaleId === sale._id;
               const creator = isCreator(sale);
@@ -493,26 +499,26 @@ export default function CollectiveSalesPage() {
               return (
                 <Fragment key={sale._id}>
                   <tr
-                    className={`hover:bg-gray-50 ${expanded ? 'bg-blue-50' : ''}`}
+                    className={`hover:bg-surface-alt ${expanded ? 'bg-primary/8' : ''}`}
                   >
-                    <td className="px-4 py-4 text-sm font-medium text-gray-900">{sale.material_name}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{sale.creator_cooperative_name}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{sale.buyer_name}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{formatCurrency(sale['price/kg'])}/kg</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{formatKg(sale.total_weight)}</td>
-                    <td className="px-4 py-4 text-sm text-gray-700">{formatDate(sale.expected_sale_date)}</td>
+                    <td className="px-4 py-4 text-sm font-semibold text-foreground">{sale.material_name}</td>
+                    <td className={tableCellClass}>{sale.creator_cooperative_name}</td>
+                    <td className={tableCellClass}>{sale.buyer_name}</td>
+                    <td className={tableCellClass}>{formatCurrency(sale['price/kg'])}/kg</td>
+                    <td className={tableCellClass}>{formatKg(sale.total_weight)}</td>
+                    <td className={tableCellClass}>{formatDate(sale.expected_sale_date)}</td>
                     <td className="px-4 py-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CLASSES[sale.status]}`}>
                         {STATUS_LABELS[sale.status]}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-700">
+                    <td className={tableCellClass}>
                       {creator ? (
-                        <span className="text-[#7a1c44] font-semibold">Criadora</span>
+                        <span className="text-primary font-semibold">Criadora</span>
                       ) : sale.my_participation ? (
                         <span>{CONTRIB_LABELS[sale.my_participation]}</span>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-text-secondary">—</span>
                       )}
                     </td>
                     <td className="px-4 py-4">
@@ -576,7 +582,7 @@ export default function CollectiveSalesPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           title="Ver relatório JSON"
-                          className="p-1.5 text-gray-500 hover:text-gray-700"
+                          className="p-1.5 text-text-secondary hover:text-foreground"
                         >
                           <FaFileAlt />
                         </a>
@@ -590,7 +596,7 @@ export default function CollectiveSalesPage() {
                         </a>
                         <button
                           onClick={() => setExpandedSaleId(expanded ? null : sale._id)}
-                          className="p-1.5 text-gray-400 hover:text-gray-600"
+                          className="p-1.5 text-text-secondary hover:text-foreground"
                           title="Ver participantes"
                         >
                           {expanded ? <FaChevronUp /> : <FaChevronDown />}
@@ -600,35 +606,35 @@ export default function CollectiveSalesPage() {
                   </tr>
 
                   {expanded && (
-                    <tr className="bg-blue-50">
+                    <tr className="bg-surface-alt">
                       <td colSpan={9} className="px-4 py-4">
-                        <div className="text-sm font-medium text-gray-700 mb-2">Participantes</div>
+                        <div className="text-sm font-semibold text-on-surface mb-2">Participantes</div>
                         {sale.participants.length === 0 ? (
-                          <p className="text-sm text-gray-500">Nenhuma participação registrada</p>
+                          <p className="text-sm text-text-secondary">Nenhuma participação registrada</p>
                         ) : (
-                          <table className="w-full border border-gray-200 rounded-lg overflow-hidden">
-                            <thead className="bg-white">
+                          <table className="w-full overflow-hidden rounded-lg border border-outline">
+                            <thead className="bg-surface-elevated">
                               <tr>
                                 {['Cooperativa', 'Status', 'Peso (kg)', 'Revenue share'].map((h) => (
-                                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500">{h}</th>
+                                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-text-secondary">{h}</th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody>
                               {sale.participants.map((p) => (
-                                <tr key={p.contribution_id} className="border-t border-gray-200">
-                                  <td className="px-4 py-2 text-sm text-gray-900">{p.cooperative_name}</td>
+                                <tr key={p.contribution_id} className="border-t border-outline">
+                                  <td className="px-4 py-2 text-sm text-foreground">{p.cooperative_name}</td>
                                   <td className="px-4 py-2 text-sm">
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                                       p.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
                                       p.status === 'INVITED' ? 'bg-yellow-100 text-yellow-800' :
-                                      'bg-gray-100 text-gray-600'
+                                      'bg-surface-elevated text-text-secondary'
                                     }`}>
                                       {CONTRIB_LABELS[p.status as ContribStatus]}
                                     </span>
                                   </td>
-                                  <td className="px-4 py-2 text-sm text-gray-700">{formatKg(p.contributed_weight)}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-700">
+                                  <td className="px-4 py-2 text-sm text-foreground">{formatKg(p.contributed_weight)}</td>
+                                  <td className="px-4 py-2 text-sm text-foreground">
                                     {p.contributed_weight != null && sale.status === 'SOLD'
                                       ? formatCurrency(p.contributed_weight * sale['price/kg'])
                                       : '—'}
@@ -654,18 +660,18 @@ export default function CollectiveSalesPage() {
     <Layout activePath="/collective-sales">
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#c15079]">
+        <div className={panelClass}>
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-[#7a1c44] mb-2">Vendas Coletivas</h1>
-              <p className="text-gray-600">Gerencie vendas coletivas, convites, contribuições e relatórios</p>
+              <h1 className="text-3xl font-bold text-primary mb-2">Vendas Coletivas</h1>
+              <p className="text-text-secondary">Gerencie vendas coletivas, convites, contribuições e relatórios</p>
               {myCoopName && (
-                <p className="text-sm text-gray-500 mt-1">Cooperativa: {myCoopName}</p>
+                <p className="text-sm text-text-secondary mt-1">Cooperativa: {myCoopName}</p>
               )}
             </div>
             <button
               onClick={() => { setCreateError(null); setShowCreateModal(true); }}
-              className="bg-[#c15079] text-white px-6 py-3 rounded-lg hover:bg-[#a03d63] transition-colors flex items-center gap-2"
+              className={`${primaryButtonClass} flex items-center gap-2`}
             >
               <FaPlus />
               Nova Venda Coletiva
@@ -674,16 +680,16 @@ export default function CollectiveSalesPage() {
         </div>
 
         {/* Tabs + Table */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="flex border-b border-gray-200">
+        <div className={tablePanelClass}>
+          <div className="grid grid-cols-2 gap-2 border-b border-outline bg-surface-alt p-2 sm:grid-cols-4">
             {(['ACTIVE', 'INVITED', 'SOLD', 'CANCELLED'] as ActiveTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+                className={`relative min-h-11 rounded-lg border px-4 text-sm font-semibold transition-colors ${
                   activeTab === tab
-                    ? 'border-b-2 border-[#c15079] text-[#c15079]'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-primary/50 bg-primary/12 text-primary shadow-glow'
+                    : 'border-transparent text-text-secondary hover:border-outline hover:bg-surface hover:text-foreground'
                 }`}
               >
                 {TAB_LABELS[tab]}
@@ -698,8 +704,8 @@ export default function CollectiveSalesPage() {
 
           {/* Action error */}
           {actionError && (
-            <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex justify-between items-center">
-              <span className="text-red-700 text-sm">{actionError}</span>
+            <div className="mx-4 mt-4 rounded-lg border border-error/35 bg-error/10 p-3 flex justify-between items-center">
+              <span className="text-error text-sm">{actionError}</span>
               <button onClick={() => setActionError(null)} className="text-red-500 hover:text-red-700 ml-2">
                 <FaTimes />
               </button>
@@ -713,10 +719,10 @@ export default function CollectiveSalesPage() {
       {/* ── Create Modal ─────────────────────────────────────────────────────── */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className={`${modalClass} max-w-2xl max-h-[90vh] overflow-y-auto`}>
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-[#7a1c44]">Nova Venda Coletiva</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-2xl font-bold text-primary">Nova Venda Coletiva</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-text-secondary hover:text-foreground">
                 <FaTimes size={20} />
               </button>
             </div>
@@ -728,9 +734,9 @@ export default function CollectiveSalesPage() {
             <div className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">Material *</label>
+                  <label className={labelClass}>Material *</label>
                   <select
-                    className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                    className={`${fieldClass} w-full`}
                     value={createForm.material_id}
                     onChange={(e) => setCreateForm((p) => ({ ...p, material_id: e.target.value }))}
                   >
@@ -739,12 +745,12 @@ export default function CollectiveSalesPage() {
                       <option key={m._id} value={m.material_id}>{m.material ?? m.name}</option>
                     ))}
                   </select>
-                  {loadingMeta && <p className="text-xs text-gray-400 mt-1">Carregando materiais...</p>}
+                  {loadingMeta && <p className="text-xs text-text-secondary mt-1">Carregando materiais...</p>}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">Cooperativa</label>
-                  <div className="w-full py-2 px-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-700">
+                  <label className={labelClass}>Cooperativa</label>
+                  <div className="w-full rounded-lg border border-outline bg-surface-elevated px-3 py-2 text-text-secondary">
                     {myCoopName || 'Cooperativa não identificada'}
                   </div>
                 </div>
@@ -752,12 +758,12 @@ export default function CollectiveSalesPage() {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">Preço/kg (R$) *</label>
+                  <label className={labelClass}>Preço/kg (R$) *</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0.01"
-                    className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                    className={`${fieldClass} w-full`}
                     value={createForm.price_per_kg}
                     onChange={(e) => setCreateForm((p) => ({ ...p, price_per_kg: e.target.value }))}
                     placeholder="0.00"
@@ -765,10 +771,10 @@ export default function CollectiveSalesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">Data prevista de venda *</label>
+                  <label className={labelClass}>Data prevista de venda *</label>
                   <input
                     type="date"
-                    className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                    className={`${fieldClass} w-full`}
                     value={createForm.expected_sale_date}
                     onChange={(e) => setCreateForm((p) => ({ ...p, expected_sale_date: e.target.value }))}
                   />
@@ -776,10 +782,10 @@ export default function CollectiveSalesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#7a1c44] mb-2">Comprador *</label>
+                <label className={labelClass}>Comprador *</label>
                 <div className="flex gap-2">
                   <select
-                    className="flex-1 py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                    className={`${fieldClass} flex-1`}
                     value={createForm.buyer}
                     onChange={(e) => setCreateForm((p) => ({ ...p, buyer: e.target.value }))}
                   >
@@ -791,7 +797,7 @@ export default function CollectiveSalesPage() {
                   <button
                     type="button"
                     onClick={() => setShowBuyerSubform(true)}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    className="rounded-lg border border-outline bg-surface-elevated px-4 py-2 text-foreground hover:bg-surface-alt"
                     title="Adicionar comprador"
                   >
                     <FaUserPlus />
@@ -800,19 +806,19 @@ export default function CollectiveSalesPage() {
               </div>
 
               {showBuyerSubform && (
-                <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="rounded-lg border border-outline bg-surface-alt p-4">
                   <div className="flex gap-2 items-center">
                     <input
                       type="text"
-                      className="flex-1 py-2 px-3 border border-gray-300 rounded-lg text-sm"
+                      className={`${fieldClass} flex-1 text-sm`}
                       placeholder="Nome do comprador"
                       value={newBuyerName}
                       onChange={(e) => setNewBuyerName(e.target.value)}
                     />
-                    <button onClick={handleAddBuyer} className="px-3 py-2 bg-[#c15079] text-white rounded-lg text-sm hover:bg-[#a03d63]">
+                    <button onClick={handleAddBuyer} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary hover:bg-primary/90">
                       Adicionar
                     </button>
-                    <button onClick={() => setShowBuyerSubform(false)} className="px-3 py-2 bg-gray-200 rounded-lg text-sm">
+                    <button onClick={() => setShowBuyerSubform(false)} className="rounded-lg border border-outline px-3 py-2 text-sm text-foreground hover:bg-surface">
                       Cancelar
                     </button>
                   </div>
@@ -822,14 +828,14 @@ export default function CollectiveSalesPage() {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  className={secondaryButtonClass}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleCreate}
                   disabled={saving}
-                  className="px-6 py-2 bg-[#c15079] text-white rounded-lg hover:bg-[#a03d63] disabled:opacity-50 flex items-center gap-2"
+                  className={`${primaryButtonClass} flex items-center gap-2 py-2`}
                 >
                   {saving ? <FaSpinner className="animate-spin" /> : <FaPlus />}
                   Criar
@@ -843,10 +849,10 @@ export default function CollectiveSalesPage() {
       {/* ── Invite Modal ──────────────────────────────────────────────────────── */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+          <div className={`${modalClass} max-w-md`}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-[#7a1c44]">Convidar Cooperativa</h2>
-              <button onClick={() => setShowInviteModal(null)} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-xl font-bold text-primary">Convidar Cooperativa</h2>
+              <button onClick={() => setShowInviteModal(null)} className="text-text-secondary hover:text-foreground">
                 <FaTimes />
               </button>
             </div>
@@ -857,19 +863,19 @@ export default function CollectiveSalesPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#7a1c44] mb-2">ID da cooperativa *</label>
+                <label className={labelClass}>ID da cooperativa *</label>
                 <input
                   type="text"
-                  className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                  className={`${fieldClass} w-full`}
                   placeholder="Ex: 12345"
                   value={inviteCoopId}
                   onChange={(e) => setInviteCoopId(e.target.value)}
                 />
-                <p className="text-xs text-gray-400 mt-1">Digite o ID numérico da cooperativa a convidar</p>
+                <p className="text-xs text-text-secondary mt-1">Digite o ID numérico da cooperativa a convidar</p>
               </div>
 
               <div className="flex justify-end gap-3">
-                <button onClick={() => setShowInviteModal(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                <button onClick={() => setShowInviteModal(null)} className={secondaryButtonClass}>
                   Cancelar
                 </button>
                 <button
@@ -889,10 +895,10 @@ export default function CollectiveSalesPage() {
       {/* ── Contribution Modal ────────────────────────────────────────────────── */}
       {showContribModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+          <div className={`${modalClass} max-w-md`}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-[#7a1c44]">Atualizar Contribuição de Peso</h2>
-              <button onClick={() => setShowContribModal(null)} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-xl font-bold text-primary">Atualizar Contribuição de Peso</h2>
+              <button onClick={() => setShowContribModal(null)} className="text-text-secondary hover:text-foreground">
                 <FaTimes />
               </button>
             </div>
@@ -903,27 +909,27 @@ export default function CollectiveSalesPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#7a1c44] mb-2">Peso contribuído (kg)</label>
+                <label className={labelClass}>Peso contribuído (kg)</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                  className={`${fieldClass} w-full`}
                   value={contribWeight}
                   onChange={(e) => setContribWeight(e.target.value)}
                   placeholder="0.00"
                 />
-                <p className="text-xs text-gray-400 mt-1">A diferença em relação ao valor atual será reservada/devolvida do estoque</p>
+                <p className="text-xs text-text-secondary mt-1">A diferença em relação ao valor atual será reservada/devolvida do estoque</p>
               </div>
 
               <div className="flex justify-end gap-3">
-                <button onClick={() => setShowContribModal(null)} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                <button onClick={() => setShowContribModal(null)} className={secondaryButtonClass}>
                   Cancelar
                 </button>
                 <button
                   onClick={() => showContribModal && handleContrib(showContribModal)}
                   disabled={saving}
-                  className="px-4 py-2 bg-[#c15079] text-white rounded-lg hover:bg-[#a03d63] disabled:opacity-50 flex items-center gap-2"
+                  className="rounded-lg bg-primary px-4 py-2 font-semibold text-on-primary hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
                 >
                   {saving ? <FaSpinner className="animate-spin" /> : <FaWeight />}
                   Salvar
@@ -937,20 +943,20 @@ export default function CollectiveSalesPage() {
       {/* ── Confirm Modal ─────────────────────────────────────────────────────── */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+          <div className={`${modalClass} max-w-md`}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-[#7a1c44]">{showConfirmModal.title}</h2>
-              <button onClick={() => setShowConfirmModal(null)} className="text-gray-500 hover:text-gray-700">
+              <h2 className="text-xl font-bold text-primary">{showConfirmModal.title}</h2>
+              <button onClick={() => setShowConfirmModal(null)} className="text-text-secondary hover:text-foreground">
                 <FaTimes />
               </button>
             </div>
 
-            <p className="text-gray-700 mb-6">{showConfirmModal.message}</p>
+            <p className="text-text-secondary mb-6">{showConfirmModal.message}</p>
 
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowConfirmModal(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className={secondaryButtonClass}
               >
                 Cancelar
               </button>

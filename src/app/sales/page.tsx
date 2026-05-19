@@ -78,6 +78,17 @@ const TAB_LABELS: Record<LifecycleTab, string> = {
   CANCELLED: 'Canceladas',
 };
 
+const panelClass = 'surface-panel rounded-xl p-6';
+const tablePanelClass = 'surface-panel rounded-xl overflow-hidden';
+const fieldClass = 'rounded-lg border border-outline bg-surface-alt px-3 py-2 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0';
+const labelClass = 'block text-sm font-semibold text-on-surface mb-2';
+const modalClass = 'surface-panel rounded-xl p-6 w-full shadow-2xl';
+const primaryButtonClass = 'rounded-lg bg-primary px-6 py-3 font-semibold text-on-primary shadow-glow hover:bg-primary/90 disabled:opacity-50';
+const secondaryButtonClass = 'rounded-lg border border-outline px-4 py-2 font-semibold text-foreground hover:bg-surface-alt';
+const tableHeaderClass = 'bg-surface-elevated';
+const tableHeadCellClass = 'px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider';
+const tableCellClass = 'px-6 py-4 whitespace-nowrap text-sm text-foreground';
+
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -387,11 +398,11 @@ export default function SalesPage() {
     <Layout activePath="/sales">
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#c15079]">
+        <div className={panelClass}>
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-[#7a1c44] mb-2">Gestão de Vendas</h1>
-              <p className="text-gray-600">Registre vendas e acompanhe o ciclo de vida</p>
+              <h1 className="text-3xl font-bold text-primary mb-2">Gestão de Vendas</h1>
+              <p className="text-text-secondary">Registre vendas e acompanhe o ciclo de vida</p>
             </div>
             <button
               onClick={() => {
@@ -399,7 +410,7 @@ export default function SalesPage() {
                 setEditingSale(null);
                 setShowSaleForm(true);
               }}
-              className="bg-[#c15079] text-white px-6 py-3 rounded-lg hover:bg-[#a03d63] transition-colors flex items-center"
+              className={`${primaryButtonClass} flex items-center`}
             >
               <FaPlus className="mr-2" />
               Nova Venda
@@ -408,8 +419,8 @@ export default function SalesPage() {
         </div>
 
         {/* Lifecycle Tabs + Table */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="flex border-b border-gray-200">
+        <div className={tablePanelClass}>
+          <div className="grid grid-cols-3 gap-2 border-b border-outline bg-surface-alt p-2">
             {(['ACTIVE', 'HISTORY', 'CANCELLED'] as LifecycleTab[]).map((tab) => (
               <button
                 key={tab}
@@ -417,10 +428,10 @@ export default function SalesPage() {
                   setActiveTab(tab);
                   setActionError(null);
                 }}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                className={`min-h-11 rounded-lg border px-4 text-sm font-semibold transition-colors ${
                   activeTab === tab
-                    ? 'border-b-2 border-[#c15079] text-[#c15079]'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-primary/50 bg-primary/12 text-primary shadow-glow'
+                    : 'border-transparent text-text-secondary hover:border-outline hover:bg-surface hover:text-foreground'
                 }`}
               >
                 {TAB_LABELS[tab]}
@@ -429,20 +440,20 @@ export default function SalesPage() {
           </div>
 
           {/* Filters */}
-          <div className="p-4 border-b border-gray-100 flex gap-4 flex-wrap">
+          <div className="p-4 border-b border-outline flex gap-4 flex-wrap">
             <div className="relative flex-1 min-w-48">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
               <input
                 type="text"
                 placeholder="Material, comprador..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                className={`${fieldClass} w-full pl-10 pr-4`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <input
               type="date"
-              className="py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+              className={fieldClass}
               value={filterStartDate}
               onChange={(e) => setFilterStartDate(e.target.value)}
             />
@@ -450,8 +461,8 @@ export default function SalesPage() {
 
           {/* Action error banner */}
           {actionError && (
-            <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex justify-between items-center">
-              <span className="text-red-700 text-sm">{actionError.message}</span>
+            <div className="mx-4 mt-4 rounded-lg border border-error/35 bg-error/10 p-3 flex justify-between items-center">
+              <span className="text-error text-sm">{actionError.message}</span>
               <button
                 onClick={() => setActionError(null)}
                 className="text-red-500 hover:text-red-700 ml-2"
@@ -464,70 +475,70 @@ export default function SalesPage() {
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50">
+              <thead className={tableHeaderClass}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     <FaShoppingCart className="inline mr-1" />
                     Data
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Material
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Peso (kg)
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Preço/kg
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Total
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Comprador
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={tableHeadCellClass}>
                     Ações
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-outline bg-surface">
                 {loadingSales ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-12 text-center">
                       <div className="flex justify-center items-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#c15079]" />
-                        <span className="ml-2 text-gray-500">Carregando...</span>
+                        <span className="ml-2 text-text-secondary">Carregando...</span>
                       </div>
                     </td>
                   </tr>
                 ) : filteredSales.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-12 text-center text-text-secondary">
                       Nenhuma venda {TAB_LABELS[activeTab].toLowerCase()} encontrada
                     </td>
                   </tr>
                 ) : (
                   filteredSales.map((sale) => (
-                    <tr key={sale._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <tr key={sale._id} className="hover:bg-surface-alt">
+                      <td className={tableCellClass}>
                         {formatDate(sale.date)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className={tableCellClass}>
                         {loadingMeta ? '...' : getMaterialName(sale.material_id)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className={tableCellClass}>
                         {sale.weight_sold.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className={tableCellClass}>
                         {formatCurrency(sale['price/kg'])}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                         {formatCurrency(sale.weight_sold * sale['price/kg'])}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className={tableCellClass}>
                         {sale.Buyer}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -573,7 +584,7 @@ export default function SalesPage() {
                             </button>
                           </div>
                         ) : (
-                          <span className="text-gray-400 text-xs">—</span>
+                          <span className="text-text-secondary text-xs">—</span>
                         )}
                       </td>
                     </tr>
@@ -587,12 +598,12 @@ export default function SalesPage() {
         {/* Sale Form Modal */}
         {showSaleForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className={`${modalClass} max-w-2xl max-h-[90vh] overflow-y-auto`}>
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-[#7a1c44]">
+                <h2 className="text-2xl font-bold text-primary">
                   {editingSale ? 'Editar Venda' : 'Nova Venda'}
                 </h2>
-                <button onClick={resetForm} className="text-gray-500 hover:text-gray-700">
+                <button onClick={resetForm} className="text-text-secondary hover:text-foreground">
                   <FaTimes size={24} />
                 </button>
               </div>
@@ -606,12 +617,12 @@ export default function SalesPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                    <label className={labelClass}>
                       Material *
                     </label>
                     <select
                       required
-                      className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                      className={`${fieldClass} w-full`}
                       value={formData.material_id}
                       onChange={(e) => {
                         setFormData((prev) => ({ ...prev, material_id: e.target.value }));
@@ -626,17 +637,17 @@ export default function SalesPage() {
                       ))}
                     </select>
                     {formData.material_id && (
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-text-secondary mt-1">
                         Estoque disponível: {getAvailableStock(formData.material_id).toFixed(2)} kg
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                    <label className={labelClass}>
                       Cooperativa
                     </label>
-                    <div className="w-full py-2 px-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-700">
+                    <div className="w-full rounded-lg border border-outline bg-surface-elevated px-3 py-2 text-text-secondary">
                       {managerCooperativeName || 'Cooperativa não identificada'}
                     </div>
                   </div>
@@ -644,7 +655,7 @@ export default function SalesPage() {
 
                 <div className="grid md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                    <label className={labelClass}>
                       <FaWeight className="inline mr-1" />
                       Peso (kg) *
                     </label>
@@ -653,7 +664,7 @@ export default function SalesPage() {
                       step="0.01"
                       min="0.01"
                       required
-                      className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                      className={`${fieldClass} w-full`}
                       value={formData.weight_sold || ''}
                       onChange={(e) => {
                         setFormData((prev) => ({
@@ -665,7 +676,7 @@ export default function SalesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                    <label className={labelClass}>
                       <FaDollarSign className="inline mr-1" />
                       Preço/kg (R$) *
                     </label>
@@ -674,7 +685,7 @@ export default function SalesPage() {
                       step="0.01"
                       min="0.01"
                       required
-                      className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                      className={`${fieldClass} w-full`}
                       value={formData.price_per_kg || ''}
                       onChange={(e) => {
                         setFormData((prev) => ({
@@ -686,14 +697,14 @@ export default function SalesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                    <label className={labelClass}>
                       <FaCalendarAlt className="inline mr-1" />
                       Data *
                     </label>
                     <input
                       type="date"
                       required
-                      className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                      className={`${fieldClass} w-full`}
                       value={formData.date}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, date: e.target.value }))
@@ -703,12 +714,12 @@ export default function SalesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                  <label className={labelClass}>
                     Comprador *
                   </label>
                   <div className="flex gap-2">
                     <select
-                      className="flex-1 py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                      className={`${fieldClass} flex-1`}
                       value={formData.buyer}
                       onChange={(e) => {
                         setFormData((prev) => ({ ...prev, buyer: e.target.value }));
@@ -728,7 +739,7 @@ export default function SalesPage() {
                         setBuyerFormError(null);
                         setShowBuyerForm(true);
                       }}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      className="rounded-lg border border-outline bg-surface-elevated px-4 py-2 text-foreground hover:bg-surface-alt"
                       title="Adicionar comprador"
                     >
                       <FaUserPlus />
@@ -749,14 +760,14 @@ export default function SalesPage() {
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className={secondaryButtonClass}
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={savingForm}
-                    className="px-6 py-2 bg-[#c15079] text-white rounded-lg hover:bg-[#a03d63] transition-colors disabled:opacity-50 flex items-center"
+                    className={`${primaryButtonClass} flex items-center py-2`}
                   >
                     {savingForm ? (
                       <>
@@ -779,12 +790,12 @@ export default function SalesPage() {
         {/* Add Buyer Modal */}
         {showBuyerForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <div className={`${modalClass} max-w-md`}>
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-[#7a1c44]">Adicionar Comprador</h3>
+                <h3 className="text-xl font-bold text-primary">Adicionar Comprador</h3>
                 <button
                   onClick={() => { setBuyerFormError(null); setShowBuyerForm(false); }}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-text-secondary hover:text-foreground"
                 >
                   <FaTimes />
                 </button>
@@ -798,12 +809,12 @@ export default function SalesPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#7a1c44] mb-2">
+                  <label className={labelClass}>
                     Nome do Comprador
                   </label>
                   <input
                     type="text"
-                    className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:border-[#c15079] focus:ring-2 focus:ring-[#c15079] focus:ring-opacity-25"
+                    className={`${fieldClass} w-full`}
                     value={newBuyerName}
                     onChange={(e) => {
                       setNewBuyerName(e.target.value);
@@ -815,13 +826,13 @@ export default function SalesPage() {
                 <div className="flex justify-end space-x-4">
                   <button
                     onClick={() => { setBuyerFormError(null); setShowBuyerForm(false); }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className={secondaryButtonClass}
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleAddBuyer}
-                    className="px-4 py-2 bg-[#c15079] text-white rounded-lg hover:bg-[#a03d63] transition-colors"
+                    className="rounded-lg bg-primary px-4 py-2 font-semibold text-on-primary hover:bg-primary/90"
                   >
                     Adicionar
                   </button>

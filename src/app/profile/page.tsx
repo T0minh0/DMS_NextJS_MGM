@@ -207,6 +207,13 @@ export default function ProfilePage() {
 
   // Get CPF from user object
   const userCPF = user?.CPF || user?.cpf || '';
+  const panelClass = 'surface-panel rounded-xl p-6';
+  const labelClass = 'block text-sm font-semibold text-on-surface mb-1';
+  const fieldClass = 'block w-full rounded-lg border border-outline bg-surface-alt px-3 py-2 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0';
+  const iconFieldClass = `${fieldClass} pl-10`;
+  const disabledFieldClass = 'block w-full rounded-lg border border-outline bg-surface-elevated px-3 py-2 pl-10 text-text-secondary disabled:cursor-not-allowed';
+  const helpTextClass = 'mt-1 text-xs text-text-secondary';
+  const primaryButtonClass = 'w-full mt-2 rounded-lg bg-primary px-4 py-2 font-semibold text-on-primary shadow-glow hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 flex justify-center items-center';
 
   return (
     <Layout activePath="/profile">
@@ -225,46 +232,46 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Profile Information Section */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className={panelClass}>
               <h2 className="text-xl font-semibold text-dms-primary mb-4 flex items-center">
                 <FaUser className="mr-2 text-dms-secondary" />
                 Informações Pessoais
               </h2>
 
               {error && (
-                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start">
-                  <FaExclamationCircle className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                <div className="mb-4 rounded-lg border border-error/35 bg-error/10 px-4 py-3 text-error flex items-start">
+                  <FaExclamationCircle className="mt-0.5 mr-2 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               {success && (
-                <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+                <div className="mb-4 rounded-lg border border-success/35 bg-success/10 px-4 py-3 text-success">
                   {success}
                 </div>
               )}
 
               <form onSubmit={handleProfileSubmit}>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className={labelClass}>
                     CPF
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaIdCard className="text-gray-400" />
+                      <FaIdCard className="text-text-secondary" />
                     </div>
                     <input
                       type="text"
                       value={formatCPF(userCPF)}
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                      className={disabledFieldClass}
                       disabled
                     />
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">CPF não pode ser alterado</p>
+                  <p className={helpTextClass}>CPF não pode ser alterado</p>
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="fullName" className={labelClass}>
                     Nome Completo
                   </label>
                   <input
@@ -272,36 +279,36 @@ export default function ProfilePage() {
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                    className={fieldClass}
                     required
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="email" className={labelClass}>
                     Email
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaEnvelope className="text-gray-400" />
+                      <FaEnvelope className="text-text-secondary" />
                     </div>
                     <input
                       id="email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                      className={iconFieldClass}
                     />
                   </div>
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="phone" className={labelClass}>
                     Telefone
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaPhone className="text-gray-400" />
+                      <FaPhone className="text-text-secondary" />
                     </div>
                     <input
                       id="phone"
@@ -309,18 +316,18 @@ export default function ProfilePage() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="(00) 00000-0000"
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                      className={iconFieldClass}
                     />
                   </div>
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="pis" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="pis" className={labelClass}>
                     PIS/NIS
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaIdCard className="text-gray-400" />
+                      <FaIdCard className="text-text-secondary" />
                     </div>
                     <input
                       id="pis"
@@ -328,19 +335,19 @@ export default function ProfilePage() {
                       value={pis}
                       onChange={(e) => setPis(e.target.value)}
                       placeholder="000.00000.00-0"
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                      className={iconFieldClass}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">Programa de Integração Social</p>
+                  <p className={helpTextClass}>Programa de Integração Social</p>
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="rg" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="rg" className={labelClass}>
                     RG
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaIdCard className="text-gray-400" />
+                      <FaIdCard className="text-text-secondary" />
                     </div>
                     <input
                       id="rg"
@@ -348,17 +355,16 @@ export default function ProfilePage() {
                       value={rg}
                       onChange={(e) => setRg(e.target.value)}
                       placeholder="00.000.000-0"
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                      className={iconFieldClass}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-gray-500">Registro Geral</p>
+                  <p className={helpTextClass}>Registro Geral</p>
                 </div>
 
                 <button
                   type="submit"
                   disabled={saving}
-                  className={`w-full mt-2 bg-[#5C1D2E] text-white font-medium py-2 px-4 rounded-lg hover:bg-[#8A2736] transition-colors duration-200 flex justify-center items-center ${saving ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
+                  className={primaryButtonClass}
                 >
                   {saving ? (
                     <>
@@ -379,7 +385,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Change Password Section */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className={panelClass}>
               <h2 className="text-xl font-semibold text-dms-primary mb-4 flex items-center">
                 <FaLock className="mr-2 text-dms-secondary" />
                 Alterar Senha
@@ -387,7 +393,7 @@ export default function ProfilePage() {
 
               <form onSubmit={handlePasswordSubmit}>
                 <div className="mb-4">
-                  <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="currentPassword" className={labelClass}>
                     Senha Atual
                   </label>
                   <input
@@ -395,13 +401,13 @@ export default function ProfilePage() {
                     type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                    className={fieldClass}
                     required
                   />
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="newPassword" className={labelClass}>
                     Nova Senha
                   </label>
                   <input
@@ -409,15 +415,15 @@ export default function ProfilePage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-dms-secondary focus:border-dms-secondary"
+                    className={fieldClass}
                     required
                     minLength={6}
                   />
-                  <p className="mt-1 text-xs text-gray-500">Mínimo de 6 caracteres</p>
+                  <p className={helpTextClass}>Mínimo de 6 caracteres</p>
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="confirmPassword" className={labelClass}>
                     Confirmar Nova Senha
                   </label>
                   <input
@@ -425,24 +431,21 @@ export default function ProfilePage() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`block w-full px-3 py-2 border rounded-lg focus:ring-dms-secondary focus:border-dms-secondary ${confirmPassword && confirmPassword !== newPassword
-                      ? 'border-red-300 bg-red-50'
-                      : 'border-gray-300'
+                    className={`${fieldClass} ${confirmPassword && confirmPassword !== newPassword
+                      ? 'border-error bg-error/10'
+                      : ''
                       }`}
                     required
                   />
                   {confirmPassword && confirmPassword !== newPassword && (
-                    <p className="mt-1 text-xs text-red-500">As senhas não coincidem</p>
+                    <p className="mt-1 text-xs text-error">As senhas não coincidem</p>
                   )}
                 </div>
 
                 <button
                   type="submit"
                   disabled={saving || (newPassword !== confirmPassword) || newPassword.length < 6}
-                  className={`w-full mt-2 bg-[#5C1D2E] text-white font-medium py-2 px-4 rounded-lg hover:bg-[#8A2736] transition-colors duration-200 flex justify-center items-center ${saving || (newPassword !== confirmPassword) || newPassword.length < 6
-                    ? 'opacity-70 cursor-not-allowed'
-                    : ''
-                    }`}
+                  className={primaryButtonClass}
                 >
                   {saving ? (
                     <>

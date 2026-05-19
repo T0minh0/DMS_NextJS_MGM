@@ -62,6 +62,11 @@ const PRIORITY_FILTER_LABELS: Record<number, string> = {
   5: 'Prioridade 5',
 };
 
+const panelClass = 'surface-panel rounded-xl p-6';
+const chipBaseClass = 'inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-semibold transition-colors';
+const chipInactiveClass = 'border-outline bg-surface text-text-secondary hover:border-primary/40 hover:text-foreground';
+const chipActiveClass = 'border-primary bg-primary text-on-primary shadow-glow';
+
 const formatDate = (s: string | null) => {
   if (!s) return null;
   const [year, month, day] = s.split('T')[0].split('-');
@@ -284,7 +289,7 @@ export default function NoticesPage() {
   );
 
   const renderEmpty = () => (
-    <div className="flex flex-col items-center justify-center py-xxl gap-md text-center">
+    <div className="surface-panel flex min-h-56 flex-col items-center justify-center rounded-xl p-8 text-center">
       <FaBell className="h-12 w-12 text-text-secondary/50" />
       <div>
         <p className="text-base font-semibold text-on-surface">Nenhum aviso encontrado</p>
@@ -297,7 +302,7 @@ export default function NoticesPage() {
       {canCreate && (
         <button
           onClick={openCreate}
-          className="flex items-center gap-xs bg-primary text-on-primary text-sm font-semibold px-md py-sm rounded-lg hover:opacity-90 transition-opacity"
+          className="mt-4 flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-glow hover:bg-primary/90"
         >
           <FaPlus className="h-3 w-3" />
           Criar Aviso
@@ -399,7 +404,7 @@ export default function NoticesPage() {
       <div className="space-y-xl">
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <div className="bg-surface-alt rounded-xl p-xl border-l-4 border-primary">
+        <div className={panelClass}>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md">
             <div>
               <div className="flex items-center gap-sm mb-xs">
@@ -413,7 +418,7 @@ export default function NoticesPage() {
             {canCreate && (
               <button
                 onClick={openCreate}
-                className="flex items-center gap-xs bg-primary text-on-primary text-sm font-semibold h-11 px-md rounded-lg hover:opacity-90 transition-opacity shrink-0"
+                className="flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-glow hover:bg-primary/90 shrink-0"
               >
                 <FaPlus className="h-3.5 w-3.5" />
                 Novo Aviso
@@ -436,16 +441,16 @@ export default function NoticesPage() {
         )}
 
         {/* ── Filters bar ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-sm flex-wrap">
+        <div className="surface-panel flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
           {/* Priority filter buttons */}
-          <div className="flex items-center gap-xs flex-wrap">
-            <span className="text-xs text-text-secondary font-medium mr-xs">Prioridade:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-text-secondary font-semibold uppercase">Prioridade</span>
             <button
               onClick={() => setPriorityFilter(null)}
-              className={`text-xs font-medium px-sm py-xxs rounded-full border transition-colors ${
+              className={`${chipBaseClass} ${
                 priorityFilter === null
-                  ? 'bg-primary text-on-primary border-primary'
-                  : 'bg-surface-alt text-text-secondary border-outline/60 hover:border-primary/40 hover:text-on-surface'
+                  ? chipActiveClass
+                  : chipInactiveClass
               }`}
             >
               Todos
@@ -454,10 +459,10 @@ export default function NoticesPage() {
               <button
                 key={p}
                 onClick={() => setPriorityFilter(priorityFilter === p ? null : p)}
-                className={`text-xs font-medium px-sm py-xxs rounded-full border transition-colors ${
+                className={`${chipBaseClass} ${
                   priorityFilter === p
-                    ? 'bg-primary text-on-primary border-primary'
-                    : 'bg-surface-alt text-text-secondary border-outline/60 hover:border-primary/40 hover:text-on-surface'
+                    ? chipActiveClass
+                    : chipInactiveClass
                 }`}
                 title={PRIORITY_FILTER_LABELS[p]}
               >
@@ -466,7 +471,7 @@ export default function NoticesPage() {
             ))}
           </div>
 
-          <span className="ml-auto text-xs text-text-secondary" title="Avisos expirados são ocultados automaticamente pelo servidor">
+          <span className="text-xs text-text-secondary" title="Avisos expirados são ocultados automaticamente pelo servidor">
             Exibindo apenas avisos ativos
           </span>
         </div>

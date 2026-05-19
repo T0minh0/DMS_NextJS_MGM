@@ -15,7 +15,6 @@ Backlog derivado de fatos observados no codigo e nos checks locais.
 - Usar transacao Prisma em criacao/edicao/exclusao de venda + update de estoque.
 - Aplicar [[ADR/ADR-0002-lifecycle-vendas-estoque-decimal]] nas migrations e APIs de vendas/estoque.
 - Usar transacao no recalc de contribuicoes.
-- Decidir se `phone` deve existir no schema ou sair dos formularios.
 - Padronizar tipos de `material_id` nas respostas e componentes.
 
 ## Tooling

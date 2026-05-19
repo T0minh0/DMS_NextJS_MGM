@@ -409,7 +409,7 @@ export default function ManageWorkersPage() {
       const payload: Record<string, unknown> = {
         full_name: fullName.trim(),
         email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
+        phone: phone.trim(),
         user_type: userType,
         birth_date: birthDate,
         enter_date: enterDate,

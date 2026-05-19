@@ -10,7 +10,7 @@ import {
 } from '@/lib/auth/server';
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
-import { normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
+import { normalizePhoneValue, normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
 import { shouldBlockWorkerCooperativeTransfer } from '@/lib/users/dependencies';
 
 function isMaskedDocument(value: unknown) {
@@ -20,10 +20,12 @@ function isMaskedDocument(value: unknown) {
 export async function POST(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
+    const body = await request.json();
     const {
       id,
       full_name,
       email,
+      phone,
       PIS,
       RG,
       user_type,
@@ -33,7 +35,8 @@ export async function POST(request: Request) {
       exit_date,
       gender,
       cooperative_id,
-    } = await request.json();
+    } = body;
+    const hasPhone = Object.prototype.hasOwnProperty.call(body, 'phone');
 
     if (!id || !full_name || !birth_date || !enter_date || !cooperative_id) {
       return apiErrorResponse({
@@ -179,6 +182,10 @@ export async function POST(request: Request) {
     if (password) {
       const passwordHash = await bcrypt.hash(password, 10);
       updateData.password = Buffer.from(passwordHash, 'utf8');
+    }
+
+    if (hasPhone) {
+      updateData.phone = normalizePhoneValue(phone);
     }
 
     await prisma.workers.update({

@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   normalizeCpfDigits,
+  normalizePhoneValue,
   normalizePisDigits,
   normalizeRgDigits,
 } from '../src/lib/privacy/pii';
@@ -20,6 +21,8 @@ const PROFILE_UPDATE_ROUTE = 'src/app/api/user/update/route.ts';
 const USERS_CREATE_ROUTE = 'src/app/api/users/create/route.ts';
 const USERS_DELETE_ROUTE = 'src/app/api/users/delete/route.ts';
 const USERS_DOCS = 'Web_vault/API/Usuarios.md';
+const PRISMA_SCHEMA = 'prisma/schema.prisma';
+const WORKER_PHONE_MIGRATION = 'prisma/migrations/20260519183000_add_worker_phone/migration.sql';
 
 test('S5-05 team page uses server session and team-management API view', () => {
   const source = readSource(MANAGE_WORKERS_PAGE);
@@ -137,6 +140,20 @@ test('masked document values are not persisted back as partial digits', () => {
   assert.match(adminUpdateSource, /isMaskedDocument/);
   assert.match(adminUpdateSource, /normalizePisDigits\(PIS\)/);
   assert.match(adminUpdateSource, /normalizeRgDigits\(RG\)/);
+});
+
+test('phone is persisted through schema and user APIs without rejecting plain digits', () => {
+  assert.equal(normalizePhoneValue('6195148368'), '6195148368');
+  assert.equal(normalizePhoneValue(6195148368), '6195148368');
+  assert.equal(normalizePhoneValue('  '), null);
+
+  assert.match(readSource(PRISMA_SCHEMA), /phone\s+String\?\s+@map\("Phone"\)/);
+  assert.match(readSource(WORKER_PHONE_MIGRATION), /ADD COLUMN "Phone" TEXT/);
+  assert.match(readSource(USERS_CREATE_ROUTE), /phone: normalizedPhone/);
+  assert.match(readSource(USER_UPDATE_ROUTE), /updateData\.phone = normalizePhoneValue\(phone\)/);
+  assert.match(readSource(PROFILE_UPDATE_ROUTE), /updateData\.phone = normalizePhoneValue\(phone\)/);
+  assert.match(readSource(USER_ROUTE), /phone: worker\.phone/);
+  assert.doesNotMatch(readSource(USERS_ROUTE), /phone: worker\.phone/);
 });
 
 test('vault documents S5-05 PII reveal policy and team-management API view', () => {

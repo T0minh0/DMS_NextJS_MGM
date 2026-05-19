@@ -109,6 +109,7 @@ model Workers {
   gender                      String?                 @map("Gender")
   password                    Bytes                   @map("Password")
   email                       String                  @map("Email")
+  phone                       String?                 @map("Phone")
   lastUpdate                  DateTime?               @map("Last_update") @db.Date
   cooperativeRef              Cooperative             @relation(fields: [cooperative], references: [cooperativeId], map: "cooperative")
   measurements                Measurments[]

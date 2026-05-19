@@ -16,7 +16,7 @@ Exige pelo menos `id` ou `cpf`.
 
 ### Retorno
 
-Retorna `id`, `worker_id`, `wastepicker_id`, `full_name`, `cpf`/`CPF`, `PIS`, `RG`, `role`, `userType`, `user_type`, `email`, `gender`, datas, `cooperative_id`, `cooperative_name`, `can_reveal_documents` e `documents_revealed` para usuario autorizado no escopo.
+Retorna `id`, `worker_id`, `wastepicker_id`, `full_name`, `cpf`/`CPF`, `PIS`, `RG`, `role`, `userType`, `user_type`, `email`, `phone`, `gender`, datas, `cooperative_id`, `cooperative_name`, `can_reveal_documents` e `documents_revealed` para usuario autorizado no escopo.
 
 CPF, PIS e RG saem mascarados por padrao. A leitura completa exige `reveal=documents`, escopo server-side valido e permissao de edicao/gestao de usuarios no RBAC. A tela `/manage-workers` usa essa revelacao somente por acao explicita dentro do modal de edicao.
 
@@ -45,6 +45,7 @@ Atualiza perfil do usuario logado.
 | `id` | Obrigatorio |
 | `full_name` | Opcional; trim |
 | `email` | Opcional; trim |
+| `phone` | Opcional; trim; vazio persiste `null` |
 | `PIS` | Opcional; digitos viram bytes |
 | `RG` | Opcional; digitos viram bytes |
 
@@ -74,7 +75,7 @@ Arquivo: `src/app/api/users/route.ts`
 
 Por padrao lista apenas integrantes operacionais (`mapUserType(userType) === 1`), ordenados por nome, incluindo cooperativa. `manager` recebe apenas a propria cooperativa; `admin` recebe todas.
 
-Campos retornados incluem aliases para compatibilidade: `wastepicker_id`, `worker_id`, `user_id`, `full_name`, `worker_name`, `cooperative_id`, `CPF`, `cpf`, `PIS`, `RG`, datas e email. Documentos pessoais saem mascarados na listagem; fluxos de edicao buscam detalhe autorizado em `/api/user?id=...`.
+Campos retornados incluem aliases para compatibilidade: `wastepicker_id`, `worker_id`, `user_id`, `full_name`, `worker_name`, `cooperative_id`, `CPF`, `cpf`, `PIS`, `RG`, datas e email. Documentos pessoais saem mascarados na listagem; fluxos de edicao buscam detalhe autorizado em `/api/user?id=...`, que tambem retorna `phone`.
 
 `view=team-management` inclui gestores e integrantes operacionais para a tela de equipe. `view=gamification` continua retornando payload reduzido e apenas integrantes operacionais, sem CPF/PIS/RG/email/datas.
 
@@ -97,6 +98,7 @@ Arquivo: `src/app/api/users/create/route.ts`
 | `full_name` | Sim | Nome completo |
 | `CPF` | Sim | Sanitizado para digitos |
 | `email` | Nao | Fallback `sem-email@coop.local` |
+| `phone` | Nao | Trim; vazio persiste `null` |
 | `PIS` | Sim | Sanitizado para digitos |
 | `RG` | Sim | Sanitizado para digitos |
 | `user_type` | Sim | `0` ou `1` |
@@ -131,6 +133,7 @@ Atualiza usuario administrativo.
 - Senha e opcional; se enviada, atualiza com bcrypt custo `10`.
 - `manager` so pode atualizar usuario da propria cooperativa e manter cooperativa dentro desse escopo.
 - Conecta nova cooperativa via relation `cooperativeRef.connect`.
+- Atualiza `phone` quando enviado; string vazia limpa o telefone.
 - Bloqueia troca de cooperativa quando o usuario ja possui vendas, medicoes ou contribuicoes associadas; isso preserva a invariavel entre `Workers.Cooperative` e `Sales.cooperative_id`.
 - Nao atualiza CPF.
 
@@ -163,6 +166,6 @@ Resposta inclui:
 - `updated: 0`
 - `assignments`
 
-## Campos cliente nao persistidos
+## Telefone
 
-As paginas `profile` e `manage-workers` mantem `phone` em estado/payload, mas o schema Prisma e os handlers atuais nao persistem telefone.
+As paginas `profile` e `manage-workers` persistem `phone` em `Workers.Phone`. O campo e opcional e aceita telefone em texto, incluindo digitos simples como `6195148368`.

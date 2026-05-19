@@ -137,6 +137,7 @@ export async function GET(request: Request) {
       userType,
       user_type: userType,
       email: worker.email,
+      phone: worker.phone,
       gender: worker.gender,
       birth_date: worker.birthDate?.toISOString().split('T')[0] ?? null,
       enter_date: worker.enterDate?.toISOString().split('T')[0] ?? null,

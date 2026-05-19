@@ -17,7 +17,6 @@
 | Dados legados podem bloquear S1-01 | Migration aborta se houver duplicidade em `Stock`, totais negativos ou vendas sem estoque correspondente | Produzir script/consulta de saneamento antes de aplicar em banco real |
 | Writes durante migration S1-01 | Migration usa transacao explicita e lock em `Sales`, `Stock`, `Workers`; runbook ainda exige pausar writes | Evita divergencia durante backfill e constraints |
 | Cutover sem restore check | [[Operacao/Runbook-final-migracao-e-handoff]] exige `pg_dump`, `pg_restore` e smoke Prisma antes de migrar producao | Sem restore validado, rollback pode ser ilusorio |
-| `phone` no cliente nao existe no backend | profile/manage-workers | Usuario pode achar que telefone sera salvo |
 | `material_id` retorna number em `/api/materials` | algumas telas esperam string | Comparacoes podem falhar em casos especificos |
 
 ## Riscos mitigados em S5-03

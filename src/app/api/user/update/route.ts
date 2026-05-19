@@ -9,7 +9,7 @@ import {
 } from '@/lib/auth/server';
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
-import { normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
+import { normalizePhoneValue, normalizePisDigits, normalizeRgDigits } from '@/lib/privacy/pii';
 
 function isMaskedDocument(value: unknown) {
   return typeof value === 'string' && value.includes('*');
@@ -18,7 +18,9 @@ function isMaskedDocument(value: unknown) {
 export async function POST(request: Request) {
   try {
     const session = await requireAuth();
-    const { id, full_name, email, PIS, RG } = await request.json();
+    const body = await request.json();
+    const { id, full_name, email, phone, PIS, RG } = body;
+    const hasPhone = Object.prototype.hasOwnProperty.call(body, 'phone');
 
     if (!id) {
       return apiErrorResponse({
@@ -64,6 +66,9 @@ export async function POST(request: Request) {
     }
     if (email) {
       updateData.email = email.trim();
+    }
+    if (hasPhone) {
+      updateData.phone = normalizePhoneValue(phone);
     }
     if (PIS && !isMaskedDocument(PIS)) {
       const pisDigits = normalizePisDigits(PIS);

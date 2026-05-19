@@ -17,6 +17,19 @@ export function normalizeRgDigits(value: string | null | undefined) {
   return digits.length >= 8 && digits.length <= 9 ? digits : null;
 }
 
+export function normalizePhoneValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+}
+
 function maskDigits(value: string, visibleDigits = 2) {
   const digits = digitsOnly(value);
   if (!digits) {

@@ -6,7 +6,7 @@ import {
   requireManagerOrAdmin,
   requireScopedPermission,
 } from '@/lib/auth/server';
-import { apiErrorResponse, apiInternalErrorResponse } from '@/lib/api/errors';
+import { apiInternalErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
 import { createLogContext } from '@/lib/observability/logger';
 import { SOLD_SALE_WHERE } from '@/lib/sales/lifecycle';

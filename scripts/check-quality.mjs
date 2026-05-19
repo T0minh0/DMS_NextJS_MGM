@@ -23,7 +23,7 @@ const steps = [
 
 for (const [label, command, args] of steps) {
   console.log(`\n==> ${label}`);
-  const result = spawnSync(command, args, { env: qualityEnv, stdio: 'inherit' });
+  const result = spawnSync(command, args, { env: qualityEnv, stdio: 'inherit', shell: true });
 
   if (result.status !== 0) {
     console.error(`\nQuality gate failed at: ${label}`);

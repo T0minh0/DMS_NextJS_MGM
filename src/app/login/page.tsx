@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaExclamationCircle, FaIdCard, FaLock, FaRecycle, FaSignInAlt, FaSpinner } from 'react-icons/fa';
+import { FaExclamationCircle, FaIdCard, FaLock, FaSignInAlt, FaSpinner } from 'react-icons/fa';
+import { DmsLogo } from '@/components/DmsLogo';
 
 export default function LoginPage() {
   const [cpf, setCpf] = useState<string>('');
@@ -86,9 +87,7 @@ export default function LoginPage() {
         <div className="p-6 sm:p-8">
           <div className="mb-8 text-center">
             <div className="mb-6 flex justify-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-primary/35 bg-primary/14 text-primary shadow-glow">
-                <FaRecycle className="h-9 w-9" aria-hidden="true" />
-              </div>
+              <DmsLogo size={90} className="animate-[pulse_4s_cubic-bezier(0.4,0,0.6,1)_infinite] shadow-glow rounded-[20px]" />
             </div>
             <h2 className="text-2xl font-semibold text-foreground">Sistema de Gestão DMS</h2>
             <p className="mt-2 text-sm text-text-secondary">Acesso de gestores ao painel operacional</p>

@@ -13,7 +13,7 @@ import {
   formatDecimal,
   parsePositiveDecimal2,
 } from '@/lib/decimal';
-import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
+import { createLogContext, logInfo } from '@/lib/observability/logger';
 import { getActiveSaleMutationGuard } from '@/lib/sales/lifecycle';
 
 type SaleLockRow = {
@@ -293,7 +293,6 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  _ctx: { params: Promise<{ id: string }> },
 ) {
   const context = createLogContext(request, { domain: 'sales' });
   const response = apiErrorResponse({

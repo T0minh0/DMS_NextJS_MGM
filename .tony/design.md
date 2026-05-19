@@ -33,9 +33,9 @@ productPrinciples:
   dataSafety: mostrar apenas o necessario por papel e cooperativa
   firstViewport: priorizar estado operacional, pendencias e proximas acoes
 colors:
-  primary: "#00D4FF"
+  primary: "#c15079"
   on-primary: "#0A0E1A"
-  secondary: "#FF00D4"
+  secondary: "#7a1c44"
   warning: "#FFD700"
   success: "#00FF88"
   energy: "#FF6B35"
@@ -251,7 +251,7 @@ O mapa operacional de papeis, jornadas, rotas, acoes permitidas, dados visiveis 
 
 Use `background`, `surface`, `surface-alt` e `surface-elevated` para estrutura operacional escura. Use `primary` para acao principal, foco visivel, estados ativos e dados que precisam de atencao imediata. Use `secondary` apenas para destaque pontual, nunca como base dominante. Use `warning` para alerta, risco, recompensa ou valor financeiro que precise destaque controlado. Use `success` para conclusao, saude operacional e resultados positivos. Use `error` com texto e icone para erro, risco destrutivo ou bloqueio.
 
-A paleta vinho/verde antiga nao e base valida para novas telas. Classes `dms-*` podem existir somente como compatibilidade temporaria mapeada para tokens oficiais.
+A paleta Burgundy/Wine é a base oficial padrão do sistema. O antigo tema neon ciano/rosa é obsoleto e não deve ser utilizado. Classes `dms-*` podem existir somente como compatibilidade temporaria mapeada para tokens oficiais.
 
 ## Typography
 
@@ -315,6 +315,6 @@ As rotas minimas para cobertura do pacote sao `/login`, `/`, `/sales`, `/materia
 - Do atualizar este contrato quando criar padrao reutilizavel novo.
 - Don't criar hero, landing page ou experiencia editorial para fluxos administrativos.
 - Don't tratar catadores como publico primario da web gerencial.
-- Don't usar paleta vinho/verde antiga, gradientes decorativos ou cores literais fora dos tokens.
+- Don't usar o antigo tema neon ciano/rosa, gradientes decorativos ou cores literais fora dos tokens.
 - Don't esconder problema de permissao apenas removendo link da navegacao.
 - Don't concluir task UI sem browser evidence minima.

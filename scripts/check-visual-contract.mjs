@@ -14,14 +14,8 @@ const canonicalFrontendFiles = [
 ];
 
 const forbiddenPatterns = [
-  { pattern: /#f8eef1/i, label: 'legacy light burgundy background' },
-  { pattern: /#7a1c44/i, label: 'legacy burgundy text/action color' },
-  { pattern: /#c15079/i, label: 'legacy burgundy accent color' },
-  { pattern: /#C74B6F/i, label: 'legacy chart burgundy color' },
-  { pattern: /#8A2736/i, label: 'legacy chart burgundy color' },
-  { pattern: /#5C1D2E/i, label: 'legacy chart burgundy color' },
-  { pattern: /#2D0D17/i, label: 'legacy chart burgundy color' },
-  { pattern: /#F7E4E4/i, label: 'legacy chart light rose color' },
+  { pattern: /#00D4FF/i, label: 'legacy neon ciano color' },
+  { pattern: /#FF00D4/i, label: 'legacy neon rosa color' },
   { pattern: /\bdms-chart-(green|teal|forest|olive)/i, label: 'legacy green chart token' },
   { pattern: /\b(bg|text|border|ring|from|to|via)-(white|black|gray|slate|zinc|neutral|stone|red|green|blue|orange|purple)(?:\b|-)/i, label: 'raw Tailwind palette class outside contract tokens' },
   { pattern: /\btracking-/i, label: 'local letter-spacing class' },
@@ -31,7 +25,6 @@ const forbiddenPatterns = [
 
 const allowedHexValues = new Set([
   '#0A0E1A',
-  '#00D4FF',
   '#00FF88',
   '#1A1F2E',
   '#1F2536',
@@ -40,10 +33,18 @@ const allowedHexValues = new Set([
   '#65708D',
   '#94A3C7',
   '#F5F8FF',
-  '#FF00D4',
   '#FF4D6D',
   '#FF6B35',
   '#FFD700',
+  '#C15079',
+  '#7A1C44',
+  '#A03D63',
+  '#F8EEF1',
+  '#C74B6F',
+  '#8A2736',
+  '#5C1D2E',
+  '#2D0D17',
+  '#F7E4E4',
 ]);
 
 function runGit(args) {

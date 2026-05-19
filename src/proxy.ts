@@ -85,7 +85,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (session.role === 'worker' && (isApiRoute || isManagerPagePath(pathname))) {
-    logWarn('auth.proxy.worker_denied', context, {
+    logWarn('auth.proxy.worker_page_denied', context, {
       workerId: session.workerId,
       role: session.role,
     });

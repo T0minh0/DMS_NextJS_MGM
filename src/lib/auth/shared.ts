@@ -136,7 +136,7 @@ export function mapDatabaseUserTypeToRole(rawType: string | number | null | unde
   }
 
   if (normalized === 'M' || normalized === 'MANAGER' || normalized === '0') {
-    return 'admin';
+    return 'manager';
   }
 
   if (normalized === 'W' || normalized === 'WORKER' || normalized === 'C' || normalized === '1') {

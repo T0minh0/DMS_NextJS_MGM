@@ -144,7 +144,10 @@ test('S5-02 generated evidence, when present, validates screenshots and backend 
   assert.equal(evidence.summary.httpFailures.length, 0);
 
   for (const route of evidence.routes as Array<{ screenshot: string }>) {
-    assert.equal(existsSync(route.screenshot), true, route.screenshot);
+    const relativeScreenshotPath = route.screenshot.includes('output/')
+      ? route.screenshot.substring(route.screenshot.indexOf('output/'))
+      : route.screenshot;
+    assert.equal(existsSync(path.resolve(relativeScreenshotPath)), true, route.screenshot);
   }
 });
 

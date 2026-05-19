@@ -3,7 +3,6 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const testRoot = path.resolve('tests');
-const tsxCommand = process.platform === 'win32' ? 'tsx.cmd' : 'tsx';
 
 function collectTestFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -24,7 +23,7 @@ if (!files.length) {
   process.exit(1);
 }
 
-const result = spawnSync(tsxCommand, ['--test', ...files], {
+const result = spawnSync('node', ['--import', 'tsx', '--test', ...files], {
   stdio: 'inherit',
 });
 

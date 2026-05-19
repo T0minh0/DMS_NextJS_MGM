@@ -10,7 +10,6 @@ import {
   FaChartBar,
   FaHome,
   FaHandshake,
-  FaRecycle,
   FaShoppingCart,
   FaSignInAlt,
   FaSignOutAlt,
@@ -18,6 +17,7 @@ import {
   FaUser,
   FaUsers,
 } from 'react-icons/fa';
+import { DmsLogo } from '@/components/DmsLogo';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -146,9 +146,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePath = '/' }) => {
               href="/"
               className="group flex min-w-0 items-center gap-3 rounded-xl border border-outline/70 bg-surface/80 px-4 py-3 shadow-soft hover:border-primary/40 hover:bg-surface-alt"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/35 bg-primary/14 text-primary shadow-glow">
-                <FaRecycle className="h-5 w-5" />
-              </span>
+              <DmsLogo size={44} className="shrink-0 shadow-glow rounded-xl" />
               <span className="min-w-0">
                 <span className="block truncate text-base font-semibold text-foreground uppercase">
                   Painel DMS

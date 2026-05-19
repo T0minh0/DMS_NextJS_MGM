@@ -12,6 +12,7 @@ const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const result = spawnSync(npxCommand, ['prisma', 'validate'], {
   env,
   stdio: 'inherit',
+  shell: true,
 });
 
 process.exit(result.status ?? 1);

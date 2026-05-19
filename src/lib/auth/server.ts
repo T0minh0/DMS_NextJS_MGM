@@ -118,7 +118,7 @@ export function determineTargetCooperative(
 ) {
   const requested = parseScopedId(requestedCooperativeId, 'Cooperativa');
 
-  if (session.role === 'admin' || session.role === 'manager') {
+  if (session.role === 'admin') {
     if (requested) {
       return requested;
     }

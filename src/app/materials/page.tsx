@@ -173,7 +173,7 @@ export default function MaterialsPage() {
   const [deleteMaterial, setDeleteMaterial] = useState<Material | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  const canManageMaterials = sessionUser?.role === 'admin' || sessionUser?.role === 'manager';
+  const canManageMaterials = sessionUser?.role === 'admin';
   const canAdjustStock = Boolean(sessionUser);
   const stockReadAvailable = !stockError;
 
@@ -526,7 +526,7 @@ export default function MaterialsPage() {
               <div>
                 <h1 className="text-2xl font-semibold text-foreground">Operação de materiais</h1>
                 <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-                  Saldo atual, grupos, ações permitidas e ajustes de estoque dentro do escopo da cooperativa.
+                  Saldo atual, grupos, ações permitidas e ajustes de estoque dentro do escopo da cooperativa. Gerentes ajustam saldos da própria cooperativa. Apenas administradores podem alterar o catálogo de materiais.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs text-text-secondary">

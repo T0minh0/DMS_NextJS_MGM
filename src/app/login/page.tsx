@@ -61,7 +61,7 @@ export default function LoginPage() {
         // Handle specific error messages from the API
         const errorMessages = {
           401: 'CPF ou senha incorretos. Verifique suas credenciais.',
-          403: 'Acesso restrito. Apenas gerentes podem acessar o sistema.',
+          403: 'Acesso restrito. Apenas gestores podem acessar o sistema.',
           500: 'Erro no servidor. Tente novamente mais tarde.',
         };
 

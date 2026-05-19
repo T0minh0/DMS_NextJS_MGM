@@ -173,7 +173,7 @@ export default function MaterialsPage() {
   const [deleteMaterial, setDeleteMaterial] = useState<Material | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
-  const canManageMaterials = sessionUser?.role === 'admin';
+  const canManageMaterials = sessionUser?.role === 'admin' || sessionUser?.role === 'manager';
   const canAdjustStock = Boolean(sessionUser);
   const stockReadAvailable = !stockError;
 
@@ -373,7 +373,7 @@ export default function MaterialsPage() {
     setPageError(null);
 
     if (!canManageMaterials) {
-      setPageError('Apenas administradores podem alterar o catálogo de materiais.');
+      setPageError('Apenas gestores podem alterar o catalogo de materiais.');
       return;
     }
 
@@ -408,7 +408,7 @@ export default function MaterialsPage() {
     setPageError(null);
 
     if (!canManageMaterials) {
-      setPageError('Apenas administradores podem criar grupos de materiais.');
+      setPageError('Apenas gestores podem criar grupos de materiais.');
       return;
     }
 
@@ -622,7 +622,7 @@ export default function MaterialsPage() {
               type="button"
               onClick={() => {
                 if (!canManageMaterials) {
-                  setPageError('Apenas administradores podem criar grupos de materiais.');
+                  setPageError('Apenas gestores podem criar grupos de materiais.');
                   setSuccess(null);
                   return;
                 }
@@ -699,11 +699,6 @@ export default function MaterialsPage() {
             </div>
           </div>
 
-          {!canManageMaterials && (
-            <div className="mt-4 rounded-lg border border-outline/70 bg-surface px-4 py-3 text-sm text-text-secondary">
-              Gerentes ajustam saldos da própria cooperativa. Criação, edição e exclusão do catálogo global ficam restritas a administradores.
-            </div>
-          )}
 
           {loading ? (
             <div className="mt-6 flex min-h-40 items-center justify-center rounded-lg border border-outline bg-surface text-sm text-text-secondary">

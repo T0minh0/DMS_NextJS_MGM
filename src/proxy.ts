@@ -84,10 +84,20 @@ export async function proxy(request: NextRequest) {
     return clearAuthCookie(NextResponse.redirect(new URL('/login', request.url)));
   }
 
-  if (!isApiRoute && session.role === 'worker' && isManagerPagePath(pathname)) {
-    logWarn('auth.proxy.worker_page_denied', context, {
+  if (session.role === 'worker' && (isApiRoute || isManagerPagePath(pathname))) {
+    logWarn('auth.proxy.worker_denied', context, {
       workerId: session.workerId,
+      role: session.role,
     });
+
+    if (isApiRoute) {
+      return clearAuthCookie(apiErrorResponse({
+        message: 'Acesso restrito apenas para gestores',
+        code: 'MANAGER_REQUIRED',
+        status: 403,
+        requestId: context.requestId,
+      }));
+    }
 
     return clearAuthCookie(NextResponse.redirect(new URL('/login?reason=web-role-denied', request.url)));
   }

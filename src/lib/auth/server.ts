@@ -84,8 +84,8 @@ export async function requireAuth() {
 export async function requireAdmin() {
   const session = await requireAuth();
 
-  if (session.role !== 'admin') {
-    throw new AuthError('Acesso restrito a administradores', 403, 'ADMIN_REQUIRED');
+  if (session.role !== 'admin' && session.role !== 'manager') {
+    throw new AuthError('Acesso restrito a gestores', 403, 'MANAGER_REQUIRED');
   }
 
   return session;
@@ -118,7 +118,7 @@ export function determineTargetCooperative(
 ) {
   const requested = parseScopedId(requestedCooperativeId, 'Cooperativa');
 
-  if (session.role === 'admin') {
+  if (session.role === 'admin' || session.role === 'manager') {
     if (requested) {
       return requested;
     }

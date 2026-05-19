@@ -135,7 +135,7 @@ export async function POST(request: Request) {
         cooperativeId: worker.cooperative.toString(),
       });
       return apiErrorResponse({
-        message: 'Acesso restrito apenas para gerentes',
+        message: 'Acesso restrito apenas para gestores',
         code: 'WEB_ROLE_DENIED',
         status: 403,
         requestId: context.requestId,

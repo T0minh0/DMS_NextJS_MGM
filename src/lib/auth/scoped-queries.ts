@@ -5,7 +5,7 @@ export function scopedWorkerWhere(
   session: AuthSession,
   workerId: bigint,
 ): Prisma.WorkersWhereInput {
-  if (session.role === 'admin') {
+  if (session.role === 'admin' || session.role === 'manager') {
     return { workerId };
   }
 
@@ -27,7 +27,7 @@ export function scopedSaleWhere(
   session: AuthSession,
   saleId: bigint,
 ): Prisma.SalesWhereInput {
-  if (session.role === 'admin') {
+  if (session.role === 'admin' || session.role === 'manager') {
     return { saleId };
   }
 

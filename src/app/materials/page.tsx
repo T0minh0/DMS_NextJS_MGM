@@ -55,7 +55,17 @@ interface CooperativeMaterialsPayload {
   truncated?: boolean;
 }
 
-type FieldErrors = Partial<Record<'material' | 'group' | 'amount', string>>;
+interface MaterialGroup {
+  group_id: string;
+  group: string;
+}
+
+interface MaterialGroupsPayload {
+  groups?: MaterialGroup[];
+  count?: number;
+}
+
+type FieldErrors = Partial<Record<'material' | 'group' | 'groupName' | 'amount', string>>;
 type StockStatus = 'empty' | 'critical' | 'stable' | 'unavailable';
 type MaterialRow = Material & {
   stockKg: number | null;
@@ -134,6 +144,7 @@ export default function MaterialsPage() {
 
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([]);
   const [stockRows, setStockRows] = useState<CooperativeMaterialStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,7 +158,9 @@ export default function MaterialsPage() {
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [materialSubmitting, setMaterialSubmitting] = useState(false);
-  const [materialForm, setMaterialForm] = useState({ material: '', group: '' });
+  const [materialForm, setMaterialForm] = useState({ material: '', groupId: '' });
+  const [groupForm, setGroupForm] = useState({ group: '' });
+  const [groupSubmitting, setGroupSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const [stockMaterial, setStockMaterial] = useState<MaterialRow | null>(null);
@@ -173,9 +186,10 @@ export default function MaterialsPage() {
     setStockError(null);
 
     try {
-      const [sessionResponse, materialsResponse] = await Promise.all([
+      const [sessionResponse, materialsResponse, groupsResponse] = await Promise.all([
         fetch('/api/auth/session'),
         fetch('/api/materials'),
+        fetch('/api/material-groups'),
       ]);
 
       if (sessionResponse.status === 401) {
@@ -183,9 +197,10 @@ export default function MaterialsPage() {
         return;
       }
 
-      const [sessionData, materialsData] = await Promise.all([
+      const [sessionData, materialsData, groupsData] = await Promise.all([
         readJson<SessionUser>(sessionResponse, 'Sessão indisponível'),
         readJson<Material[]>(materialsResponse, 'Falha ao carregar materiais'),
+        readJson<MaterialGroupsPayload>(groupsResponse, 'Falha ao carregar grupos de materiais'),
       ]);
 
       let nextStockRows: CooperativeMaterialStock[] = [];
@@ -212,12 +227,14 @@ export default function MaterialsPage() {
 
       setSessionUser(sessionData);
       setMaterials(materialsData.filter((item) => item.material_id && !item.isGroup));
+      setMaterialGroups(Array.isArray(groupsData.groups) ? groupsData.groups : []);
       setStockRows(nextStockRows);
       setStockError(nextStockError);
     } catch (error) {
       if (requestId !== requestSeq.current) return;
       setPageError(error instanceof Error ? error.message : 'Não foi possível carregar materiais e estoque');
       setMaterials([]);
+      setMaterialGroups([]);
       setStockRows([]);
     } finally {
       if (requestId === requestSeq.current) {
@@ -231,9 +248,15 @@ export default function MaterialsPage() {
     void loadMaterials(true);
   }, [loadMaterials]);
 
-  const groups = useMemo(() => (
-    Array.from(new Set(materials.map((material) => material.group).filter(Boolean))).sort()
-  ), [materials]);
+  const groups = useMemo(() => materialGroups.map((materialGroup) => materialGroup.group), [materialGroups]);
+
+  const groupByName = useMemo(() => {
+    const map = new Map<string, MaterialGroup>();
+    materialGroups.forEach((materialGroup) => {
+      map.set(materialGroup.group.toLocaleLowerCase('pt-BR'), materialGroup);
+    });
+    return map;
+  }, [materialGroups]);
 
   const stockByMaterialId = useMemo(() => {
     const map = new Map<string, CooperativeMaterialStock>();
@@ -283,23 +306,34 @@ export default function MaterialsPage() {
 
   const resetMaterialForm = () => {
     setEditingMaterial(null);
-    setMaterialForm({ material: '', group: '' });
+    setMaterialForm({ material: '', groupId: '' });
     setFieldErrors({});
     setShowMaterialModal(false);
   };
 
   const openCreateMaterial = () => {
     if (!canManageMaterials) return;
+    if (materialGroups.length === 0) {
+      setPageError('Crie pelo menos um grupo de materiais antes de cadastrar materiais.');
+      setSuccess(null);
+      return;
+    }
+
+    const selectedGroup = groupFilter
+      ? materialGroups.find((materialGroup) => materialGroup.group === groupFilter)
+      : materialGroups[0];
+
     setEditingMaterial(null);
-    setMaterialForm({ material: '', group: groupFilter || groups[0] || '' });
+    setMaterialForm({ material: '', groupId: selectedGroup?.group_id ?? '' });
     setFieldErrors({});
     setShowMaterialModal(true);
   };
 
   const openEditMaterial = (material: Material) => {
     if (!canManageMaterials) return;
+    const currentGroup = groupByName.get(material.group.toLocaleLowerCase('pt-BR'));
     setEditingMaterial(material);
-    setMaterialForm({ material: materialName(material), group: material.group });
+    setMaterialForm({ material: materialName(material), groupId: currentGroup?.group_id ?? '' });
     setFieldErrors({});
     setShowMaterialModal(true);
   };
@@ -327,7 +361,7 @@ export default function MaterialsPage() {
   const validateMaterialForm = () => {
     const nextErrors: FieldErrors = {};
     if (!materialForm.material.trim()) nextErrors.material = 'Informe o nome do material.';
-    if (!materialForm.group.trim()) nextErrors.group = 'Informe ou selecione o grupo.';
+    if (!materialForm.groupId) nextErrors.group = 'Selecione um grupo cadastrado.';
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -352,7 +386,7 @@ export default function MaterialsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           material: materialForm.material.trim(),
-          group: materialForm.group.trim(),
+          group_id: materialForm.groupId,
         }),
       });
 
@@ -364,6 +398,42 @@ export default function MaterialsPage() {
       setPageError(error instanceof Error ? error.message : 'Não foi possível salvar o material');
     } finally {
       setMaterialSubmitting(false);
+    }
+  };
+
+  const handleGroupSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSuccess(null);
+    setPageError(null);
+
+    if (!canManageMaterials) {
+      setPageError('Apenas administradores podem criar grupos de materiais.');
+      return;
+    }
+
+    const groupName = groupForm.group.trim();
+    if (!groupName) {
+      setFieldErrors({ groupName: 'Informe o nome do grupo.' });
+      return;
+    }
+
+    setFieldErrors({});
+    setGroupSubmitting(true);
+    try {
+      const response = await fetch('/api/material-groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: groupName }),
+      });
+
+      await readJson(response, 'Nao foi possivel criar o grupo de materiais');
+      setGroupForm({ group: '' });
+      setSuccess('Grupo de materiais criado com sucesso.');
+      await loadMaterials(false);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'Nao foi possivel criar o grupo de materiais');
+    } finally {
+      setGroupSubmitting(false);
     }
   };
 
@@ -481,7 +551,9 @@ export default function MaterialsPage() {
                 <button
                   type="button"
                   onClick={openCreateMaterial}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background shadow-glow hover:bg-primary/90"
+                  disabled={materialGroups.length === 0}
+                  title={materialGroups.length === 0 ? 'Crie um grupo antes de cadastrar materiais' : 'Novo material'}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background shadow-glow hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <FaPlus className="h-4 w-4" />
                   Novo material
@@ -530,6 +602,64 @@ export default function MaterialsPage() {
             </div>
           </div>
         )}
+
+        <section className="surface-panel rounded-xl p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold uppercase text-primary">
+                <FaLayerGroup className="h-4 w-4" />
+                Grupos de materiais
+              </div>
+              <h2 className="mt-2 text-lg font-semibold text-foreground">Cadastro controlado de grupos</h2>
+              <p className="mt-1 max-w-2xl text-sm text-text-secondary">
+                Materiais novos devem usar um grupo existente para evitar nomes duplicados por erro de digitacao.
+              </p>
+            </div>
+
+            {canManageMaterials && (
+              <form onSubmit={handleGroupSubmit} className="w-full max-w-xl">
+                <label htmlFor="materialGroupName" className={labelClass}>Novo grupo</label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    id="materialGroupName"
+                    type="text"
+                    value={groupForm.group}
+                    onChange={(event) => setGroupForm({ group: event.target.value })}
+                    className={fieldClass}
+                    placeholder="Ex.: Papeis"
+                  />
+                  <button
+                    type="submit"
+                    disabled={groupSubmitting}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-background hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <FaPlus className="h-4 w-4" />
+                    {groupSubmitting ? 'Criando...' : 'Criar grupo'}
+                  </button>
+                </div>
+                {renderFieldError('groupName')}
+              </form>
+            )}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {materialGroups.length === 0 ? (
+              <span className="rounded-lg border border-dashed border-outline bg-surface px-3 py-2 text-sm text-text-secondary">
+                Nenhum grupo cadastrado. Crie o primeiro grupo antes de cadastrar materiais.
+              </span>
+            ) : (
+              materialGroups.map((materialGroup) => (
+                <span
+                  key={materialGroup.group_id}
+                  className="inline-flex items-center gap-2 rounded-full border border-outline/70 bg-surface px-3 py-1.5 text-sm font-semibold text-foreground"
+                >
+                  <FaLayerGroup className="h-3.5 w-3.5 text-primary" />
+                  {materialGroup.group}
+                </span>
+              ))
+            )}
+          </div>
+        </section>
 
         <section className="surface-panel rounded-xl p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -793,25 +923,26 @@ export default function MaterialsPage() {
                   value={materialForm.material}
                   onChange={(event) => setMaterialForm((current) => ({ ...current, material: event.target.value }))}
                   className={fieldClass}
-                  placeholder="Ex.: Papelão, PET transparente"
+                  placeholder="Ex.: Papelao, PET transparente"
                 />
                 {renderFieldError('material')}
               </div>
 
               <div>
                 <label htmlFor="materialGroup" className={labelClass}>Grupo *</label>
-                <input
+                <select
                   id="materialGroup"
-                  type="text"
-                  value={materialForm.group}
-                  onChange={(event) => setMaterialForm((current) => ({ ...current, group: event.target.value }))}
+                  value={materialForm.groupId}
+                  onChange={(event) => setMaterialForm((current) => ({ ...current, groupId: event.target.value }))}
                   className={fieldClass}
-                  placeholder="Ex.: Papéis, Plásticos, Metais"
-                  list="material-groups"
-                />
-                <datalist id="material-groups">
-                  {groups.map((group) => <option key={group} value={group} />)}
-                </datalist>
+                >
+                  <option value="">Selecione um grupo</option>
+                  {materialGroups.map((materialGroup) => (
+                    <option key={materialGroup.group_id} value={materialGroup.group_id}>
+                      {materialGroup.group}
+                    </option>
+                  ))}
+                </select>
                 {renderFieldError('group')}
               </div>
 

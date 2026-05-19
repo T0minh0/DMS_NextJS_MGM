@@ -16,6 +16,43 @@ function parseMaterialId(id: string) {
   }
 }
 
+function parseGroupId(value: unknown) {
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'bigint') {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  try {
+    return BigInt(normalized);
+  } catch {
+    return null;
+  }
+}
+
+async function findExistingGroup(body: Record<string, unknown>) {
+  const groupId = parseGroupId(body.group_id ?? body.groupId);
+
+  if (groupId !== null) {
+    return prisma.groups.findUnique({
+      where: { groupId },
+    });
+  }
+
+  const groupName = typeof body.group === 'string' ? body.group.trim() : '';
+  if (!groupName) return null;
+
+  return prisma.groups.findFirst({
+    where: {
+      groupName: {
+        equals: groupName,
+        mode: 'insensitive',
+      },
+    },
+  });
+}
+
 function formatMaterial(material: MaterialWithGroup) {
   return {
     _id: material.materialId.toString(),
@@ -39,6 +76,14 @@ function isForeignKeyConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003';
 }
 
+function materialGroupNotFoundResponse() {
+  return apiErrorResponse({
+    message: 'Selecione um grupo de material cadastrado',
+    code: 'MATERIAL_GROUP_NOT_FOUND',
+    status: 400,
+  });
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -55,11 +100,10 @@ export async function PUT(
       });
     }
 
-    const body = await request.json();
-    const materialName = body.material?.trim();
-    const groupName = body.group?.trim();
+    const body = await request.json() as Record<string, unknown>;
+    const materialName = typeof body.material === 'string' ? body.material.trim() : '';
 
-    if (!materialName || !groupName) {
+    if (!materialName) {
       return apiErrorResponse({
         message: 'Nome do material e grupo são obrigatórios',
         code: 'REQUIRED_MATERIAL_FIELDS',
@@ -98,19 +142,9 @@ export async function PUT(
       });
     }
 
-    let group = await prisma.groups.findFirst({
-      where: {
-        groupName: {
-          equals: groupName,
-          mode: 'insensitive',
-        },
-      },
-    });
-
+    const group = await findExistingGroup(body);
     if (!group) {
-      group = await prisma.groups.create({
-        data: { groupName },
-      });
+      return materialGroupNotFoundResponse();
     }
 
     const updatedMaterial = await prisma.materials.update({

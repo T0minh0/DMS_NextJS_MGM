@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import Layout from '@/components/Layout';
@@ -145,7 +145,7 @@ export default function NoticesPage() {
 
   const canDelete = (notice: Notice) => canEdit(notice);
 
-  // ── Open form ──────────────────────────────────────────────────────────────
+  // ÔöÇÔöÇ Open form ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
   const openCreate = () => {
     setEditNotice(null);
@@ -169,16 +169,16 @@ export default function NoticesPage() {
     setShowFormModal(true);
   };
 
-  // ── Save ───────────────────────────────────────────────────────────────────
+  // ÔöÇÔöÇ Save ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
   const handleSave = async () => {
     setFormError(null);
     if (!formTitle.trim()) {
-      setFormError('O título é obrigatório');
+      setFormError('O t├¡tulo ├® obrigat├│rio');
       return;
     }
     if (!formContent.trim()) {
-      setFormError('O conteúdo é obrigatório');
+      setFormError('O conte├║do ├® obrigat├│rio');
       return;
     }
     const priority = parseInt(formPriority, 10);
@@ -238,13 +238,13 @@ export default function NoticesPage() {
       setTimeout(() => setActionMessage(null), 4000);
       await fetchNotices(priorityFilter);
     } catch {
-      setFormError('Erro de conexão. Tente novamente.');
+      setFormError('Erro de conex├úo. Tente novamente.');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
+  // ÔöÇÔöÇ Delete ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
   const handleDelete = async (notice: Notice) => {
     setShowDeleteConfirm(null);
@@ -266,7 +266,7 @@ export default function NoticesPage() {
     }
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ÔöÇÔöÇ Render ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 
   const renderSkeleton = () => (
     <div className="space-y-md" aria-busy="true" aria-label="Carregando avisos">
@@ -293,7 +293,7 @@ export default function NoticesPage() {
         <p className="text-sm text-text-secondary mt-xs">
           {priorityFilter != null
             ? `Nenhum aviso com prioridade ${priorityFilter} encontrado.`
-            : 'Não há avisos ativos no momento.'}
+            : 'N├úo h├í avisos ativos no momento.'}
         </p>
       </div>
       {canCreate && (
@@ -410,116 +410,114 @@ export default function NoticesPage() {
   };
 
   return (
-    <>
-      <Layout activePath="/notices">
-        <div className="space-y-xl">
+    <Layout activePath="/notices">
+      <div className="space-y-xl">
 
-          {/* ── Header ─────────────────────────────────────────────────────────── */}
-          <div className={panelClass}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md">
-              <div>
-                <div className="flex items-center gap-sm mb-xs">
-                  <FaBell className="h-5 w-5 text-primary" />
-                  <h1 className="text-2xl font-semibold text-on-surface">Mural de Avisos</h1>
-                </div>
-                <p className="text-sm text-text-secondary">
-                  Comunicados globais e da cooperativa. Avisos expirados ficam ocultos por padrão.
-                </p>
+        {/* ÔöÇÔöÇ Header ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        <div className={panelClass}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md">
+            <div>
+              <div className="flex items-center gap-sm mb-xs">
+                <FaBell className="h-5 w-5 text-primary" />
+                <h1 className="text-2xl font-semibold text-on-surface">Mural de Avisos</h1>
               </div>
-              {canCreate && (
-                <button
-                  onClick={openCreate}
-                  className="flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-glow hover:bg-primary/90 shrink-0"
-                >
-                  <FaPlus className="h-3.5 w-3.5" />
-                  Novo Aviso
-                </button>
-              )}
+              <p className="text-sm text-text-secondary">
+                Comunicados globais e da cooperativa. Avisos expirados ficam ocultos por padr├úo.
+              </p>
             </div>
-          </div>
-
-          {/* ── Success toast ───────────────────────────────────────────────────── */}
-          {actionMessage && (
-            <div className="flex items-center justify-between gap-md px-md py-sm bg-success/10 border border-success/30 rounded-lg text-success text-sm font-medium">
-              <div className="flex items-center gap-xs">
-                <FaCheck className="h-4 w-4 shrink-0" />
-                {actionMessage}
-              </div>
-              <button onClick={() => setActionMessage(null)} className="text-success/70 hover:text-success shrink-0">
-                <FaTimes className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
-          {/* ── Filters bar ─────────────────────────────────────────────────────── */}
-          <div className="surface-panel flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
-            {/* Priority filter buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-text-secondary font-semibold uppercase">Prioridade</span>
+            {canCreate && (
               <button
-                onClick={() => setPriorityFilter(null)}
+                onClick={openCreate}
+                className="flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-glow hover:bg-primary/90 shrink-0"
+              >
+                <FaPlus className="h-3.5 w-3.5" />
+                Novo Aviso
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ÔöÇÔöÇ Success toast ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        {actionMessage && (
+          <div className="flex items-center justify-between gap-md px-md py-sm bg-success/10 border border-success/30 rounded-lg text-success text-sm font-medium">
+            <div className="flex items-center gap-xs">
+              <FaCheck className="h-4 w-4 shrink-0" />
+              {actionMessage}
+            </div>
+            <button onClick={() => setActionMessage(null)} className="text-success/70 hover:text-success shrink-0">
+              <FaTimes className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ÔöÇÔöÇ Filters bar ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        <div className="surface-panel flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
+          {/* Priority filter buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-text-secondary font-semibold uppercase">Prioridade</span>
+            <button
+              onClick={() => setPriorityFilter(null)}
+              className={`${chipBaseClass} ${
+                priorityFilter === null
+                  ? chipActiveClass
+                  : chipInactiveClass
+              }`}
+            >
+              Todos
+            </button>
+            {[1, 2, 3, 4, 5].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPriorityFilter(priorityFilter === p ? null : p)}
                 className={`${chipBaseClass} ${
-                  priorityFilter === null
+                  priorityFilter === p
                     ? chipActiveClass
                     : chipInactiveClass
                 }`}
+                title={PRIORITY_FILTER_LABELS[p]}
               >
-                Todos
+                P{p}
               </button>
-              {[1, 2, 3, 4, 5].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPriorityFilter(priorityFilter === p ? null : p)}
-                  className={`${chipBaseClass} ${
-                    priorityFilter === p
-                      ? chipActiveClass
-                      : chipInactiveClass
-                  }`}
-                  title={PRIORITY_FILTER_LABELS[p]}
-                >
-                  P{p}
-                </button>
-              ))}
-            </div>
-
-            <span className="text-xs text-text-secondary" title="Avisos expirados são ocultados automaticamente pelo servidor">
-              Exibindo apenas avisos ativos
-            </span>
+            ))}
           </div>
 
-          {/* ── Error banner ────────────────────────────────────────────────────── */}
-          {error && (
-            <div className="flex items-center justify-between gap-md px-md py-sm bg-error/10 border border-error/30 rounded-lg text-error text-sm">
-              <div className="flex items-center gap-xs">
-                <FaExclamationTriangle className="h-4 w-4 shrink-0" />
-                {error}
-              </div>
-              <button
-                onClick={() => { setError(null); void fetchNotices(priorityFilter); }}
-                className="flex items-center gap-xxs text-xs font-medium text-error hover:text-error/80 border border-error/40 rounded-md px-sm py-xxs transition-colors shrink-0"
-              >
-                <FaRedo className="h-3 w-3" />
-                Tentar novamente
-              </button>
-            </div>
-          )}
-
-          {/* ── Notices list ────────────────────────────────────────────────────── */}
-          <div>
-            {loading
-              ? renderSkeleton()
-              : displayedNotices.length === 0
-              ? renderEmpty()
-              : (
-                <div className="space-y-md">
-                  {displayedNotices.map(renderNoticeCard)}
-                </div>
-              )}
-          </div>
+          <span className="text-xs text-text-secondary" title="Avisos expirados s├úo ocultados automaticamente pelo servidor">
+            Exibindo apenas avisos ativos
+          </span>
         </div>
-      </Layout>
 
-      {/* ── Form Modal (Create / Edit) ─────────────────────────────────────── */}
+        {/* ÔöÇÔöÇ Error banner ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        {error && (
+          <div className="flex items-center justify-between gap-md px-md py-sm bg-error/10 border border-error/30 rounded-lg text-error text-sm">
+            <div className="flex items-center gap-xs">
+              <FaExclamationTriangle className="h-4 w-4 shrink-0" />
+              {error}
+            </div>
+            <button
+              onClick={() => { setError(null); void fetchNotices(priorityFilter); }}
+              className="flex items-center gap-xxs text-xs font-medium text-error hover:text-error/80 border border-error/40 rounded-md px-sm py-xxs transition-colors shrink-0"
+            >
+              <FaRedo className="h-3 w-3" />
+              Tentar novamente
+            </button>
+          </div>
+        )}
+
+        {/* ÔöÇÔöÇ Notices list ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
+        <div>
+          {loading
+            ? renderSkeleton()
+            : displayedNotices.length === 0
+            ? renderEmpty()
+            : (
+              <div className="space-y-md">
+                {displayedNotices.map(renderNoticeCard)}
+              </div>
+            )}
+        </div>
+      </div>
+
+      {/* ÔöÇÔöÇ Form Modal (Create / Edit) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
       {showFormModal && (
         <div className="fixed inset-0 bg-background/70 backdrop-blur-md flex items-center justify-center z-50 p-md transition-all duration-300">
           <div className="bg-surface-alt rounded-xl shadow-soft border border-outline w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -550,13 +548,13 @@ export default function NoticesPage() {
               {/* Title */}
               <div>
                 <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-title">
-                  Título <span className="text-error" aria-hidden="true">*</span>
+                  T├¡tulo <span className="text-error" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="notice-title"
                   type="text"
                   className="w-full h-11 px-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 placeholder:text-text-secondary"
-                  placeholder="Título do aviso"
+                  placeholder="T├¡tulo do aviso"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   maxLength={200}
@@ -566,13 +564,13 @@ export default function NoticesPage() {
               {/* Content */}
               <div>
                 <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-content">
-                  Conteúdo <span className="text-error" aria-hidden="true">*</span>
+                  Conte├║do <span className="text-error" aria-hidden="true">*</span>
                 </label>
                 <textarea
                   id="notice-content"
                   rows={6}
                   className="w-full px-sm py-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 placeholder:text-text-secondary resize-y"
-                  placeholder="Conteúdo do aviso (HTML permitido)"
+                  placeholder="Conte├║do do aviso (HTML permitido)"
                   value={formContent}
                   onChange={(e) => setFormContent(e.target.value)}
                 />
@@ -604,9 +602,9 @@ export default function NoticesPage() {
                       const labelText: Record<number, string> = {
                         1: 'Informativo',
                         2: 'Baixo',
-                        3: 'Médio',
+                        3: 'M├®dio',
                         4: 'Alto',
-                        5: 'Crítico',
+                        5: 'Cr├¡tico',
                       };
 
                       return (
@@ -633,7 +631,7 @@ export default function NoticesPage() {
 
                 <div>
                   <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-expires">
-                    Expiração <span className="text-text-secondary font-normal">(opcional)</span>
+                    Expira├º├úo <span className="text-text-secondary font-normal">(opcional)</span>
                   </label>
                   <input
                     id="notice-expires"
@@ -656,7 +654,7 @@ export default function NoticesPage() {
                   />
                   <span className="text-sm text-on-surface">
                     Aviso global
-                    <span className="ml-xs text-xs text-text-secondary">(visível para todas as cooperativas)</span>
+                    <span className="ml-xs text-xs text-text-secondary">(vis├¡vel para todas as cooperativas)</span>
                   </span>
                 </label>
               )}
@@ -685,7 +683,7 @@ export default function NoticesPage() {
         </div>
       )}
 
-      {/* ── Delete Confirm Modal ──────────────────────────────────────────────── */}
+      {/* ÔöÇÔöÇ Delete Confirm Modal ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-md">
           <div className="bg-surface-alt rounded-xl shadow-soft border border-outline w-full max-w-md">
@@ -703,13 +701,13 @@ export default function NoticesPage() {
             <div className="p-xl space-y-md">
               <div className="flex items-start gap-sm">
                 <FaExclamationTriangle className="h-5 w-5 text-error shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
+                <div>
                   <p className="text-sm text-on-surface font-medium mb-xxs">
                     Tem certeza que deseja remover este aviso?
                   </p>
                   <p className="text-sm text-text-secondary">
-                    <strong className="text-on-surface">{showDeleteConfirm.title}</strong> será removido permanentemente.
-                    Esta ação não pode ser desfeita.
+                    <strong className="text-on-surface">{showDeleteConfirm.title}</strong> ser├í removido permanentemente.
+                    Esta a├º├úo n├úo pode ser desfeita.
                   </p>
                 </div>
               </div>
@@ -733,6 +731,6 @@ export default function NoticesPage() {
           </div>
         </div>
       )}
-    </>
+    </Layout>
   );
 }

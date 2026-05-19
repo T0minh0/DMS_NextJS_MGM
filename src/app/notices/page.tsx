@@ -13,6 +13,8 @@ import {
   FaRedo,
   FaGlobe,
   FaCheck,
+  FaCalendarAlt,
+  FaClock,
 } from 'react-icons/fa';
 
 interface Notice {
@@ -42,16 +44,11 @@ const PRIORITY_LABELS: Record<number, string> = {
 };
 
 const PRIORITY_CLASSES: Record<number, string> = {
-  // priority 1 → neutral-chip: bg-neutral text-on-surface, rounded-full, caption
-  1: 'bg-neutral text-on-surface text-xs font-medium px-xs py-xxs rounded-full',
-  // priority 2 → status-success: bg-success text-background, label-md
-  2: 'bg-success text-background text-xs font-semibold px-xs py-xxs rounded-md',
-  // priority 3 → status-warning: bg-warning text-background, label-md
-  3: 'bg-warning text-background text-xs font-semibold px-xs py-xxs rounded-md',
-  // priority 4 → status-danger: bg-error text-background, label-md
-  4: 'bg-error text-background text-xs font-semibold px-xs py-xxs rounded-md',
-  // priority 5 → status-danger bold: bg-error text-background + ring for extra emphasis
-  5: 'bg-error text-background text-xs font-bold px-xs py-xxs rounded-md ring-2 ring-error/60 uppercase',
+  1: 'bg-text-secondary/15 text-text-secondary text-xs font-semibold px-2.5 py-0.5 rounded-full border border-outline shadow-sm',
+  2: 'bg-success/15 text-success text-xs font-semibold px-2.5 py-0.5 rounded-full border border-success/20 shadow-sm',
+  3: 'bg-warning/15 text-warning text-xs font-semibold px-2.5 py-0.5 rounded-full border border-warning/20 shadow-sm',
+  4: 'bg-energy/15 text-energy text-xs font-semibold px-2.5 py-0.5 rounded-full border border-energy/20 shadow-sm',
+  5: 'bg-error/15 text-error text-xs font-bold px-2.5 py-0.5 rounded-full border border-error/30 ring-1 ring-error/25 uppercase',
 };
 
 const PRIORITY_FILTER_LABELS: Record<number, string> = {
@@ -313,15 +310,24 @@ export default function NoticesPage() {
 
   const renderNoticeCard = (notice: Notice) => {
     const expired = isExpired(notice.expires_at);
+
+    const priorityBorders: Record<number, string> = {
+      1: 'border-l-text-secondary/40 hover:border-l-text-secondary',
+      2: 'border-l-success/40 hover:border-l-success',
+      3: 'border-l-warning/40 hover:border-l-warning',
+      4: 'border-l-energy/40 hover:border-l-energy',
+      5: 'border-l-error/60 hover:border-l-error',
+    };
+
     return (
       <article
         key={notice._id}
-        className={`bg-surface-alt rounded-xl p-xl border border-outline/60 transition-opacity ${expired ? 'opacity-60' : ''}`}
+        className={`bg-surface-alt rounded-xl p-md sm:p-lg border border-outline/60 border-l-4 ${priorityBorders[notice.priority]} transition-all duration-300 hover:border-outline hover:shadow-glow ${expired ? 'opacity-50' : ''}`}
         aria-label={`Aviso: ${notice.title}`}
       >
         <div className="flex items-start justify-between gap-md flex-wrap">
           {/* Left: badges + title */}
-          <div className="flex-1 min-w-0 space-y-xs">
+          <div className="flex-1 min-w-0 space-y-sm">
             {/* Badge row */}
             <div className="flex items-center gap-xs flex-wrap">
               <span className={PRIORITY_CLASSES[notice.priority]} title={`Prioridade ${notice.priority}`}>
@@ -330,17 +336,17 @@ export default function NoticesPage() {
 
               {notice.is_global && (
                 <span
-                  className="flex items-center gap-xxs bg-secondary text-background text-xs font-medium px-xs py-xxs rounded-md"
+                  className="flex items-center gap-xs bg-secondary/15 text-primary text-xs font-semibold px-2.5 py-0.5 rounded-full border border-secondary/30"
                   title="Aviso global"
                 >
-                  <FaGlobe className="h-3 w-3" />
+                  <FaGlobe className="h-3.5 w-3.5" />
                   Global
                 </span>
               )}
 
               {expired && (
-                <span className="flex items-center gap-xxs text-xs text-text-secondary">
-                  <FaExclamationTriangle className="h-3 w-3" />
+                <span className="flex items-center gap-xs bg-outline/20 text-text-secondary text-xs font-medium px-2.5 py-0.5 rounded-full border border-outline">
+                  <FaExclamationTriangle className="h-3.5 w-3.5 text-warning" />
                   Expirado
                 </span>
               )}
@@ -356,10 +362,14 @@ export default function NoticesPage() {
             />
 
             {/* Meta */}
-            <div className="flex flex-wrap gap-sm text-xs text-text-secondary mt-xs">
-              <span>Criado: {formatDate(notice.created_at)}</span>
+            <div className="flex flex-wrap items-center gap-md text-xs text-text-secondary mt-sm pt-xs border-t border-outline/20">
+              <span className="flex items-center gap-xs">
+                <FaCalendarAlt className="h-3.5 w-3.5 opacity-70" />
+                Criado: {formatDate(notice.created_at)}
+              </span>
               {notice.expires_at && (
-                <span>
+                <span className="flex items-center gap-xs text-text-secondary/80">
+                  <FaClock className="h-3.5 w-3.5 opacity-70" />
                   Expira: {formatDate(notice.expires_at)}
                 </span>
               )}
@@ -368,14 +378,14 @@ export default function NoticesPage() {
 
           {/* Right: action buttons */}
           {(canEdit(notice) || canDelete(notice)) && (
-            <div className="flex items-center gap-xs shrink-0">
+            <div className="flex items-center gap-xs shrink-0 self-start sm:self-center">
               {canEdit(notice) && (
                 <button
                   onClick={() => openEdit(notice)}
-                  className="flex items-center gap-xxs text-xs font-medium text-primary hover:text-primary/80 border border-primary/30 hover:border-primary/60 rounded-md px-sm py-xxs transition-colors"
+                  className="flex items-center gap-xs text-xs font-medium text-primary hover:text-on-primary bg-primary/10 border border-primary/20 hover:bg-primary rounded-md px-3 py-1.5 transition-all cursor-pointer"
                   title="Editar aviso"
                 >
-                  <FaEdit className="h-3 w-3" />
+                  <FaEdit className="h-3.5 w-3.5" />
                   Editar
                 </button>
               )}
@@ -383,12 +393,12 @@ export default function NoticesPage() {
                 <button
                   onClick={() => setShowDeleteConfirm(notice)}
                   disabled={deleteLoading === notice._id}
-                  className="flex items-center gap-xxs text-xs font-medium text-error hover:text-error/80 border border-error/30 hover:border-error/60 rounded-md px-sm py-xxs transition-colors disabled:opacity-50"
+                  className="flex items-center gap-xs text-xs font-medium text-error hover:text-background bg-error/10 border border-error/20 hover:bg-error rounded-md px-3 py-1.5 transition-all cursor-pointer disabled:opacity-50"
                   title="Remover aviso"
                 >
                   {deleteLoading === notice._id
-                    ? <FaSpinner className="h-3 w-3 animate-spin" />
-                    : <FaTrash className="h-3 w-3" />}
+                    ? <FaSpinner className="h-3.5 w-3.5 animate-spin" />
+                    : <FaTrash className="h-3.5 w-3.5" />}
                   Remover
                 </button>
               )}
@@ -509,15 +519,18 @@ export default function NoticesPage() {
 
       {/* ── Form Modal (Create / Edit) ─────────────────────────────────────── */}
       {showFormModal && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-md">
+        <div className="fixed inset-0 bg-background/70 backdrop-blur-md flex items-center justify-center z-50 p-md transition-all duration-300">
           <div className="bg-surface-alt rounded-xl shadow-soft border border-outline w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-xl py-md border-b border-outline">
-              <h2 className="text-lg font-semibold text-on-surface">
-                {editNotice ? 'Editar Aviso' : 'Novo Aviso'}
-              </h2>
+              <div className="flex items-center gap-xs">
+                <FaBell className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold text-on-surface">
+                  {editNotice ? 'Editar Aviso' : 'Novo Aviso'}
+                </h2>
+              </div>
               <button
                 onClick={() => setShowFormModal(false)}
-                className="text-text-secondary hover:text-on-surface transition-colors"
+                className="flex items-center justify-center h-8 w-8 rounded-full border border-outline bg-surface hover:bg-surface-elevated text-text-secondary hover:text-on-surface transition-all cursor-pointer"
                 aria-label="Fechar modal"
               >
                 <FaTimes className="h-4 w-4" />
@@ -566,19 +579,54 @@ export default function NoticesPage() {
               {/* Priority + Expires row */}
               <div className="grid sm:grid-cols-2 gap-md">
                 <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-priority">
+                  <label className="block text-sm font-semibold text-on-surface mb-xs">
                     Prioridade <span className="text-error" aria-hidden="true">*</span>
                   </label>
-                  <input
-                    id="notice-priority"
-                    type="number"
-                    min={1}
-                    max={5}
-                    className="w-full h-11 px-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
-                    value={formPriority}
-                    onChange={(e) => setFormPriority(e.target.value)}
-                  />
-                  <p className="text-xs text-text-secondary mt-xxs">1 = informativo, 5 = crítico</p>
+                  <div className="grid grid-cols-5 gap-xs">
+                    {[1, 2, 3, 4, 5].map((p) => {
+                      const isActive = formPriority === String(p);
+                      const activeStyles: Record<number, string> = {
+                        1: 'border-text-secondary bg-text-secondary/15 text-text-secondary shadow-glow',
+                        2: 'border-success bg-success/15 text-success shadow-glow',
+                        3: 'border-warning bg-warning/15 text-warning shadow-glow',
+                        4: 'border-energy bg-energy/15 text-energy shadow-glow',
+                        5: 'border-error bg-error/15 text-error shadow-glow',
+                      };
+                      const hoverStyles: Record<number, string> = {
+                        1: 'hover:border-text-secondary/50 hover:bg-text-secondary/5 text-text-secondary/80',
+                        2: 'hover:border-success/50 hover:bg-success/5 text-text-secondary/80',
+                        3: 'hover:border-warning/50 hover:bg-warning/5 text-text-secondary/80',
+                        4: 'hover:border-energy/50 hover:bg-energy/5 text-text-secondary/80',
+                        5: 'hover:border-error/50 hover:bg-error/5 text-text-secondary/80',
+                      };
+                      const labelText: Record<number, string> = {
+                        1: 'Informativo',
+                        2: 'Baixo',
+                        3: 'Médio',
+                        4: 'Alto',
+                        5: 'Crítico',
+                      };
+
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setFormPriority(String(p))}
+                          className={`flex flex-col items-center justify-center p-xs rounded-lg border text-center transition-all cursor-pointer ${
+                            isActive
+                              ? activeStyles[p]
+                              : `border-outline bg-surface ${hoverStyles[p]}`
+                          }`}
+                          title={`Prioridade ${p}: ${labelText[p]}`}
+                        >
+                          <span className="text-sm font-bold">P{p}</span>
+                          <span className="text-[10px] opacity-75 mt-xxs font-medium hidden md:block">
+                            {labelText[p]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>
@@ -588,7 +636,7 @@ export default function NoticesPage() {
                   <input
                     id="notice-expires"
                     type="date"
-                    className="w-full h-11 px-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    className="w-full h-11 px-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 cursor-pointer"
                     value={formExpiresAt}
                     onChange={(e) => setFormExpiresAt(e.target.value)}
                   />
@@ -600,7 +648,7 @@ export default function NoticesPage() {
                 <label className="flex items-center gap-sm cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-outline bg-surface text-primary focus:ring-primary"
+                    className="h-4 w-4 rounded border-outline bg-surface text-primary focus:ring-primary cursor-pointer"
                     checked={formIsGlobal}
                     onChange={(e) => setFormIsGlobal(e.target.checked)}
                   />
@@ -614,15 +662,17 @@ export default function NoticesPage() {
               {/* Actions */}
               <div className="flex justify-end gap-sm pt-xs border-t border-outline">
                 <button
+                  type="button"
                   onClick={() => setShowFormModal(false)}
-                  className="h-11 px-md bg-surface-elevated text-on-surface text-sm font-semibold rounded-lg border border-outline hover:border-primary/30 transition-colors"
+                  className="h-11 px-md bg-surface-elevated text-on-surface text-sm font-semibold rounded-lg border border-outline hover:border-primary/30 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
+                  type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-xs h-11 px-md bg-primary text-on-primary text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="flex items-center gap-xs h-11 px-md bg-primary text-on-primary text-sm font-semibold rounded-lg hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-hover"
                 >
                   {saving ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}
                   {editNotice ? 'Salvar' : 'Criar'}

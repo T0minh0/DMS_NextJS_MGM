@@ -24,10 +24,10 @@ const LEVELS_ROUTE = 'src/app/api/levels/route.ts';
 const WORKER_LEVEL_ROUTE = 'src/app/api/levels/worker/[workerId]/route.ts';
 
 const levels = [
-  { levelNumber: 1, levelName: 'Beginner', xpRequired: 100 },
-  { levelNumber: 2, levelName: 'Amateur', xpRequired: 167 },
-  { levelNumber: 3, levelName: 'Apprentice', xpRequired: 278 },
-  { levelNumber: 10, levelName: 'Legend', xpRequired: 10000 },
+  { levelNumber: 1, levelName: 'Iniciante', xpRequired: 100 },
+  { levelNumber: 2, levelName: 'Amador', xpRequired: 167 },
+  { levelNumber: 3, levelName: 'Aprendiz', xpRequired: 278 },
+  { levelNumber: 10, levelName: 'Lenda', xpRequired: 10000 },
 ];
 
 test('level math keeps new workers at level 1 and never returns negative xpToNext', () => {
@@ -46,7 +46,7 @@ test('level math keeps new workers at level 1 and never returns negative xpToNex
 
   assert.deepEqual(formatted, {
     levelNumber: 1,
-    levelName: 'Beginner',
+    levelName: 'Iniciante',
     xpRequired: 100,
     xpToNext: 167,
     workerId: '7',

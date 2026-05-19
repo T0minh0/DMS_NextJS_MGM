@@ -270,16 +270,16 @@ CREATE INDEX "leaderboard_entry_worker_id_idx" ON "leaderboard_entry"("worker_id
 
 INSERT INTO "level_definition" ("level_number", "level_name", "xp_required")
 VALUES
-  (1,  'Beginner',     100),
-  (2,  'Amateur',      167),
-  (3,  'Apprentice',   278),
-  (4,  'Collector',    464),
-  (5,  'Professional', 774),
-  (6,  'Expert',       1291),
-  (7,  'Master',       2154),
+  (1,  'Iniciante',     100),
+  (2,  'Amador',      167),
+  (3,  'Aprendiz',   278),
+  (4,  'Coletor',    464),
+  (5,  'Profissional', 774),
+  (6,  'Especialista',       1291),
+  (7,  'Mestre',       2154),
   (8,  'Elite',        3593),
-  (9,  'Champion',     5992),
-  (10, 'Legend',       10000)
+  (9,  'Campeão',     5992),
+  (10, 'Lenda',       10000)
 ON CONFLICT ("level_number") DO UPDATE SET
   "level_name" = EXCLUDED."level_name",
   "xp_required" = EXCLUDED."xp_required";
@@ -287,20 +287,20 @@ ON CONFLICT ("level_number") DO UPDATE SET
 INSERT INTO "achievement_definition"
   ("achievement_key", "achievement_name", "description", "category", "threshold_value", "base_xp_reward", "difficulty")
 VALUES
-  ('WEIGHT_50KG', 'Beginner', 'Collect 50 kg of materials in a month', 'WEIGHT', 50, 100, 'EASY'),
-  ('WEIGHT_100KG', 'Amateur', 'Collect 100 kg of materials in a month', 'WEIGHT', 100, 200, 'EASY'),
-  ('WEIGHT_250KG', 'Professional', 'Collect 250 kg of materials in a month', 'WEIGHT', 250, 400, 'MEDIUM'),
-  ('WEIGHT_500KG', 'Master Collector', 'Collect 500 kg of materials in a month', 'WEIGHT', 500, 750, 'HARD'),
-  ('WEIGHT_1000KG', 'Legendary Collector', 'Collect 1000 kg of materials in a month', 'WEIGHT', 1000, 1500, 'HARD'),
-  ('DAYS_5', 'Getting Started', 'Work at least 5 days in a month', 'DAYS_WORKED', 5, 75, 'EASY'),
-  ('DAYS_10', 'On a Roll', 'Work at least 10 days in a month', 'DAYS_WORKED', 10, 150, 'MEDIUM'),
-  ('DAYS_15', 'Committed Worker', 'Work at least 15 days in a month', 'DAYS_WORKED', 15, 250, 'HARD'),
-  ('DAYS_20', 'Dedicated Worker', 'Work at least 20 days in a month', 'DAYS_WORKED', 20, 400, 'HARD'),
-  ('DAYS_25', 'Unstoppable Worker', 'Work at least 25 days in a month', 'DAYS_WORKED', 25, 600, 'HARD'),
-  ('ACHIEVEMENTS_COUNT_3', 'Rising Star', 'Unlock 3 different achievements in a month', 'ACHIEVEMENTS_COUNT', 3, 125, 'MEDIUM'),
-  ('ACHIEVEMENTS_COUNT_5', 'Shining Star', 'Unlock 5 different achievements in a month', 'ACHIEVEMENTS_COUNT', 5, 300, 'HARD'),
-  ('ACHIEVEMENTS_COUNT_8', 'Superstar', 'Unlock 8 different achievements in a month', 'ACHIEVEMENTS_COUNT', 8, 500, 'HARD'),
-  ('ACHIEVEMENTS_COUNT_10', 'Legendary Superstar', 'Unlock 10 different achievements in a month', 'ACHIEVEMENTS_COUNT', 10, 750, 'HARD')
+  ('WEIGHT_50KG', 'Iniciante', 'Coletar 50 kg de materiais em um mês', 'WEIGHT', 50, 100, 'EASY'),
+  ('WEIGHT_100KG', 'Amador', 'Coletar 100 kg of materiais em um mês', 'WEIGHT', 100, 200, 'EASY'),
+  ('WEIGHT_250KG', 'Profissional', 'Coletar 250 kg de materiais em um mês', 'WEIGHT', 250, 400, 'MEDIUM'),
+  ('WEIGHT_500KG', 'Mestre Coletor', 'Coletar 500 kg de materiais em um mês', 'WEIGHT', 500, 750, 'HARD'),
+  ('WEIGHT_1000KG', 'Coletor Lendário', 'Coletar 1000 kg de materiais em um mês', 'WEIGHT', 1000, 1500, 'HARD'),
+  ('DAYS_5', 'Primeiros Passos', 'Trabalhar pelo menos 5 dias em um mês', 'DAYS_WORKED', 5, 75, 'EASY'),
+  ('DAYS_10', 'Em Ritmo Firme', 'Trabalhar pelo menos 10 dias em um mês', 'DAYS_WORKED', 10, 150, 'MEDIUM'),
+  ('DAYS_15', 'Trabalhador Comprometido', 'Trabalhar pelo menos 15 dias em um mês', 'DAYS_WORKED', 15, 250, 'HARD'),
+  ('DAYS_20', 'Trabalhador Dedicado', 'Trabalhar pelo menos 20 dias em um mês', 'DAYS_WORKED', 20, 400, 'HARD'),
+  ('DAYS_25', 'Trabalhador Imparável', 'Trabalhar pelo menos 25 dias em um mês', 'DAYS_WORKED', 25, 600, 'HARD'),
+  ('ACHIEVEMENTS_COUNT_3', 'Estrela Ascendente', 'Desbloquear 3 conquistas diferentes em um mês', 'ACHIEVEMENTS_COUNT', 3, 125, 'MEDIUM'),
+  ('ACHIEVEMENTS_COUNT_5', 'Estrela Brilhante', 'Desbloquear 5 conquistas diferentes em um mês', 'ACHIEVEMENTS_COUNT', 5, 300, 'HARD'),
+  ('ACHIEVEMENTS_COUNT_8', 'Superestrela', 'Desbloquear 8 conquistas diferentes em um mês', 'ACHIEVEMENTS_COUNT', 8, 500, 'HARD'),
+  ('ACHIEVEMENTS_COUNT_10', 'Superestrela Lendária', 'Desbloquear 10 conquistas diferentes em um mês', 'ACHIEVEMENTS_COUNT', 10, 750, 'HARD')
 ON CONFLICT ("achievement_key") DO UPDATE SET
   "achievement_name" = EXCLUDED."achievement_name",
   "description" = EXCLUDED."description",

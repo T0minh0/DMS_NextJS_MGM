@@ -52,7 +52,7 @@ test('S1-03 migration creates current physical FKs and leaderboard cascade', () 
   assert.match(s103Migration, /REFERENCES "Materials"\("Material_id"\)/);
   assert.match(
     s103Migration,
-    /FOREIGN KEY \("snapshot_id", "cooperative_id"\) REFERENCES "leaderboard_snapshot"\("snapshot_id", "cooperative_id"\)\n    ON DELETE CASCADE/,
+    /FOREIGN KEY \("snapshot_id", "cooperative_id"\) REFERENCES "leaderboard_snapshot"\("snapshot_id", "cooperative_id"\)\r?\n    ON DELETE CASCADE/,
   );
   assert.doesNotMatch(s103Migration, /REFERENCES public\.cooperative/);
   assert.doesNotMatch(s103Migration, /REFERENCES public\.workers/);
@@ -67,23 +67,23 @@ test('S1-03 migration encodes tenant-aware worker consistency constraints', () =
   assert.match(s103Migration, /UNIQUE \("Worker_id", "Cooperative"\)/);
   assert.match(
     s103Migration,
-    /CONSTRAINT "notice_board_created_by_cooperative_fkey"\n    FOREIGN KEY \("created_by", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
+    /CONSTRAINT "notice_board_created_by_cooperative_fkey"\r?\n    FOREIGN KEY \("created_by", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
   );
   assert.match(
     s103Migration,
-    /CONSTRAINT "achievement_xp_override_updated_by_cooperative_fkey"\n    FOREIGN KEY \("updated_by", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
+    /CONSTRAINT "achievement_xp_override_updated_by_cooperative_fkey"\r?\n    FOREIGN KEY \("updated_by", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
   );
   assert.match(
     s103Migration,
-    /CONSTRAINT "worker_achievement_worker_cooperative_fkey"\n    FOREIGN KEY \("worker_id", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
+    /CONSTRAINT "worker_achievement_worker_cooperative_fkey"\r?\n    FOREIGN KEY \("worker_id", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
   );
   assert.match(
     s103Migration,
-    /CONSTRAINT "leaderboard_snapshot_snapshot_cooperative_key"\n    UNIQUE \("snapshot_id", "cooperative_id"\)/,
+    /CONSTRAINT "leaderboard_snapshot_snapshot_cooperative_key"\r?\n    UNIQUE \("snapshot_id", "cooperative_id"\)/,
   );
   assert.match(
     s103Migration,
-    /CONSTRAINT "leaderboard_entry_worker_cooperative_fkey"\n    FOREIGN KEY \("worker_id", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
+    /CONSTRAINT "leaderboard_entry_worker_cooperative_fkey"\r?\n    FOREIGN KEY \("worker_id", "cooperative_id"\) REFERENCES "Workers"\("Worker_id", "Cooperative"\)/,
   );
 });
 
@@ -109,7 +109,7 @@ test('S1-03 migration encodes uniqueness and value constraints', () => {
 test('S1-03 migration seeds fixed levels and achievements idempotently', () => {
   assert.match(s103Migration, /INSERT INTO "level_definition"/);
   assert.match(s103Migration, /ON CONFLICT \("level_number"\) DO UPDATE SET/);
-  assert.match(s103Migration, /'Legend',\s+10000/);
+  assert.match(s103Migration, /'Lenda',\s+10000/);
   assert.match(s103Migration, /INSERT INTO "achievement_definition"/);
   assert.match(s103Migration, /ON CONFLICT \("achievement_key"\) DO UPDATE SET/);
   assert.match(s103Migration, /'WEIGHT_50KG'/);

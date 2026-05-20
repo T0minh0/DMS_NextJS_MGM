@@ -269,11 +269,11 @@ export default function NoticesPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const renderSkeleton = () => (
-    <div className="space-y-md" aria-busy="true" aria-label="Carregando avisos">
+    <div className="space-y-4" aria-busy="true" aria-label="Carregando avisos">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="bg-surface-alt rounded-xl p-xl animate-pulse">
-          <div className="flex items-start justify-between gap-md">
-            <div className="flex-1 space-y-xs">
+        <div key={i} className="bg-surface-alt rounded-xl p-6 animate-pulse">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 space-y-2">
               <div className="h-4 bg-surface-elevated rounded-md w-1/3" />
               <div className="h-3 bg-surface-elevated rounded-md w-2/3" />
               <div className="h-3 bg-surface-elevated rounded-md w-1/2" />
@@ -290,7 +290,7 @@ export default function NoticesPage() {
       <FaBell className="h-12 w-12 text-text-secondary/50" />
       <div>
         <p className="text-base font-semibold text-on-surface">Nenhum aviso encontrado</p>
-        <p className="text-sm text-text-secondary mt-xs">
+        <p className="text-sm text-text-secondary mt-2">
           {priorityFilter != null
             ? `Nenhum aviso com prioridade ${priorityFilter} encontrado.`
             : 'Não há avisos ativos no momento.'}
@@ -322,21 +322,21 @@ export default function NoticesPage() {
     return (
       <article
         key={notice._id}
-        className={`bg-surface-alt rounded-xl p-md sm:p-lg border border-outline/60 border-l-4 ${priorityBorders[notice.priority]} transition-all duration-300 hover:border-outline hover:shadow-glow ${expired ? 'opacity-50' : ''}`}
+        className={`bg-surface-alt rounded-xl p-4 sm:p-5 border border-outline/60 border-l-4 ${priorityBorders[notice.priority]} transition-all duration-300 hover:border-outline hover:shadow-glow ${expired ? 'opacity-50' : ''}`}
         aria-label={`Aviso: ${notice.title}`}
       >
-        <div className="flex items-start justify-between gap-md flex-wrap">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           {/* Left: badges + title */}
-          <div className="flex-1 min-w-0 space-y-sm">
+          <div className="flex-1 min-w-0 space-y-3">
             {/* Badge row */}
-            <div className="flex items-center gap-xs flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className={PRIORITY_CLASSES[notice.priority]} title={`Prioridade ${notice.priority}`}>
                 {PRIORITY_LABELS[notice.priority]}
               </span>
 
               {notice.is_global && (
                 <span
-                  className="flex items-center gap-xs bg-secondary/15 text-primary text-xs font-semibold px-2.5 py-0.5 rounded-full border border-secondary/30"
+                  className="flex items-center gap-2 bg-secondary/15 text-primary text-xs font-semibold px-2.5 py-0.5 rounded-full border border-secondary/30"
                   title="Aviso global"
                 >
                   <FaGlobe className="h-3.5 w-3.5" />
@@ -345,7 +345,7 @@ export default function NoticesPage() {
               )}
 
               {expired && (
-                <span className="flex items-center gap-xs bg-outline/20 text-text-secondary text-xs font-medium px-2.5 py-0.5 rounded-full border border-outline">
+                <span className="flex items-center gap-2 bg-outline/20 text-text-secondary text-xs font-medium px-2.5 py-0.5 rounded-full border border-outline">
                   <FaExclamationTriangle className="h-3.5 w-3.5 text-warning" />
                   Expirado
                 </span>
@@ -362,13 +362,13 @@ export default function NoticesPage() {
             />
 
             {/* Meta */}
-            <div className="flex flex-wrap items-center gap-md text-xs text-text-secondary mt-sm pt-xs border-t border-outline/20">
-              <span className="flex items-center gap-xs">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-text-secondary mt-3 pt-2 border-t border-outline/20">
+              <span className="flex items-center gap-2">
                 <FaCalendarAlt className="h-3.5 w-3.5 opacity-70" />
                 Criado: {formatDate(notice.created_at)}
               </span>
               {notice.expires_at && (
-                <span className="flex items-center gap-xs text-text-secondary/80">
+                <span className="flex items-center gap-2 text-text-secondary/80">
                   <FaClock className="h-3.5 w-3.5 opacity-70" />
                   Expira: {formatDate(notice.expires_at)}
                 </span>
@@ -378,11 +378,11 @@ export default function NoticesPage() {
 
           {/* Right: action buttons */}
           {(canEdit(notice) || canDelete(notice)) && (
-            <div className="flex items-center gap-xs shrink-0 self-start sm:self-center">
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
               {canEdit(notice) && (
                 <button
                   onClick={() => openEdit(notice)}
-                  className="flex items-center gap-xs text-xs font-medium text-primary hover:text-on-primary bg-primary/10 border border-primary/20 hover:bg-primary rounded-md px-3 py-1.5 transition-all cursor-pointer"
+                  className="flex items-center gap-2 text-xs font-medium text-primary hover:text-on-primary bg-primary/10 border border-primary/20 hover:bg-primary rounded-md px-3 py-1.5 transition-all cursor-pointer"
                   title="Editar aviso"
                 >
                   <FaEdit className="h-3.5 w-3.5" />
@@ -393,7 +393,7 @@ export default function NoticesPage() {
                 <button
                   onClick={() => setShowDeleteConfirm(notice)}
                   disabled={deleteLoading === notice._id}
-                  className="flex items-center gap-xs text-xs font-medium text-error hover:text-background bg-error/10 border border-error/20 hover:bg-error rounded-md px-3 py-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-2 text-xs font-medium text-error hover:text-background bg-error/10 border border-error/20 hover:bg-error rounded-md px-3 py-1.5 transition-all cursor-pointer disabled:opacity-50"
                   title="Remover aviso"
                 >
                   {deleteLoading === notice._id
@@ -412,13 +412,13 @@ export default function NoticesPage() {
   return (
     <>
       <Layout activePath="/notices">
-        <div className="space-y-xl">
+        <div className="space-y-6">
 
           {/* ── Header ─────────────────────────────────────────────────────────── */}
           <div className={panelClass}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-md">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <div className="flex items-center gap-sm mb-xs">
+                <div className="flex items-center gap-3 mb-2">
                   <FaBell className="h-5 w-5 text-primary" />
                   <h1 className="text-2xl font-semibold text-on-surface">Mural de Avisos</h1>
                 </div>
@@ -440,8 +440,8 @@ export default function NoticesPage() {
 
           {/* ── Success toast ───────────────────────────────────────────────────── */}
           {actionMessage && (
-            <div className="flex items-center justify-between gap-md px-md py-sm bg-success/10 border border-success/30 rounded-lg text-success text-sm font-medium">
-              <div className="flex items-center gap-xs">
+            <div className="flex items-center justify-between gap-4 px-4 py-3 bg-success/10 border border-success/30 rounded-lg text-success text-sm font-medium">
+              <div className="flex items-center gap-2">
                 <FaCheck className="h-4 w-4 shrink-0" />
                 {actionMessage}
               </div>
@@ -489,14 +489,14 @@ export default function NoticesPage() {
 
           {/* ── Error banner ────────────────────────────────────────────────────── */}
           {error && (
-            <div className="flex items-center justify-between gap-md px-md py-sm bg-error/10 border border-error/30 rounded-lg text-error text-sm">
-              <div className="flex items-center gap-xs">
+            <div className="flex items-center justify-between gap-4 px-4 py-3 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
+              <div className="flex items-center gap-2">
                 <FaExclamationTriangle className="h-4 w-4 shrink-0" />
                 {error}
               </div>
               <button
                 onClick={() => { setError(null); void fetchNotices(priorityFilter); }}
-                className="flex items-center gap-xxs text-xs font-medium text-error hover:text-error/80 border border-error/40 rounded-md px-sm py-xxs transition-colors shrink-0"
+                className="flex items-center gap-1 text-xs font-medium text-error hover:text-error/80 border border-error/40 rounded-md px-3 py-1 transition-colors shrink-0"
               >
                 <FaRedo className="h-3 w-3" />
                 Tentar novamente
@@ -511,7 +511,7 @@ export default function NoticesPage() {
               : displayedNotices.length === 0
               ? renderEmpty()
               : (
-                <div className="space-y-md">
+                <div className="space-y-4">
                   {displayedNotices.map(renderNoticeCard)}
                 </div>
               )}
@@ -521,10 +521,10 @@ export default function NoticesPage() {
 
       {/* ── Form Modal (Create / Edit) ─────────────────────────────────────── */}
       {showFormModal && (
-        <div className="fixed inset-0 bg-background/70 backdrop-blur-md flex items-center justify-center z-50 p-md transition-all duration-300">
+        <div className="fixed inset-0 bg-background/70 backdrop-blur-md flex items-center justify-center z-50 p-4 transition-all duration-300">
           <div className="bg-surface-alt rounded-xl shadow-soft border border-outline w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-xl py-md border-b border-outline">
-              <div className="flex items-center gap-xs">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-outline">
+              <div className="flex items-center gap-2">
                 <FaBell className="h-5 w-5 text-primary" />
                 <h2 className="text-lg font-semibold text-on-surface">
                   {editNotice ? 'Editar Aviso' : 'Novo Aviso'}
@@ -539,9 +539,9 @@ export default function NoticesPage() {
               </button>
             </div>
 
-            <div className="p-xl space-y-md">
+            <div className="p-6 space-y-4">
               {formError && (
-                <div className="flex items-center gap-xs px-md py-sm bg-error/10 border border-error/30 rounded-lg text-error text-sm">
+                <div className="flex items-center gap-2 px-4 py-3 bg-error/10 border border-error/30 rounded-lg text-error text-sm">
                   <FaExclamationTriangle className="h-4 w-4 shrink-0" />
                   {formError}
                 </div>
@@ -549,13 +549,13 @@ export default function NoticesPage() {
 
               {/* Title */}
               <div>
-                <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-title">
+                <label className="block text-sm font-semibold text-on-surface mb-2" htmlFor="notice-title">
                   Título <span className="text-error" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="notice-title"
                   type="text"
-                  className="w-full h-11 px-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 placeholder:text-text-secondary"
+                  className="w-full h-11 px-3 bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 placeholder:text-text-secondary"
                   placeholder="Título do aviso"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
@@ -565,13 +565,13 @@ export default function NoticesPage() {
 
               {/* Content */}
               <div>
-                <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-content">
+                <label className="block text-sm font-semibold text-on-surface mb-2" htmlFor="notice-content">
                   Conteúdo <span className="text-error" aria-hidden="true">*</span>
                 </label>
                 <textarea
                   id="notice-content"
                   rows={6}
-                  className="w-full px-sm py-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 placeholder:text-text-secondary resize-y"
+                  className="w-full px-3 py-3 bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 placeholder:text-text-secondary resize-y"
                   placeholder="Conteúdo do aviso (HTML permitido)"
                   value={formContent}
                   onChange={(e) => setFormContent(e.target.value)}
@@ -579,12 +579,12 @@ export default function NoticesPage() {
               </div>
 
               {/* Priority + Expires row */}
-              <div className="grid sm:grid-cols-2 gap-md">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-xs">
+                  <label className="block text-sm font-semibold text-on-surface mb-2">
                     Prioridade <span className="text-error" aria-hidden="true">*</span>
                   </label>
-                  <div className="grid grid-cols-5 gap-xs">
+                  <div className="grid grid-cols-5 gap-2">
                     {[1, 2, 3, 4, 5].map((p) => {
                       const isActive = formPriority === String(p);
                       const activeStyles: Record<number, string> = {
@@ -614,7 +614,7 @@ export default function NoticesPage() {
                           key={p}
                           type="button"
                           onClick={() => setFormPriority(String(p))}
-                          className={`flex flex-col items-center justify-center p-xs rounded-lg border text-center transition-all cursor-pointer ${
+                          className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                             isActive
                               ? activeStyles[p]
                               : `border-outline bg-surface ${hoverStyles[p]}`
@@ -622,7 +622,7 @@ export default function NoticesPage() {
                           title={`Prioridade ${p}: ${labelText[p]}`}
                         >
                           <span className="text-sm font-bold">P{p}</span>
-                          <span className="text-[10px] opacity-75 mt-xxs font-medium hidden md:block">
+                          <span className="text-[10px] opacity-75 mt-1 font-medium hidden md:block">
                             {labelText[p]}
                           </span>
                         </button>
@@ -632,13 +632,13 @@ export default function NoticesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-xs" htmlFor="notice-expires">
+                  <label className="block text-sm font-semibold text-on-surface mb-2" htmlFor="notice-expires">
                     Expiração <span className="text-text-secondary font-normal">(opcional)</span>
                   </label>
                   <input
                     id="notice-expires"
                     type="date"
-                    className="w-full h-11 px-sm bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 cursor-pointer"
+                    className="w-full h-11 px-3 bg-surface text-on-surface border border-outline rounded-md text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25 cursor-pointer"
                     value={formExpiresAt}
                     onChange={(e) => setFormExpiresAt(e.target.value)}
                   />
@@ -647,7 +647,7 @@ export default function NoticesPage() {
 
               {/* Admin-only: global checkbox */}
               {isAdmin && !editNotice && (
-                <label className="flex items-center gap-sm cursor-pointer select-none">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-outline bg-surface text-primary focus:ring-primary cursor-pointer"
@@ -656,17 +656,17 @@ export default function NoticesPage() {
                   />
                   <span className="text-sm text-on-surface">
                     Aviso global
-                    <span className="ml-xs text-xs text-text-secondary">(visível para todas as cooperativas)</span>
+                    <span className="ml-2 text-xs text-text-secondary">(visível para todas as cooperativas)</span>
                   </span>
                 </label>
               )}
 
               {/* Actions */}
-              <div className="flex justify-end gap-sm pt-xs border-t border-outline">
+              <div className="flex justify-end gap-3 pt-2 border-t border-outline">
                 <button
                   type="button"
                   onClick={() => setShowFormModal(false)}
-                  className="h-11 px-md bg-surface-elevated text-on-surface text-sm font-semibold rounded-lg border border-outline hover:border-primary/30 transition-colors cursor-pointer"
+                  className="h-11 px-4 bg-surface-elevated text-on-surface text-sm font-semibold rounded-lg border border-outline hover:border-primary/30 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -674,7 +674,7 @@ export default function NoticesPage() {
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center gap-xs h-11 px-md bg-primary text-on-primary text-sm font-semibold rounded-lg hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-hover"
+                  className="flex items-center gap-2 h-11 px-4 bg-primary text-on-primary text-sm font-semibold rounded-lg hover:bg-primary/95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-glow hover:shadow-glow-hover"
                 >
                   {saving ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}
                   {editNotice ? 'Salvar' : 'Criar'}
@@ -687,9 +687,9 @@ export default function NoticesPage() {
 
       {/* ── Delete Confirm Modal ──────────────────────────────────────────────── */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-md">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-surface-alt rounded-xl shadow-soft border border-outline w-full max-w-md">
-            <div className="flex items-center justify-between px-xl py-md border-b border-outline">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-outline">
               <h2 className="text-lg font-semibold text-on-surface">Remover Aviso</h2>
               <button
                 onClick={() => setShowDeleteConfirm(null)}
@@ -700,11 +700,11 @@ export default function NoticesPage() {
               </button>
             </div>
 
-            <div className="p-xl space-y-md">
-              <div className="flex items-start gap-sm">
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3">
                 <FaExclamationTriangle className="h-5 w-5 text-error shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-on-surface font-medium mb-xxs">
+                  <p className="text-sm text-on-surface font-medium mb-1">
                     Tem certeza que deseja remover este aviso?
                   </p>
                   <p className="text-sm text-text-secondary">
@@ -714,16 +714,16 @@ export default function NoticesPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-sm pt-xs border-t border-outline">
+              <div className="flex justify-end gap-3 pt-2 border-t border-outline">
                 <button
                   onClick={() => setShowDeleteConfirm(null)}
-                  className="h-11 px-md bg-surface-elevated text-on-surface text-sm font-semibold rounded-lg border border-outline hover:border-primary/30 transition-colors"
+                  className="h-11 px-4 bg-surface-elevated text-on-surface text-sm font-semibold rounded-lg border border-outline hover:border-primary/30 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => handleDelete(showDeleteConfirm)}
-                  className="flex items-center gap-xs h-11 px-md bg-error text-background text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                  className="flex items-center gap-2 h-11 px-4 bg-error text-background text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity"
                 >
                   <FaTrash className="h-4 w-4" />
                   Remover

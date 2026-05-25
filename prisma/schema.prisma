@@ -120,6 +120,7 @@ model Workers {
   workerAchievements          WorkerAchievement[]
   leaderboardEntries          LeaderboardEntry[]
   workerLevel                 WorkerLevel?
+  pushTokens                  WorkerPushToken[]
 
   @@unique([workerId, cooperative], map: "Workers_worker_cooperative_key")
   @@map("Workers")
@@ -383,4 +384,25 @@ model WorkerLevel {
 
   @@index([currentLevel], map: "worker_level_current_level_idx")
   @@map("worker_level")
+}
+
+/// Expo push tokens por catador, consumido pelo backend mobile para enviar
+/// notificacoes de pesagem registrada. Cada catador pode ter varios tokens
+/// (multiplos devices). Token unico globalmente — se o mesmo device trocar
+/// de dono, o upsert atualiza o `worker_id`.
+///
+/// Esta tabela so eh USADA pelo backend mobile (`Mobile/DMS-app-Backend`).
+/// Esta no schema autoritativo (portal web) para manter os tres sistemas
+/// sincronizados.
+model WorkerPushToken {
+  id        BigInt   @id @default(autoincrement())
+  workerId  BigInt   @map("worker_id")
+  token     String   @unique
+  platform  String   @db.VarChar(16)
+  lastSeen  DateTime @default(now()) @map("last_seen") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  worker    Workers  @relation(fields: [workerId], references: [workerId], onDelete: Cascade, map: "worker_push_token_worker_id_fkey")
+
+  @@index([workerId], map: "worker_push_token_worker_id_idx")
+  @@map("worker_push_token")
 }

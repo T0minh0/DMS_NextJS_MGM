@@ -362,29 +362,6 @@ async function assertMaterialWorkerDevice(
   }
 }
 
-async function assertStockRowExists(
-  tx: Prisma.TransactionClient,
-  cooperativeId: bigint,
-  materialId: bigint,
-) {
-  const existingStock = await tx.stock.findFirst({
-    where: {
-      cooperative: cooperativeId,
-      material: materialId,
-    },
-    select: { stockId: true },
-  });
-
-  if (!existingStock) {
-    throw new MaterialDomainError(
-      'STOCK_MISSING',
-      'Não há estoque registrado para este material nesta cooperativa',
-      422,
-      { cooperativeId, materialId },
-    );
-  }
-}
-
 function mapStockError(error: unknown): never {
   if (error instanceof StockDomainError && error.code === 'STOCK_MISSING') {
     throw new MaterialDomainError(
@@ -412,7 +389,6 @@ export async function recordMaterialWeighing(
   input: RecordMaterialWeighingInput,
 ) {
   await assertMaterialWorkerDevice(tx, input);
-  await assertStockRowExists(tx, input.cooperativeId, input.materialId);
 
   const lockedBagState = await ensureBagStateLocked(
     tx,
@@ -473,7 +449,6 @@ export async function recordMaterialWeighing(
         cooperativeId: input.cooperativeId,
         materialId: input.materialId,
         amountKg: delta.collectedDeltaKg,
-        createIfMissing: false,
       });
     } catch (error) {
       mapStockError(error);

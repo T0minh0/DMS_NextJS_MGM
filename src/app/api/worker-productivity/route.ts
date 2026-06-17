@@ -8,6 +8,11 @@ import {
 import { scopedWorkerWhere } from '@/lib/auth/scoped-queries';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import {
+  processMeasurementDeltas,
+  type MeasurementDeltaRecord,
+  type ProcessedDeltaMeasurement,
+} from '@/lib/analytics/measurement-deltas';
 
 type MaterialContribution = {
   materialName: string;
@@ -42,21 +47,7 @@ type ProductivityStats = {
   }>;
 };
 
-type MeasurementRecord = {
-  weight: number;
-  timestamp: Date;
-  materialId: bigint;
-  bagFilled: boolean;
-};
-
-type ProcessedMeasurement = {
-  dateLabel: string;
-  weight: number;
-  bagFilled: string;
-  timestamp: Date;
-  netContribution: number;
-  materialId: bigint;
-};
+type MeasurementRecord = MeasurementDeltaRecord;
 
 function parseWorkerId(workerParam: string) {
   const digits = workerParam.replace(/\D/g, '');
@@ -110,46 +101,6 @@ function getWeekRange(weekKey: string) {
     start: weekStart.toLocaleDateString('pt-BR'),
     end: weekEnd.toLocaleDateString('pt-BR'),
   };
-}
-
-function calculateNetContributions(measurements: MeasurementRecord[]) {
-  const grouped = new Map<string, MeasurementRecord[]>();
-
-  measurements.forEach((measurement) => {
-    const dateKey = measurement.timestamp.toISOString().split('T')[0];
-    const key = `${dateKey}-${measurement.materialId.toString()}`;
-    const list = grouped.get(key) ?? [];
-    list.push(measurement);
-    grouped.set(key, list);
-  });
-
-  const processed: ProcessedMeasurement[] = [];
-
-  grouped.forEach((list) => {
-    list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    let previousWeight = 0;
-
-    list.forEach((measurement, index) => {
-      let net = index === 0 ? measurement.weight : measurement.weight - previousWeight;
-      if (measurement.bagFilled) {
-        const initialWeight = list[0]?.weight ?? 0;
-        net = measurement.weight - (index > 0 ? initialWeight : 0);
-      }
-
-      processed.push({
-        dateLabel: measurement.timestamp.toLocaleDateString('pt-BR'),
-        weight: measurement.weight,
-        bagFilled: measurement.bagFilled ? 'S' : 'N',
-        timestamp: measurement.timestamp,
-        netContribution: Math.max(0, net),
-        materialId: measurement.materialId,
-      });
-
-      previousWeight = measurement.weight;
-    });
-  });
-
-  return processed;
 }
 
 export async function GET(request: NextRequest) {
@@ -243,9 +194,9 @@ export async function GET(request: NextRequest) {
 
     const materialNameMap = new Map(materials.map((material) => [material.materialId, material.materialName]));
 
-    const processed = calculateNetContributions(measurements);
+    const processed: ProcessedDeltaMeasurement[] = processMeasurementDeltas(measurements);
 
-    const weeklyMap = new Map<string, ProcessedMeasurement[]>();
+    const weeklyMap = new Map<string, ProcessedDeltaMeasurement[]>();
     processed.forEach((measurement) => {
       const weekKey = getWeekKey(measurement.timestamp);
       const list = weeklyMap.get(weekKey) ?? [];
@@ -258,7 +209,7 @@ export async function GET(request: NextRequest) {
     Array.from(weeklyMap.entries())
       .sort(([a], [b]) => (a > b ? 1 : -1))
       .forEach(([weekKey, list]) => {
-        const materialsMap = new Map<string, ProcessedMeasurement[]>();
+        const materialsMap = new Map<string, ProcessedDeltaMeasurement[]>();
         list.forEach((measurement) => {
           const materialKey = measurement.materialId.toString();
           const materialList = materialsMap.get(materialKey) ?? [];

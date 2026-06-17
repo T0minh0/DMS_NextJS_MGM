@@ -9,6 +9,7 @@
     "check:visual-contract": "node scripts/check-visual-contract.mjs",
     "check:whitespace": "node scripts/check-whitespace.mjs",
     "db:seed:uat": "tsx prisma/seed.ts",
+    "stock:reconcile-orphan-measurements": "tsx scripts/reconcile-orphan-measurements-stock.ts",
     "lint": "eslint .",
     "prisma:validate": "node scripts/prisma-validate.mjs",
     "quality": "node scripts/check-quality.mjs",

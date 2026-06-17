@@ -3,21 +3,14 @@ import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin, requireScopedPermission } from '@/lib/auth/server';
 import { apiRouteErrorResponse } from '@/lib/api/errors';
 import { decimalToNumber } from '@/lib/db-utils';
+import {
+  sumDailyWorkerMaterialDeltas,
+  type WorkerMeasurementDeltaRecord,
+} from '@/lib/analytics/measurement-deltas';
 
-type MeasurementRecord = {
-  workerId: bigint;
-  materialId: bigint;
-  timestamp: Date;
-  weight: number;
-  bagFilled: boolean;
-};
+type MeasurementRecord = WorkerMeasurementDeltaRecord;
 
-type DailyContribution = {
-  workerId: bigint;
-  materialId: bigint;
-  date: string;
-  weight: number;
-};
+type DailyContribution = ReturnType<typeof sumDailyWorkerMaterialDeltas>[number];
 
 type WeeklyContribution = {
   workerId: bigint;
@@ -61,39 +54,6 @@ function getWeekRange(year: number, week: number) {
   };
 }
 
-function calculateDailyContributions(measurements: MeasurementRecord[]) {
-  const grouped = new Map<string, MeasurementRecord[]>();
-
-  measurements.forEach((measurement) => {
-    const dateKey = measurement.timestamp.toISOString().split('T')[0];
-    const key = `${measurement.workerId}|${measurement.materialId}|${dateKey}`;
-    const list = grouped.get(key) ?? [];
-    list.push(measurement);
-    grouped.set(key, list);
-  });
-
-  const contributions: DailyContribution[] = [];
-
-  grouped.forEach((list, key) => {
-    const [workerIdStr, materialIdStr, date] = key.split('|');
-    list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-    const filled = list.find((measurement) => measurement.bagFilled);
-    const weight = filled ? filled.weight : Math.max(...list.map((measurement) => measurement.weight));
-
-    if (weight > 0) {
-      contributions.push({
-        workerId: BigInt(workerIdStr),
-        materialId: BigInt(materialIdStr),
-        date,
-        weight,
-      });
-    }
-  });
-
-  return contributions;
-}
-
 export async function POST(request: Request) {
   try {
     const session = await requireAdmin();
@@ -124,7 +84,7 @@ export async function POST(request: Request) {
       bagFilled: Boolean(measurement.bagFilled),
     }));
 
-    const dailyContributions = calculateDailyContributions(measurements);
+    const dailyContributions: DailyContribution[] = sumDailyWorkerMaterialDeltas(measurements);
 
     const weeklyMap = new Map<string, WeeklyContribution>();
 

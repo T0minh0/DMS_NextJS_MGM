@@ -519,12 +519,6 @@ export default function HomePage() {
     [materialGroupFilter, materials],
   );
 
-  useEffect(() => {
-    if (!materialFilter) return;
-    if (filterableMaterials.some((material) => getMaterialId(material) === materialFilter)) return;
-    setMaterialFilter('');
-  }, [filterableMaterials, materialFilter]);
-
   const stockEntries = useMemo(() => (
     Object.entries(stockData)
       .filter(([, value]) => typeof value === 'number')
@@ -687,7 +681,10 @@ export default function HomePage() {
               <select
                 id="materialGroupFilter"
                 value={materialGroupFilter}
-                onChange={(event) => setMaterialGroupFilter(event.target.value)}
+                onChange={(event) => {
+                  setMaterialGroupFilter(event.target.value);
+                  setMaterialFilter('');
+                }}
                 className="h-11 w-full rounded-lg border border-outline bg-surface px-3 text-foreground focus:border-primary focus:ring-0"
               >
                 <option value="">Todos os grupos</option>

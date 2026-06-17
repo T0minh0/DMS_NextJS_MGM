@@ -148,7 +148,7 @@ function createFakeTx() {
           materialId,
           isBegun: false,
           currentKg: new Prisma.Decimal(0),
-          lastUpdated: new Date(),
+          lastUpdated: new Date('1970-01-01T00:00:00Z'),
         });
         nextBagStateId += BigInt(1);
       }
@@ -514,7 +514,7 @@ test('recordMaterialWeighing rejects stale non-full readings captured before a f
   assert.equal(formatDecimal(store.getStock(BigInt(100), BigInt(7))!.currentStockKg), '13.75');
 });
 
-test('recordMaterialWeighing rejects out-of-scope device and missing stock before mutating', async () => {
+test('recordMaterialWeighing rejects out-of-scope device before mutating', async () => {
   const deviceStore = createFakeTx();
   await assert.rejects(
     () =>
@@ -533,25 +533,25 @@ test('recordMaterialWeighing rejects out-of-scope device and missing stock befor
       error.status === 403,
   );
   assert.equal(deviceStore.measurements.length, 0);
+});
 
+test('recordMaterialWeighing creates stock when the first weighing arrives for a material', async () => {
   const stockStore = createFakeTx();
-  await assert.rejects(
-    () =>
-      recordMaterialWeighing(stockStore.tx, {
-        cooperativeId: BigInt(100),
-        materialId: BigInt(8),
-        workerId: BigInt(20),
-        amountKg: new Prisma.Decimal('5.00'),
-        bagFull: false,
-        measuredAt: new Date('2026-05-13T09:10:00Z'),
-        deviceId: BigInt(3),
-      }),
-    (error) =>
-      error instanceof MaterialDomainError &&
-      error.code === 'STOCK_MISSING' &&
-      error.status === 422,
-  );
-  assert.equal(stockStore.measurements.length, 0);
+  const result = await recordMaterialWeighing(stockStore.tx, {
+    cooperativeId: BigInt(100),
+    materialId: BigInt(8),
+    workerId: BigInt(20),
+    amountKg: new Prisma.Decimal('5.00'),
+    bagFull: true,
+    measuredAt: new Date('2026-05-13T09:10:00Z'),
+    deviceId: BigInt(3),
+  });
+
+  assert.equal(formatDecimal(result.collectedDeltaKg), '5.00');
+  assert.equal(formatDecimal(result.measurement.weightKg), '5.00');
+  assert.equal(formatDecimal(result.stockSnapshot!.currentStockKg), '5.00');
+  assert.equal(formatDecimal(stockStore.getStock(BigInt(100), BigInt(8))!.totalCollectedKg), '5.00');
+  assert.equal(formatDecimal(stockStore.getBag(BigInt(100), BigInt(8))!.currentKg), '0.00');
 });
 
 test('invalid JSON bodies map to 400-compatible API request errors', async () => {
@@ -673,5 +673,6 @@ test('material and stock route source exposes expected API and concurrency contr
   assert.match(stockRoute, /addManualStock/);
   assert.match(helper, /FOR UPDATE/);
   assert.match(helper, /ON CONFLICT \("cooperative_id", "material_id"\) DO NOTHING/);
-  assert.match(helper, /createIfMissing: false/);
+  assert.doesNotMatch(helper, /assertStockRowExists/);
+  assert.doesNotMatch(helper, /createIfMissing: false/);
 });

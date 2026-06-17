@@ -27,9 +27,10 @@ O mapa de papeis, jornadas e arquitetura de informacao fica em [[Planejamento/Jo
 | `/materials` | Materiais, estoque e pesagens sob gestao. | Busca, estado vazio, erro e dados de fixture. |
 | `/manage-workers` | Gestao de equipe e usuarios com minimizacao de PII. | Mascaramento, formulario, permissao negativa. |
 | `/worker-productivity` | Analytics de produtividade da equipe. | Filtro por periodo/trabalhador e estado sem dados. |
+| `/notices` | Avisos da cooperativa — CRUD completo com filtro, criacao, edicao e exclusao. Sanitizacao server-side obrigatoria. | Criar aviso, editar, excluir, filtrar por prioridade/ativo, estado vazio, permissao negativa. |
 | `/profile` | Perfil do usuario autenticado. | Leitura/edicao permitida e validacao de senha. |
 
-Novas rotas de avisos, vendas coletivas dedicadas ou relatorios devem entrar nesta tabela quando forem implementadas.
+> Atualizado em 2026-05-25: rota `/notices` adicionada — implementada na semana de 2026-05-19–2026-05-20 com API CRUD completa e UI de gestao.
 
 ## Tokens web oficiais
 

@@ -73,9 +73,9 @@ export async function GET(request: Request) {
 
   try {
     const session = await requireManagerOrAdmin();
-    const targetCooperativeId = determineTargetCooperative(session);
-    requireScopedPermission(session, 'stock', 'read', targetCooperativeId ? 'cooperative' : 'global');
     const { searchParams } = new URL(request.url);
+    const targetCooperativeId = determineTargetCooperative(session, searchParams.get('cooperative_id'));
+    requireScopedPermission(session, 'stock', 'read', targetCooperativeId ? 'cooperative' : 'global');
     const materialIdParam = searchParams.get('material_id');
 
     const materials = await prisma.materials.findMany({

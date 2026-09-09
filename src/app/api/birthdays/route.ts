@@ -6,7 +6,8 @@ import { apiRouteErrorResponse } from '@/lib/api/errors';
 export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
-    const targetCooperativeId = determineTargetCooperative(session);
+    const { searchParams } = new URL(request.url);
+    const targetCooperativeId = determineTargetCooperative(session, searchParams.get('cooperative_id'));
     requireScopedPermission(session, 'notices', 'read', targetCooperativeId ? 'cooperative' : 'global');
 
     const now = new Date();
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
     const birthdays = await prisma.workers.findMany({
       where: {
         userType: { in: ['1', 'W', 'w', 'C', 'c'] },
+        exitDate: null,
         ...(targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : {}),
       },
       select: {

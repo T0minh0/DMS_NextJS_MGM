@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const gamificationView = searchParams.get('view') === 'gamification';
     const teamManagementView = searchParams.get('view') === 'team-management';
-    const targetCooperativeId = determineTargetCooperative(session);
+    const targetCooperativeId = determineTargetCooperative(session, searchParams.get('cooperative_id'));
     const workers = await prisma.workers.findMany({
       where: targetCooperativeId ? { cooperative: BigInt(targetCooperativeId) } : undefined,
       orderBy: { workerName: 'asc' },

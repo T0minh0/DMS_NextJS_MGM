@@ -125,3 +125,43 @@ test('auth session route is manager/admin only and does not require database rea
   assert.match(source, /cooperative_name/);
   assert.doesNotMatch(source, /prisma/);
 });
+
+test('dashboard splits static and filter-dependent loads and scopes analytics by session cooperative', () => {
+  const source = readSource(PAGE);
+
+  assert.match(source, /loadStaticSections/);
+  assert.match(source, /loadFilteredSections/);
+  assert.match(source, /STATIC_SECTIONS/);
+  assert.match(source, /FILTERED_SECTIONS/);
+  assert.match(source, /sessionResolved/);
+  assert.match(source, /cooperative_id/);
+  assert.match(source, /stockParams\.set\('cooperative_id', sessionCooperativeId\)/);
+  assert.match(source, /workerCollectionsUrl\.set\('cooperative_id', sessionCooperativeId\)/);
+  assert.doesNotMatch(source, /price-fluctuation/);
+});
+
+test('dashboard counts only active wastepickers and reports sales honestly against material filters', () => {
+  const source = readSource(PAGE);
+
+  assert.match(source, /!worker\.exit_date/);
+  assert.match(source, /activeWorkers/);
+  assert.match(source, /Catadores ativos/);
+  assert.match(source, /status: 'ACTIVE', limit: '500'/);
+  assert.match(source, /Contagem sem filtro de material/);
+  assert.match(source, /Sem vendas no período/);
+  assert.match(source, /classifyStockLevel/);
+  assert.match(source, /@\/lib\/stock\/thresholds/);
+});
+
+test('dashboard renders token-driven charts with textual fallback for stock and revenue', () => {
+  const source = readSource(PAGE);
+
+  assert.match(source, /from '@\/components\/charts'/);
+  assert.match(source, /<BarChart/);
+  assert.match(source, /<LineChart/);
+  assert.match(source, /fallback="toggle"/);
+  assert.match(source, /unit="kg"/);
+  assert.match(source, /unit="R\$"/);
+  assert.match(source, /href: '\/dashboards'/);
+  assert.match(source, /href: '\/collections'/);
+});

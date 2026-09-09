@@ -92,10 +92,10 @@ function parseWorkerId(workerParam: string | null) {
 export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
-    const targetCooperativeId = determineTargetCooperative(session);
+    const { searchParams } = new URL(request.url);
+    const targetCooperativeId = determineTargetCooperative(session, searchParams.get('cooperative_id'));
     requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
 
-    const { searchParams } = new URL(request.url);
     const workerParam = searchParams.get('worker_id');
     const materialParam = searchParams.get('material_id');
     const periodType = (searchParams.get('period_type') as PeriodType) || 'monthly';

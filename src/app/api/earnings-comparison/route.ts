@@ -57,10 +57,10 @@ function formatPeriodLabel(periodType: PeriodType, start: Date, end: Date) {
 export async function GET(request: Request) {
   try {
     const session = await requireManagerOrAdmin();
-    const targetCooperativeId = determineTargetCooperative(session);
+    const { searchParams } = new URL(request.url);
+    const targetCooperativeId = determineTargetCooperative(session, searchParams.get('cooperative_id'));
     requireScopedPermission(session, 'reports', 'read', targetCooperativeId ? 'cooperative' : 'global');
 
-    const { searchParams } = new URL(request.url);
     const materialParam = searchParams.get('material_id');
     const periodType = (searchParams.get('period_type') as PeriodType) || 'monthly';
 
@@ -72,16 +72,22 @@ export async function GET(request: Request) {
     const now = new Date();
     const periods = [];
     const numberOfPeriods = 6;
+    // Calendar week (Sunday to Saturday), aligned with /api/worker-collections so
+    // "Semana" means the same bucket across the overview.
+    const currentWeekStart = new Date(now);
+    currentWeekStart.setDate(now.getDate() - now.getDay());
+    currentWeekStart.setHours(0, 0, 0, 0);
 
     for (let i = numberOfPeriods - 1; i >= 0; i -= 1) {
       let start: Date;
       let end: Date;
 
       if (periodType === 'weekly') {
-        end = new Date(now);
-        end.setDate(end.getDate() - i * 7);
-        start = new Date(end);
-        start.setDate(end.getDate() - 6);
+        start = new Date(currentWeekStart);
+        start.setDate(currentWeekStart.getDate() - i * 7);
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
       } else if (periodType === 'yearly') {
         const year = now.getFullYear() - i;
         start = new Date(year, 0, 1);

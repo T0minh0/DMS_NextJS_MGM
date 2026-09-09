@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import { LOW_STOCK_KG } from '@/lib/stock/thresholds';
 import {
   FaBoxes,
   FaCheckCircle,
@@ -74,7 +75,6 @@ type MaterialRow = Material & {
   status: StockStatus;
 };
 
-const LOW_STOCK_KG = 25;
 const fieldClass = 'block h-11 w-full rounded-lg border border-outline bg-surface px-3 text-foreground placeholder:text-text-secondary/45 focus:border-primary focus:ring-0 disabled:bg-surface-elevated disabled:text-text-secondary';
 const labelClass = 'mb-1 block text-sm font-medium text-text-secondary';
 

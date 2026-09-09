@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
+import { BarChart, LineChart } from '@/components/charts';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { SectionMessage } from '@/components/dashboard/SectionMessage';
+import { LOW_STOCK_KG, classifyStockLevel, type StockLevel } from '@/lib/stock/thresholds';
 import {
+  FaBalanceScale,
   FaBell,
   FaBoxOpen,
   FaCalendarAlt,
   FaChartLine,
+  FaChartPie,
   FaClipboardCheck,
   FaFilter,
   FaHandshake,
@@ -20,19 +24,17 @@ import {
 } from 'react-icons/fa';
 
 type PeriodFilter = 'weekly' | 'monthly' | 'yearly';
-type DashboardSection =
+type StaticSection =
   | 'session'
   | 'materials'
   | 'materialGroups'
   | 'workers'
-  | 'stock'
-  | 'earnings'
-  | 'workerCollections'
-  | 'priceFluctuation'
   | 'birthdays'
   | 'notices'
   | 'sales'
   | 'collectiveInvitations';
+type FilteredSection = 'stock' | 'earnings' | 'workerCollections';
+type DashboardSection = StaticSection | FilteredSection;
 
 interface SessionUser {
   id: string;
@@ -66,6 +68,7 @@ interface WorkerItem {
   worker_id?: string | number;
   full_name?: string;
   worker_name?: string;
+  exit_date?: string | null;
 }
 
 interface StockPayload {
@@ -93,13 +96,6 @@ interface WorkerCollectionsPayload {
   workers?: WorkerCollectionItem[];
   noData?: boolean;
   message?: string;
-}
-
-interface PriceFluctuationPayload {
-  noData?: boolean;
-  message?: string;
-  materials?: string[];
-  priceData?: Array<Record<string, unknown>>;
 }
 
 interface BirthdayItem {
@@ -138,27 +134,49 @@ interface RequestError extends Error {
   status?: number;
 }
 
-const LOW_STOCK_KG = 25;
+interface StockEntry {
+  key: string;
+  label: string;
+  weightKg: number;
+  level: StockLevel;
+}
+
+const STATIC_SECTIONS: StaticSection[] = [
+  'session',
+  'materials',
+  'materialGroups',
+  'workers',
+  'birthdays',
+  'notices',
+  'sales',
+  'collectiveInvitations',
+];
+
+const FILTERED_SECTIONS: FilteredSection[] = ['stock', 'earnings', 'workerCollections'];
 
 const initialLoading: Record<DashboardSection, boolean> = {
   session: true,
   materials: true,
   materialGroups: true,
   workers: true,
-  stock: true,
-  earnings: true,
-  workerCollections: true,
-  priceFluctuation: true,
   birthdays: true,
   notices: true,
   sales: true,
   collectiveInvitations: true,
+  stock: true,
+  earnings: true,
+  workerCollections: true,
 };
 
 const periodLabels: Record<PeriodFilter, string> = {
   weekly: 'Semana',
   monthly: 'Mês',
   yearly: 'Ano',
+};
+
+const stockLevelCopy: Record<Exclude<StockLevel, 'stable'>, string> = {
+  empty: 'Sem saldo em estoque.',
+  critical: `Estoque abaixo de ${LOW_STOCK_KG} kg.`,
 };
 
 function formatCurrency(value: number) {
@@ -200,9 +218,23 @@ function asArray<T>(value: unknown, keys: string[] = []) {
   return [];
 }
 
+function getEarningsValue(item: EarningsItem | undefined) {
+  return Number(item?.earnings ?? item?.total_revenue ?? item?.revenue ?? 0);
+}
+
 function getLatestEarnings(items: EarningsItem[]) {
-  const latest = items.at(-1);
-  return Number(latest?.earnings ?? latest?.total_revenue ?? latest?.revenue ?? 0);
+  return getEarningsValue(items.at(-1));
+}
+
+function sectionsToRecord<T extends DashboardSection>(sections: T[], value: boolean) {
+  return Object.fromEntries(sections.map((section) => [section, value])) as Record<T, boolean>;
+}
+
+function describeRejection(result: PromiseSettledResult<unknown>) {
+  if (result.status !== 'rejected') return undefined;
+  return result.reason instanceof Error
+    ? result.reason.message
+    : 'Leitura indisponível para esta seção.';
 }
 
 export default function HomePage() {
@@ -211,13 +243,13 @@ export default function HomePage() {
   const [materialGroupFilter, setMaterialGroupFilter] = useState('');
   const [workerFilter, setWorkerFilter] = useState('');
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [materialGroups, setMaterialGroups] = useState<MaterialGroupItem[]>([]);
   const [workers, setWorkers] = useState<WorkerItem[]>([]);
   const [stockData, setStockData] = useState<StockPayload>({});
   const [earningsData, setEarningsData] = useState<EarningsItem[]>([]);
   const [workerCollections, setWorkerCollections] = useState<WorkerCollectionsPayload>({});
-  const [priceFluctuation, setPriceFluctuation] = useState<PriceFluctuationPayload>({});
   const [birthdays, setBirthdays] = useState<BirthdayItem[]>([]);
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [sales, setSales] = useState<SaleItem[]>([]);
@@ -246,140 +278,106 @@ export default function HomePage() {
     return '';
   }, [materialFilter, materialGroupFilter]);
 
-  const loadDashboard = useCallback(async () => {
-    const requestId = dashboardRequestSeq.current + 1;
-    dashboardRequestSeq.current = requestId;
+  const sessionCooperativeId = sessionUser?.cooperative_id ?? '';
 
-    setLoading(initialLoading);
-    setErrors({});
+  const setSectionErrors = useCallback(
+    (sections: DashboardSection[], nextErrors: Partial<Record<DashboardSection, string>>) => {
+      setErrors((current) => {
+        const merged = { ...current };
+        sections.forEach((section) => {
+          delete merged[section];
+        });
+        return { ...merged, ...nextErrors };
+      });
+    },
+    [],
+  );
 
-    const stockUrl = effectiveMaterialFilter
-      ? `/api/stock?material_id=${encodeURIComponent(effectiveMaterialFilter)}`
-      : '/api/stock';
-    const earningsUrl = effectiveMaterialFilter
-      ? `/api/earnings-comparison?period_type=${periodFilter}&material_id=${encodeURIComponent(effectiveMaterialFilter)}`
-      : `/api/earnings-comparison?period_type=${periodFilter}`;
-    const workerCollectionsUrl = new URLSearchParams({
-      period_type: periodFilter,
-    });
+  /**
+   * Static sections depend only on the session (catalog, team, notices, sales,
+   * invitations, birthdays). They load once on mount and on manual refresh so
+   * period/material filters never make them flicker.
+   */
+  const loadStaticSections = useCallback(async () => {
+    setLoading((current) => ({ ...current, ...sectionsToRecord(STATIC_SECTIONS, true) }));
 
-    if (workerFilter) workerCollectionsUrl.set('worker_id', workerFilter);
-    if (effectiveMaterialFilter) workerCollectionsUrl.set('material_id', effectiveMaterialFilter);
+    const nextErrors: Partial<Record<DashboardSection, string>> = {};
+    let cooperativeId = '';
+
+    try {
+      const session = await fetchJson<SessionUser>('/api/auth/session');
+      setSessionUser(session);
+      cooperativeId = session.cooperative_id ?? '';
+    } catch (error) {
+      setSessionUser(null);
+      nextErrors.session = error instanceof Error ? error.message : 'Sessão indisponível.';
+    }
+
+    const scoped = (path: string, extra?: Record<string, string>) => {
+      const params = new URLSearchParams(extra);
+      if (cooperativeId) params.set('cooperative_id', cooperativeId);
+      const query = params.toString();
+      return query ? `${path}?${query}` : path;
+    };
 
     const [
-      sessionResult,
       materialsResult,
       materialGroupsResult,
       workersResult,
-      stockResult,
-      earningsResult,
-      workerCollectionsResult,
-      priceFluctuationResult,
       birthdaysResult,
       noticesResult,
       salesResult,
       collectiveInvitationsResult,
     ] = await Promise.allSettled([
-      fetchJson<SessionUser>('/api/auth/session'),
       fetchJson<unknown>('/api/materials'),
       fetchJson<unknown>('/api/material-groups'),
-      fetchJson<unknown>('/api/users'),
-      fetchJson<StockPayload>(stockUrl),
-      fetchJson<unknown>(earningsUrl),
-      fetchJson<WorkerCollectionsPayload>(`/api/worker-collections?${workerCollectionsUrl.toString()}`),
-      fetchJson<PriceFluctuationPayload>(
-        effectiveMaterialFilter
-          ? `/api/price-fluctuation?material_id=${encodeURIComponent(effectiveMaterialFilter)}`
-          : '/api/price-fluctuation',
-      ),
-      fetchJson<unknown>('/api/birthdays'),
+      fetchJson<unknown>(scoped('/api/users')),
+      fetchJson<unknown>(scoped('/api/birthdays')),
       fetchJson<unknown>('/api/notices'),
-      fetchJson<unknown>('/api/sales'),
+      fetchJson<unknown>(scoped('/api/sales', { status: 'ACTIVE', limit: '500' })),
       fetchJson<unknown>('/api/collective-sales/invitations'),
     ]);
-
-    const nextErrors: Partial<Record<DashboardSection, string>> = {};
-    const markError = (key: DashboardSection, result: PromiseSettledResult<unknown>) => {
-      if (result.status === 'rejected') {
-        nextErrors[key] = result.reason instanceof Error
-          ? result.reason.message
-          : 'Leitura indisponível para esta seção.';
-      }
-    };
-
-    if (requestId !== dashboardRequestSeq.current) return;
-
-    if (sessionResult.status === 'fulfilled') setSessionUser(sessionResult.value);
-    else {
-      setSessionUser(null);
-      markError('session', sessionResult);
-    }
 
     if (materialsResult.status === 'fulfilled') {
       setMaterials(asArray<MaterialItem>(materialsResult.value, ['materials', 'data']));
     } else {
       setMaterials([]);
-      markError('materials', materialsResult);
+      nextErrors.materials = describeRejection(materialsResult);
     }
 
     if (materialGroupsResult.status === 'fulfilled') {
       setMaterialGroups(asArray<MaterialGroupItem>(materialGroupsResult.value, ['groups', 'data']));
     } else {
       setMaterialGroups([]);
-      markError('materialGroups', materialGroupsResult);
+      nextErrors.materialGroups = describeRejection(materialGroupsResult);
     }
 
     if (workersResult.status === 'fulfilled') {
       setWorkers(asArray<WorkerItem>(workersResult.value, ['workers', 'data']));
     } else {
       setWorkers([]);
-      markError('workers', workersResult);
-    }
-
-    if (stockResult.status === 'fulfilled') setStockData(stockResult.value);
-    else {
-      setStockData({});
-      markError('stock', stockResult);
-    }
-
-    if (earningsResult.status === 'fulfilled') {
-      setEarningsData(asArray<EarningsItem>(earningsResult.value, ['earnings', 'data']));
-    } else {
-      setEarningsData([]);
-      markError('earnings', earningsResult);
-    }
-
-    if (workerCollectionsResult.status === 'fulfilled') setWorkerCollections(workerCollectionsResult.value);
-    else {
-      setWorkerCollections({});
-      markError('workerCollections', workerCollectionsResult);
-    }
-
-    if (priceFluctuationResult.status === 'fulfilled') setPriceFluctuation(priceFluctuationResult.value);
-    else {
-      setPriceFluctuation({});
-      markError('priceFluctuation', priceFluctuationResult);
+      nextErrors.workers = describeRejection(workersResult);
     }
 
     if (birthdaysResult.status === 'fulfilled') {
       setBirthdays(asArray<BirthdayItem>(birthdaysResult.value, ['birthdays', 'data']));
     } else {
       setBirthdays([]);
-      markError('birthdays', birthdaysResult);
+      nextErrors.birthdays = describeRejection(birthdaysResult);
     }
 
     if (noticesResult.status === 'fulfilled') {
       setNotices(asArray<NoticeItem>(noticesResult.value, ['notices', 'data']));
     } else {
       setNotices([]);
-      markError('notices', noticesResult);
+      nextErrors.notices = describeRejection(noticesResult);
     }
 
     if (salesResult.status === 'fulfilled') {
       setSales(asArray<SaleItem>(salesResult.value, ['sales', 'data']));
     } else {
       setSales([]);
-      markError('sales', salesResult);
+      nextErrors.sales = describeRejection(salesResult);
     }
 
     if (collectiveInvitationsResult.status === 'fulfilled') {
@@ -388,33 +386,100 @@ export default function HomePage() {
       );
     } else {
       setCollectiveInvitations([]);
-      markError('collectiveInvitations', collectiveInvitationsResult);
+      nextErrors.collectiveInvitations = describeRejection(collectiveInvitationsResult);
     }
 
-    setErrors(nextErrors);
-    setLoading({
-      session: false,
-      materials: false,
-      materialGroups: false,
-      workers: false,
-      stock: false,
-      earnings: false,
-      workerCollections: false,
-      priceFluctuation: false,
-      birthdays: false,
-      notices: false,
-      sales: false,
-      collectiveInvitations: false,
+    setSectionErrors(STATIC_SECTIONS, nextErrors);
+    setLoading((current) => ({ ...current, ...sectionsToRecord(STATIC_SECTIONS, false) }));
+    setSessionResolved(true);
+  }, [fetchJson, setSectionErrors]);
+
+  /**
+   * Filtered sections react to period/material/team filters. A request
+   * sequence guards against stale responses landing after a newer filter.
+   */
+  const loadFilteredSections = useCallback(async () => {
+    const requestId = dashboardRequestSeq.current + 1;
+    dashboardRequestSeq.current = requestId;
+
+    setLoading((current) => ({ ...current, ...sectionsToRecord(FILTERED_SECTIONS, true) }));
+
+    const stockParams = new URLSearchParams();
+    if (effectiveMaterialFilter) stockParams.set('material_id', effectiveMaterialFilter);
+    if (sessionCooperativeId) stockParams.set('cooperative_id', sessionCooperativeId);
+    const stockQuery = stockParams.toString();
+    const stockUrl = stockQuery ? `/api/stock?${stockQuery}` : '/api/stock';
+
+    const earningsUrl = effectiveMaterialFilter
+      ? `/api/earnings-comparison?period_type=${periodFilter}&material_id=${encodeURIComponent(effectiveMaterialFilter)}`
+      : `/api/earnings-comparison?period_type=${periodFilter}`;
+    const scopedEarningsUrl = sessionCooperativeId
+      ? `${earningsUrl}&cooperative_id=${encodeURIComponent(sessionCooperativeId)}`
+      : earningsUrl;
+
+    const workerCollectionsUrl = new URLSearchParams({
+      period_type: periodFilter,
     });
-  }, [effectiveMaterialFilter, fetchJson, periodFilter, workerFilter]);
+
+    if (workerFilter) workerCollectionsUrl.set('worker_id', workerFilter);
+    if (effectiveMaterialFilter) workerCollectionsUrl.set('material_id', effectiveMaterialFilter);
+    if (sessionCooperativeId) workerCollectionsUrl.set('cooperative_id', sessionCooperativeId);
+
+    const [stockResult, earningsResult, workerCollectionsResult] = await Promise.allSettled([
+      fetchJson<StockPayload>(stockUrl),
+      fetchJson<unknown>(scopedEarningsUrl),
+      fetchJson<WorkerCollectionsPayload>(`/api/worker-collections?${workerCollectionsUrl.toString()}`),
+    ]);
+
+    if (requestId !== dashboardRequestSeq.current) return;
+
+    const nextErrors: Partial<Record<DashboardSection, string>> = {};
+
+    if (stockResult.status === 'fulfilled') setStockData(stockResult.value);
+    else {
+      setStockData({});
+      nextErrors.stock = describeRejection(stockResult);
+    }
+
+    if (earningsResult.status === 'fulfilled') {
+      setEarningsData(asArray<EarningsItem>(earningsResult.value, ['earnings', 'data']));
+    } else {
+      setEarningsData([]);
+      nextErrors.earnings = describeRejection(earningsResult);
+    }
+
+    if (workerCollectionsResult.status === 'fulfilled') setWorkerCollections(workerCollectionsResult.value);
+    else {
+      setWorkerCollections({});
+      nextErrors.workerCollections = describeRejection(workerCollectionsResult);
+    }
+
+    setSectionErrors(FILTERED_SECTIONS, nextErrors);
+    setLoading((current) => ({ ...current, ...sectionsToRecord(FILTERED_SECTIONS, false) }));
+  }, [effectiveMaterialFilter, fetchJson, periodFilter, sessionCooperativeId, setSectionErrors, workerFilter]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void loadDashboard();
+      void loadStaticSections();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [loadDashboard]);
+  }, [loadStaticSections]);
+
+  useEffect(() => {
+    if (!sessionResolved) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      void loadFilteredSections();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadFilteredSections, sessionResolved]);
+
+  const refreshDashboard = useCallback(() => {
+    void loadStaticSections();
+    void loadFilteredSections();
+  }, [loadFilteredSections, loadStaticSections]);
 
   const materialNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -432,8 +497,12 @@ export default function HomePage() {
     )),
     [materialGroupFilter, materials],
   );
+  const activeWorkers = useMemo(
+    () => workers.filter((worker) => !worker.exit_date),
+    [workers],
+  );
 
-  const stockEntries = useMemo(() => (
+  const stockEntries = useMemo<StockEntry[]>(() => (
     Object.entries(stockData)
       .filter(([, value]) => typeof value === 'number')
       .map(([key, value]) => {
@@ -441,34 +510,42 @@ export default function HomePage() {
         const label = key.startsWith('Material ')
           ? materialNameById.get(materialId) || key
           : key;
+        const weightKg = Number(value);
 
         return {
           key,
           label,
-          weightKg: Number(value),
+          weightKg,
+          level: classifyStockLevel(weightKg),
         };
       })
       .sort((left, right) => right.weightKg - left.weightKg)
   ), [materialNameById, stockData]);
 
   const totalStock = stockEntries.reduce((total, item) => total + item.weightKg, 0);
-  const criticalStock = stockEntries
-    .filter((item) => item.weightKg <= LOW_STOCK_KG)
+  const attentionStock = stockEntries
+    .filter((item) => item.level !== 'stable')
     .sort((left, right) => left.weightKg - right.weightKg);
+  const topStock = stockEntries.slice(0, 8);
+  const hasEarnings = earningsData.length > 0;
   const currentEarnings = getLatestEarnings(earningsData);
-  const activeSales = sales.filter((sale) => !sale.sold_at && !sale.cancelled_at && sale.status !== 'SOLD');
+  const activeSales = sales.filter((sale) => (
+    sale.status === 'ACTIVE' || (!sale.sold_at && !sale.cancelled_at && sale.status !== 'SOLD')
+  ));
   const priorityNotices = notices
     .filter((notice) => Number(notice.priority ?? 0) >= 3)
     .slice(0, 3);
   const workerCollectionRows = workerCollections.data ?? workerCollections.workers ?? [];
   const visibleWorkerCollections = workerCollectionRows.slice(0, 5);
-  const pendingCount = criticalStock.length + collectiveInvitations.length + priorityNotices.length;
+  const pendingCount = attentionStock.length + collectiveInvitations.length + priorityNotices.length;
   const operationalErrorCount = Object.keys(errors).filter((key) => key !== 'session').length;
+  const hasMaterialFilter = Boolean(effectiveMaterialFilter);
   const materialFilterLabel = materialFilter
     ? materialNameById.get(materialFilter) || 'Material selecionado'
     : materialGroupFilter
       ? `Grupo ${materialGroupFilter}`
       : 'Todos os materiais';
+  const invitationsDetail = `${collectiveInvitations.length} convites coletivos aguardando decisão.`;
 
   return (
     <Layout activePath="/">
@@ -490,7 +567,7 @@ export default function HomePage() {
               </div>
               <div className="flex flex-wrap gap-2 text-xs text-text-secondary">
                 <span className="rounded-full border border-outline/70 bg-surface px-3 py-1">
-                  {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date())}
+                  {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full', timeZone: 'America/Sao_Paulo' }).format(new Date())}
                 </span>
                 <span className="rounded-full border border-outline/70 bg-surface px-3 py-1">
                   {sessionUser?.cooperative_name || 'Cooperativa definida pela sessão'}
@@ -574,8 +651,8 @@ export default function HomePage() {
                 onChange={(event) => setWorkerFilter(event.target.value)}
                 className="h-11 w-full rounded-lg border border-outline bg-surface px-3 text-foreground focus:border-primary focus:ring-0"
               >
-                <option value="">Todos os integrantes</option>
-                {workers.map((worker) => {
+                <option value="">Todos os catadores ativos</option>
+                {activeWorkers.map((worker) => {
                   const id = String(worker.id ?? worker._id ?? worker.worker_id ?? '');
                   if (!id) return null;
 
@@ -617,7 +694,7 @@ export default function HomePage() {
             </p>
             <button
               type="button"
-              onClick={() => void loadDashboard()}
+              onClick={refreshDashboard}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-primary/35 bg-primary px-4 text-sm font-semibold text-background shadow-glow hover:bg-primary/90"
             >
               <FaRedo className="h-4 w-4" />
@@ -629,28 +706,28 @@ export default function HomePage() {
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             title="Receita do período"
-            value={loading.earnings ? 'Carregando' : formatCurrency(currentEarnings)}
-            detail="Valor consolidado pelo recorte selecionado."
+            value={loading.earnings ? 'Carregando' : hasEarnings ? formatCurrency(currentEarnings) : 'Sem vendas'}
+            detail={hasEarnings ? 'Valor consolidado pelo recorte selecionado.' : 'Sem vendas no período selecionado.'}
             icon={FaChartLine}
             tone="success"
           />
           <MetricCard
             title="Estoque total"
             value={loading.stock ? 'Carregando' : `${formatWeight(totalStock)} kg`}
-            detail={`${criticalStock.length} materiais em atenção operacional.`}
+            detail={`${attentionStock.length} materiais em atenção operacional.`}
             icon={FaWarehouse}
           />
           <MetricCard
             title="Vendas ativas"
             value={loading.sales ? 'Carregando' : formatInteger(activeSales.length)}
-            detail={`${collectiveInvitations.length} convites coletivos aguardando decisão.`}
+            detail={hasMaterialFilter ? `Contagem sem filtro de material · ${invitationsDetail}` : invitationsDetail}
             icon={FaShoppingCart}
             tone="secondary"
           />
           <MetricCard
-            title="Equipe listada"
-            value={loading.workers ? 'Carregando' : formatInteger(workers.length)}
-            detail="Integrantes retornados pelo escopo da sessão."
+            title="Catadores ativos"
+            value={loading.workers ? 'Carregando' : formatInteger(activeWorkers.length)}
+            detail="Catadores ativos na cooperativa, sem desligados."
             icon={FaUsers}
             tone="warning"
           />
@@ -674,17 +751,19 @@ export default function HomePage() {
               <SectionMessage
                 loading={loading.stock}
                 error={errors.stock}
-                empty={criticalStock.length === 0}
+                empty={attentionStock.length === 0}
                 emptyTitle="Nenhum estoque crítico no recorte"
                 emptyDescription="Os materiais carregados estão acima do limite operacional de atenção."
               >
                 <div className="space-y-3">
-                  {criticalStock.slice(0, 5).map((item) => (
+                  {attentionStock.slice(0, 5).map((item) => (
                     <div key={item.key} className="rounded-lg border border-warning/35 bg-warning/10 px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-foreground">{item.label}</p>
-                          <p className="mt-1 text-xs text-text-secondary">Estoque abaixo de {LOW_STOCK_KG} kg.</p>
+                          <p className="mt-1 text-xs text-text-secondary">
+                            {item.level === 'empty' ? stockLevelCopy.empty : stockLevelCopy.critical}
+                          </p>
                         </div>
                         <span className="shrink-0 text-sm font-semibold text-warning">
                           {formatWeight(item.weightKg)} kg
@@ -741,9 +820,11 @@ export default function HomePage() {
 
             <div className="mt-5 space-y-3">
               {[
+                { href: '/collections', label: 'Registrar coleta', icon: FaBalanceScale },
                 { href: '/materials', label: 'Revisar materiais e estoque', icon: FaBoxOpen },
                 { href: '/sales', label: 'Acompanhar vendas', icon: FaShoppingCart },
                 { href: '/collective-sales', label: 'Responder convites coletivos', icon: FaHandshake },
+                { href: '/dashboards', label: 'Ver dashboards e relatórios em PDF', icon: FaChartPie },
                 { href: '/notices', label: 'Ver avisos relevantes', icon: FaBell },
               ].map((action) => (
                 <Link
@@ -763,7 +844,7 @@ export default function HomePage() {
           <div className="surface-panel rounded-xl p-6">
             <h2 className="text-lg font-semibold text-foreground">Estoque por material</h2>
             <p className="mt-1 text-sm text-text-secondary">
-              Leitura rápida dos saldos retornados pelo escopo atual.
+              Leitura rápida dos saldos retornados pelo escopo atual, em quilogramas.
             </p>
 
             <div className="mt-5">
@@ -774,23 +855,16 @@ export default function HomePage() {
                 emptyTitle="Sem estoque carregado"
                 emptyDescription={stockData.message || 'A API não retornou saldos para este recorte.'}
               >
-                <div className="space-y-3">
-                  {stockEntries.slice(0, 8).map((item) => {
-                    const percent = totalStock > 0 ? Math.max(6, Math.round((item.weightKg / totalStock) * 100)) : 0;
-
-                    return (
-                      <div key={item.key}>
-                        <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-                          <span className="truncate text-foreground">{item.label}</span>
-                          <span className="shrink-0 font-semibold text-text-secondary">{formatWeight(item.weightKg)} kg</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-surface-elevated">
-                          <div className="h-2 rounded-full bg-primary" style={{ width: `${percent}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <BarChart
+                  horizontal
+                  title="Estoque atual dos principais materiais"
+                  unit="kg"
+                  labels={topStock.map((item) => item.label)}
+                  datasets={[{ label: 'Estoque atual', data: topStock.map((item) => item.weightKg) }]}
+                  ariaLabel="Gráfico de barras horizontais com o estoque atual dos principais materiais em quilogramas"
+                  height={Math.max(180, topStock.length * 34)}
+                  fallback="toggle"
+                />
               </SectionMessage>
             </div>
           </div>
@@ -803,18 +877,29 @@ export default function HomePage() {
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <SectionMessage
-                loading={loading.earnings || loading.priceFluctuation}
-                error={errors.earnings || errors.priceFluctuation}
-                empty={earningsData.length === 0 && !priceFluctuation.materials?.length}
+                loading={loading.earnings}
+                error={errors.earnings}
+                empty={!hasEarnings}
                 emptyTitle="Sem série financeira"
-                emptyDescription="Selecione outro período ou material para revisar a variação disponível."
+                emptyDescription="Sem vendas no período. Selecione outro período ou material para revisar a variação disponível."
               >
-                <div className="rounded-lg border border-outline/70 bg-surface px-4 py-4">
-                  <p className="text-xs uppercase text-text-secondary">Última receita lida</p>
-                  <p className="mt-2 text-xl font-semibold text-foreground">{formatCurrency(currentEarnings)}</p>
-                  <p className="mt-2 text-sm text-text-secondary">
-                    {earningsData.at(-1)?.period || 'Período atual'} · {materialFilterLabel}
-                  </p>
+                <div className="space-y-4">
+                  <LineChart
+                    title="Receita por período"
+                    unit="R$"
+                    labels={earningsData.map((item, index) => item.period || `Período ${index + 1}`)}
+                    datasets={[{ label: 'Receita', data: earningsData.map(getEarningsValue), tone: 'success' }]}
+                    ariaLabel="Gráfico de linha com a receita consolidada dos últimos períodos"
+                    height={200}
+                    fallback="toggle"
+                  />
+                  <div className="rounded-lg border border-outline/70 bg-surface px-4 py-4">
+                    <p className="text-xs uppercase text-text-secondary">Última receita lida</p>
+                    <p className="mt-2 text-xl font-semibold text-foreground">{formatCurrency(currentEarnings)}</p>
+                    <p className="mt-2 text-sm text-text-secondary">
+                      {earningsData.at(-1)?.period || 'Período atual'} · {materialFilterLabel}
+                    </p>
+                  </div>
                 </div>
               </SectionMessage>
 

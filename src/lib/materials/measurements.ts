@@ -362,6 +362,33 @@ async function assertMaterialWorkerDevice(
   }
 }
 
+/**
+ * Resolves the device row used to attribute weighings registered without a
+ * physical scale (web portal, historical import). Mirrors the mobile backend:
+ * reuse the cooperative's first device, creating one when none exists.
+ */
+export async function resolveCooperativeDevice(
+  tx: Prisma.TransactionClient,
+  cooperativeId: bigint,
+) {
+  const existing = await tx.devices.findFirst({
+    where: { cooperativeId },
+    orderBy: { deviceId: 'asc' },
+    select: { deviceId: true },
+  });
+
+  if (existing) {
+    return existing.deviceId;
+  }
+
+  const created = await tx.devices.create({
+    data: { cooperativeId },
+    select: { deviceId: true },
+  });
+
+  return created.deviceId;
+}
+
 function mapStockError(error: unknown): never {
   if (error instanceof StockDomainError && error.code === 'STOCK_MISSING') {
     throw new MaterialDomainError(

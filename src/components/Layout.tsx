@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isGamificationUiEnabled } from '@/lib/features/gamification';
 import {
+  FaBalanceScale,
   FaBell,
   FaBox,
   FaChartBar,
+  FaChartPie,
   FaHome,
   FaHandshake,
   FaShoppingCart,
@@ -53,10 +55,12 @@ const navItems: Array<{
 }> = [
   { href: '/', icon: FaHome, label: 'Visão geral', roles: MANAGER_NAV_ROLES },
   { href: '/materials', icon: FaBox, label: 'Materiais e estoque', roles: MANAGER_NAV_ROLES },
+  { href: '/collections', icon: FaBalanceScale, label: 'Coletas', roles: MANAGER_NAV_ROLES },
   { href: '/sales', icon: FaShoppingCart, label: 'Vendas', roles: MANAGER_NAV_ROLES },
   { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas', roles: MANAGER_NAV_ROLES },
   { href: '/manage-workers', icon: FaUsers, label: 'Equipe', roles: MANAGER_NAV_ROLES },
   { href: '/worker-productivity', icon: FaChartBar, label: 'Produtividade', roles: MANAGER_NAV_ROLES },
+  { href: '/dashboards', icon: FaChartPie, label: 'Dashboards', roles: MANAGER_NAV_ROLES },
   {
     href: '/gamification',
     icon: FaTrophy,

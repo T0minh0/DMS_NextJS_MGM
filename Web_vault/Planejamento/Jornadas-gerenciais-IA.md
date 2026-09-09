@@ -14,10 +14,10 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 
 | Papel de produto | Mapeamento atual | Escopo | Rotas alvo | Acoes permitidas | Dados visiveis | Testes negativos obrigatorios |
 | --- | --- | --- | --- | --- | --- | --- |
-| Admin do sistema | `admin` | Global e por cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, futuras `/notices`, `/reports`, area admin/dev | Configurar cooperativas, materiais globais, usuarios, recalc, debug dev-only, leitura e suporte cross-cooperativa | Dados operacionais globais; PII apenas quando necessario para suporte ou cadastro | Manager nao acessa acoes globais; usuario sem sessao recebe `401`/redirect; debug exige admin e flag/dev quando aplicavel |
-| Gerente da cooperativa | `manager` | Somente propria cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, futuras `/notices`, `/reports` | Acompanhar painel, estoque, vendas, equipe, produtividade, avisos e relatorios da cooperativa | Dados da propria cooperativa com documentos mascarados em listagens; detalhe completo apenas em edicao/perfil autorizado | Nao ve outra cooperativa; nao executa recalc/debug global; nao cria recurso admin-only sem permissao server-side |
+| Admin do sistema | `admin` | Global e por cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, `/notices`, `/collections`, `/dashboards`, area admin/dev (`/admin/onboarding`) | Configurar cooperativas, materiais globais, usuarios, recalc, debug dev-only, leitura e suporte cross-cooperativa | Dados operacionais globais; PII apenas quando necessario para suporte ou cadastro | Manager nao acessa acoes globais; usuario sem sessao recebe `401`/redirect; debug exige admin e flag/dev quando aplicavel |
+| Gerente da cooperativa | `manager` | Somente propria cooperativa | `/`, `/materials`, `/sales`, `/manage-workers`, `/worker-productivity`, `/profile`, `/notices`, `/collections`, `/dashboards` | Acompanhar painel, estoque, vendas, equipe, produtividade, avisos e relatorios da cooperativa | Dados da propria cooperativa com documentos mascarados em listagens; detalhe completo apenas em edicao/perfil autorizado | Nao ve outra cooperativa; nao executa recalc/debug global; nao cria recurso admin-only sem permissao server-side |
 | Operador interno / gestao operacional | Gap: hoje cairia em `manager` | Propria cooperativa, subconjunto operacional | `/`, `/materials`, `/sales`, futuras filas de pendencias | Registrar pesagens/ajustes operacionais, acompanhar venda e estoque, resolver pendencias atribuidas | Dados operacionais sem PII completa e sem configuracao sensivel | Nao gerencia usuarios, PII, cooperativas, debug ou relatorios financeiros completos |
-| Visualizador de relatorios | Gap: hoje cairia em `manager` | Propria cooperativa, leitura | `/`, futuras `/reports`, subconjunto de `/sales` e `/worker-productivity` | Filtrar, exportar e baixar relatorios aprovados | KPIs, relatorios e PDFs sem dados pessoais desnecessarios | Mutacoes em venda, estoque, usuario, aviso e admin retornam `403`; botoes de escrita nao aparecem |
+| Visualizador de relatorios | Gap: hoje cairia em `manager` | Propria cooperativa, leitura | `/`, `/dashboards`, subconjunto de `/sales` e `/worker-productivity` | Filtrar, exportar e baixar relatorios aprovados | KPIs, relatorios e PDFs sem dados pessoais desnecessarios | Mutacoes em venda, estoque, usuario, aviso e admin retornam `403`; botoes de escrita nao aparecem |
 | Suporte tecnico autorizado | Gap: hoje cairia em `admin` | Auditado, temporario e minimizado | Futura area admin/dev, `/profile`; acesso operacional sob break-glass | Diagnosticar incidente, ler logs/healthchecks, acionar ferramentas dev-only com trilha | Minimo necessario; PII redigida por padrao | Sem feature flag ou janela ativa, suporte nao acessa debug; acesso cross-cooperativa exige trilha e motivo |
 | Worker / catador | `worker`, mas login web rejeita | Self/mobile-first | Web nao primaria; API self futura/mobile | Consultar apenas dados proprios em experiencias apropriadas | Somente dados proprios | Login web deve continuar rejeitando worker; rotas gerenciais nao podem ser expostas por navegacao |
 
@@ -33,7 +33,9 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 | `/manage-workers` | Gerir usuarios por cooperativa/global | Tela usa `/api/users`; S5-05 ainda deve minimizar PII e refinar UX cooperativa. | Sem acesso ou leitura limitada | Sem acesso | Redigido/auditado | Nao primario | Mascara PII, criar/editar usuario, negar outra cooperativa |
 | `/worker-productivity` | Global/filtrado | Equipe propria | Equipe propria sem PII completa | Leitura agregada | Diagnostico | Nao primario | Filtro periodo/trabalhador, estado sem dados, worker fora de escopo negado |
 | Futura `/notices` | Avisos globais e cooperativa | Avisos da cooperativa | Publicar operacional se permitido | Leitura | Diagnostico | Nao primario | Sanitizacao, escopo global/cooperativa, payload XSS negativo |
-| Futura `/reports` | Relatorios globais/filtrados | Relatorios da cooperativa | Relatorios operacionais | Export/PDF leitura | Diagnostico | Nao primario | JSON/PDF, `no-store`, filename seguro, cross-coop negado |
+| `/collections` Coletas | Registrar/ler coletas por cooperativa | Registrar coleta em nome do catador da propria cooperativa | Operar pesagens permitidas | Leitura | Diagnostico | Redirecionado | Registrar coleta (leitura acumulada + saco cheio), leitura regressiva 422, catador de outra cooperativa negado, worker redirecionado |
+| `/dashboards` Dashboards e relatorios | Graficos e PDFs globais/filtrados por cooperativa | Graficos e PDFs da propria cooperativa | Leitura operacional | Export/PDF leitura | Diagnostico | Nao primario | JSON/PDF, `no-store`, filename seguro, fallback textual dos graficos, cross-coop negado |
+| `/admin/onboarding` (oculta) | Importar CSV historico com validacao e confirmacao | Ve "Pagina nao encontrada"; APIs `403` | Sem acesso | Sem acesso | Sem acesso | Redirecionado | Gerente 404/403, admin valida -> confirma -> resultado, duplicatas exigem confirmacao explicita |
 | `/profile` | Proprio perfil | Proprio perfil | Proprio perfil | Proprio perfil | Proprio perfil | Nao primario | Editar dados permitidos, troca de senha, usuario invalido |
 
 ## Jornadas prioritarias
@@ -89,7 +91,7 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 
 ### 7. Baixar relatorio/PDF
 
-- Entrada: futura nav `Relatorios` ou detalhe de venda.
+- Entrada: nav `Dashboards` (painel "Relatorios em PDF") ou detalhe de venda.
 - Fluxo: selecionar periodo/venda, ver previa JSON, baixar PDF.
 - PDF deve usar `@react-pdf/renderer`, `runtime = 'nodejs'`, `Content-Disposition` seguro e `Cache-Control: no-store`.
 - Fixture S0-13: venda normal concluida, venda coletiva concluida, venda cancelada.
@@ -111,13 +113,13 @@ Este documento descreve a arquitetura de informacao alvo e os gates das proximas
 2. **Operacao**: `/materials`, pesagens, estoque, vendas normais e coletivas.
 3. **Equipe**: `/manage-workers`, `/worker-productivity`, PII minimizada e produtividade.
 4. **Comunicacao**: futura `/notices`.
-5. **Relatorios**: futura `/reports`, PDFs e exports.
+5. **Relatorios**: `/dashboards`, PDFs e exports.
 6. **Conta**: `/profile`.
 7. **Admin/dev**: somente admin/suporte autorizado, fora da primeira camada de gerente.
 
 ### Labels em pt-BR
 
-- Preferir: `Visao geral`, `Materiais e estoque`, `Vendas`, `Equipe`, `Produtividade`, `Avisos`, `Relatorios`, `Meu perfil`.
+- Preferir: `Visao geral`, `Materiais e estoque`, `Coletas`, `Vendas`, `Equipe`, `Produtividade`, `Dashboards`, `Avisos`, `Meu perfil`.
 - Evitar como nav primaria: `Catadores`, `Debug`, `Assign Wastepicker IDs`, `Worker tools`, `Recalcular contribuicoes`.
 - Usar `catador`/`trabalhador` somente quando o gerente administra equipe, produtividade, contribuicao ou historico operacional.
 
@@ -169,7 +171,7 @@ Matriz de dados S0-13: [[Planejamento/Matriz-fixtures-UAT]].
 | Venda coletiva | Futura `/sales` ou `/collective-sales` | Criar/participar/cancelar | Cooperativa nao participante negada |
 | Equipe/PII | `/manage-workers`, `/worker-productivity` | Criar/editar usuario e filtrar produtividade | PII completa nao visivel por padrao; outra cooperativa negada |
 | Avisos | Futura `/notices` | Criar aviso e renderizar conteudo sanitizado | XSS nao aparece no DOM; aviso global negado para gerente |
-| Relatorio/PDF | Futura `/reports`, detalhe de venda | Baixar PDF e conferir headers | PDF de outra cooperativa negado |
+| Relatorio/PDF | `/dashboards`, detalhe de venda | Baixar PDF consolidado e comprovante do catador e conferir headers | PDF de outra cooperativa negado |
 | Pendencia operacional | `/`, rotas de dominio | Abrir pendencia e navegar para correcao | Debug/recalc invisivel ou `403` para gerente |
 
 ## Matriz S0-13 jornada -> fixture

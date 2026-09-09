@@ -9,6 +9,7 @@ function readSource(filePath: string) {
 
 const PAGE = 'src/app/page.tsx';
 const LAYOUT = 'src/components/Layout.tsx';
+const SECTION_MESSAGE = 'src/components/dashboard/SectionMessage.tsx';
 const PROXY = 'src/proxy.ts';
 const SESSION_ROUTE = 'src/app/api/auth/session/route.ts';
 const NEXT_CONFIG = 'next.config.ts';
@@ -37,11 +38,13 @@ test('dashboard removes dev-only and debug actions from the page surface', () =>
 
 test('dashboard uses session endpoint and professional section states', () => {
   const source = readSource(PAGE);
+  const sectionMessageSource = readSource(SECTION_MESSAGE);
 
   assert.match(source, /\/api\/auth\/session/);
   assert.match(source, /SectionMessage/);
-  assert.match(source, /Leitura indisponível/);
-  assert.match(source, /Carregando leitura operacional/);
+  assert.match(source, /@\/components\/dashboard\/SectionMessage/);
+  assert.match(sectionMessageSource, /Leitura indisponível/);
+  assert.match(sectionMessageSource, /Carregando leitura operacional/);
   assert.match(source, /Atualizar painel/);
   assert.doesNotMatch(source, /localStorage/);
 });

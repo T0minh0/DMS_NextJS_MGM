@@ -15,6 +15,9 @@ sourceFiles:
   - src/app/worker-productivity/page.tsx
   - src/app/profile/page.tsx
   - src/app/notices/page.tsx
+  - src/components/dashboard/SectionMessage.tsx
+  - src/components/dashboard/MetricCard.tsx
+  - src/components/charts/chart-theme.ts
   - scripts/check-visual-contract.mjs
   - Web_vault/Arquitetura/Frontend-e-UI.md
 audience:
@@ -213,6 +216,15 @@ routes:
   "/profile":
     purpose: perfil do usuario autenticado
     evidence: leitura/edicao permitida e validacao de senha
+  "/collections":
+    purpose: registro de coleta/pesagem pelo gerente em nome do catador, com estado do saco e historico recente
+    evidence: registrar coleta, leitura regressiva rejeitada, permissao negativa worker, screenshots desktop/mobile
+  "/dashboards":
+    purpose: dashboards do periodo com graficos e fallback textual, e download dos relatorios em PDF (consolidado e comprovante do catador)
+    evidence: gerar leitura do mes, baixar os dois PDFs, fallback textual dos graficos, cross-coop negado
+  "/admin/onboarding":
+    purpose: importacao administrativa oculta de dados historicos via CSV; somente admin, sem navegacao
+    evidence: gerente ve pagina nao encontrada, admin valida -> confirma -> resultado, console limpo
 browserEvidence:
   requiredForUiTasks: true
   backendDefault: Browser

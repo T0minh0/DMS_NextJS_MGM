@@ -9,13 +9,16 @@ const PUBLIC_FILE_PATTERN = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|x
 const MANAGER_PAGE_PATHS = [
   '/',
   '/materials',
+  '/collections',
   '/manage-workers',
   '/worker-productivity',
+  '/dashboards',
   '/sales',
   '/collective-sales',
   '/notices',
   '/gamification',
   '/profile',
+  '/admin',
 ];
 
 function clearAuthCookie(response: NextResponse) {

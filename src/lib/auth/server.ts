@@ -101,6 +101,24 @@ export async function requireManagerOrAdmin() {
   return session;
 }
 
+/**
+ * Strict admin gate. Unlike `requireAdmin` (which historically also accepts
+ * managers), this only lets `role === 'admin'` through. Use it for hidden
+ * administrative tooling such as the historical CSV import.
+ */
+export function assertStrictAdminSession(session: AuthSession) {
+  if (session.role !== 'admin') {
+    throw new AuthError('Acesso restrito a administradores', 403, 'ADMIN_REQUIRED');
+  }
+
+  return session;
+}
+
+export async function requireStrictAdmin() {
+  const session = await requireAuth();
+  return assertStrictAdminSession(session);
+}
+
 export function determineTargetCooperative(
   session: AuthSession,
   requestedCooperativeId: string | bigint | number | null | undefined,

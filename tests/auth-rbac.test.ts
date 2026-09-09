@@ -134,13 +134,16 @@ test('proxy blocks worker direct access to every managerial page and clears web 
   const managerPages = [
     '/',
     '/materials',
+    '/collections',
     '/manage-workers',
     '/worker-productivity',
+    '/dashboards',
     '/sales',
     '/collective-sales',
     '/notices',
     '/gamification',
     '/profile',
+    '/admin/onboarding',
   ];
 
   for (const pagePath of managerPages) {

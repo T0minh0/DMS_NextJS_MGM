@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
+import { MetricCard } from '@/components/dashboard/MetricCard';
+import { SectionMessage } from '@/components/dashboard/SectionMessage';
 import {
   FaBell,
   FaBoxOpen,
   FaCalendarAlt,
   FaChartLine,
   FaClipboardCheck,
-  FaExclamationTriangle,
   FaFilter,
   FaHandshake,
   FaRedo,
   FaShoppingCart,
-  FaSpinner,
   FaUsers,
   FaWarehouse,
 } from 'react-icons/fa';
@@ -203,92 +203,6 @@ function asArray<T>(value: unknown, keys: string[] = []) {
 function getLatestEarnings(items: EarningsItem[]) {
   const latest = items.at(-1);
   return Number(latest?.earnings ?? latest?.total_revenue ?? latest?.revenue ?? 0);
-}
-
-function SectionMessage({
-  loading,
-  error,
-  empty,
-  emptyTitle,
-  emptyDescription,
-  children,
-}: {
-  loading: boolean;
-  error?: string;
-  empty: boolean;
-  emptyTitle: string;
-  emptyDescription: string;
-  children: React.ReactNode;
-}) {
-  if (loading) {
-    return (
-      <div className="flex min-h-36 items-center justify-center rounded-lg border border-outline/70 bg-surface px-4 py-6 text-sm text-text-secondary">
-        <FaSpinner className="mr-3 h-4 w-4 animate-spin text-primary" />
-        Carregando leitura operacional...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-error/35 bg-error/10 px-4 py-4">
-        <div className="flex items-start gap-3">
-          <FaExclamationTriangle className="mt-0.5 h-4 w-4 shrink-0 text-error" />
-          <div>
-            <p className="text-sm font-semibold text-error">Leitura indisponível</p>
-            <p className="mt-1 text-sm text-text-secondary">{error}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (empty) {
-    return (
-      <div className="rounded-lg border border-outline/70 bg-surface px-4 py-4">
-        <p className="text-sm font-semibold text-foreground">{emptyTitle}</p>
-        <p className="mt-1 text-sm text-text-secondary">{emptyDescription}</p>
-      </div>
-    );
-  }
-
-  return children;
-}
-
-function MetricCard({
-  title,
-  value,
-  detail,
-  icon: Icon,
-  tone = 'primary',
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: 'primary' | 'success' | 'warning' | 'secondary';
-}) {
-  const toneClass = {
-    primary: 'border-primary/35 bg-primary/12 text-primary',
-    success: 'border-success/35 bg-success/12 text-success',
-    warning: 'border-warning/35 bg-warning/12 text-warning',
-    secondary: 'border-secondary/35 bg-secondary/12 text-secondary',
-  }[tone];
-
-  return (
-    <article className="surface-panel rounded-xl p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase text-text-secondary">{title}</p>
-          <p className="mt-3 text-2xl font-semibold text-foreground">{value}</p>
-        </div>
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border ${toneClass}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-      </div>
-      <p className="mt-4 text-sm text-text-secondary">{detail}</p>
-    </article>
-  );
 }
 
 export default function HomePage() {

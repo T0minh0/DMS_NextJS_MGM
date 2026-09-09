@@ -21,6 +21,7 @@ Espelho operacional de `.tony/improvement-log.md`.
 | 2026-05-19 | security | Auth JWT implementada com RBAC e scoped resource access; CPF permanece no payload do token por compatibilidade historica. | Criar task futura para remover CPF do payload JWT e consultar banco via RBAC quando necessario. | aberto |
 | 2026-05-19 | missing_test | Gamification schema, seed e validations implementados; concorrencia de leaderboard/achievements nao possui smoke multi-transacao. | Criar smoke futuro com Postgres descartavel para intercalacoes de achievement-evaluation e leaderboard-snapshot. | pendente |
 | 2026-05-20 | agent_improvement | Notice management page com CRUD completo finalizada (filtro por prioridade/ativo, criacao, edicao, exclusao). Ver ADR-0005 para politica de sanitizacao de notices. | Garantir sanitizacao server-side aplicada em todos os paths de criacao/edicao antes de producao. | em andamento |
+| 2026-06-17 | bug_pattern | fix stock updates from mobile weighings: deltas de pesagem do app mobile nao eram aplicados corretamente ao estoque. Novo lib `measurement-deltas.ts` + script `reconcile-orphan-measurements-stock.ts` para corrigir registros orphaos. API routes `recalculate-contributions` e `worker-productivity` refatoradas. | Rodar script de reconciliacao em producao para corrigir registros anteriores ao fix. | concluido |
 
 ## Entradas detalhadas
 

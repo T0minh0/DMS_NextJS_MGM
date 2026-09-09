@@ -30,6 +30,9 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 | Coletas | `GET` | `/api/collections` | [[API/Vendas-e-estoque]] |
 | Coletas | `POST` | `/api/collections` | [[API/Vendas-e-estoque]] |
 | Coletas | `GET` | `/api/collections/bag-state` | [[API/Vendas-e-estoque]] |
+| Admin (oculto) | `GET` | `/api/admin/onboarding/template` | [[API/Onboarding-importacao]] |
+| Admin (oculto) | `GET` | `/api/admin/onboarding/import` | [[API/Onboarding-importacao]] |
+| Admin (oculto) | `POST` | `/api/admin/onboarding/import` | [[API/Onboarding-importacao]] |
 | Compradores | `GET` | `/api/buyers` | [[API/Vendas-e-estoque]] |
 | Compradores | `POST` | `/api/buyers` | [[API/Vendas-e-estoque]] |
 | Compradores | `GET` | `/api/sales/buyers` | [[API/Vendas-e-estoque]] |

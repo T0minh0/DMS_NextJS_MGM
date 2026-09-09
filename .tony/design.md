@@ -17,6 +17,7 @@ sourceFiles:
   - src/app/notices/page.tsx
   - src/app/collections/page.tsx
   - src/app/dashboards/page.tsx
+  - src/app/admin/onboarding/page.tsx
   - src/components/dashboard/SectionMessage.tsx
   - src/components/dashboard/MetricCard.tsx
   - src/components/charts/chart-theme.ts

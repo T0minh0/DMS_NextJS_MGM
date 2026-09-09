@@ -366,6 +366,46 @@ export async function addToStock(
   return snapshot;
 }
 
+/**
+ * Historical import helper: increments only `Total_collected_KG`. Unlike
+ * `addToStock`, the current balance is left untouched because material
+ * collected years ago is not physically on hand today. A missing row is
+ * created with current stock 0, which always satisfies the ledger invariants.
+ */
+export async function addHistoricalCollected(
+  tx: Prisma.TransactionClient,
+  input: AddToStockInput,
+) {
+  const amountKg = parsePositiveStockDecimal2(input.amountKg, 'amountKg');
+
+  const rows = await tx.$queryRaw<LockedStockRow[]>`
+    INSERT INTO "Stock" (
+      "Cooperative",
+      "Material",
+      "Total_collected_KG",
+      "Total_sold_KG",
+      "Current_stock_KG"
+    )
+    VALUES (${input.cooperativeId}, ${input.materialId}, ${amountKg}, ${ZERO}, ${ZERO})
+    ON CONFLICT ("Cooperative", "Material")
+    DO UPDATE SET
+      "Total_collected_KG" = "Stock"."Total_collected_KG" + EXCLUDED."Total_collected_KG"
+    RETURNING
+      "Stock_id" AS "stockId",
+      "Total_collected_KG" AS "totalCollectedKg",
+      "Total_sold_KG" AS "totalSoldKg",
+      "Current_stock_KG" AS "currentStockKg"
+  `;
+
+  if (!rows[0]) {
+    throw new StockDomainError('STOCK_MISSING', 'Estoque não encontrado', input);
+  }
+
+  const snapshot = rowToSnapshot(rows[0]);
+  assertNonNegativeStock(snapshot);
+  return snapshot;
+}
+
 export async function recordSale(
   tx: Prisma.TransactionClient,
   input: RecordSaleInput,

@@ -27,6 +27,8 @@ O mapa de papeis, jornadas e arquitetura de informacao fica em [[Planejamento/Jo
 | `/materials` | Materiais, estoque e pesagens sob gestao. | Busca, estado vazio, erro e dados de fixture. |
 | `/manage-workers` | Gestao de equipe e usuarios com minimizacao de PII. | Mascaramento, formulario, permissao negativa. |
 | `/worker-productivity` | Analytics de produtividade da equipe. | Filtro por periodo/trabalhador e estado sem dados. |
+| `/collections` | Registro de coleta pelo gerente em nome do catador (leitura acumulada + saco cheio) e historico recente. | Registrar coleta, leitura regressiva rejeitada, worker redirecionado. |
+| `/dashboards` | Dashboards do periodo (graficos com fallback textual e tabelas) e download dos dois PDFs (consolidado e comprovante do catador). | Gerar leitura do mes, baixar PDFs, cross-coop negado. |
 | `/notices` | Avisos da cooperativa — CRUD completo com filtro, criacao, edicao e exclusao. Sanitizacao server-side obrigatoria. | Criar aviso, editar, excluir, filtrar por prioridade/ativo, estado vazio, permissao negativa. |
 | `/profile` | Perfil do usuario autenticado. | Leitura/edicao permitida e validacao de senha. |
 

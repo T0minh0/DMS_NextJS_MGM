@@ -54,6 +54,9 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 | Reports | `GET` | `/api/reports/sales/collective/[saleId]` | [[API/Vendas-e-estoque]] |
 | Reports | `GET` | `/api/reports/pdf/normal-sale/[saleId]` | [[API/Vendas-e-estoque]] |
 | Reports | `GET` | `/api/reports/pdf/collective-sale/[saleId]` | [[API/Vendas-e-estoque]] |
+| Reports | `GET` | `/api/reports/period` | [[API/Dashboard-e-analytics]] |
+| Reports | `GET` | `/api/reports/pdf/period` | [[API/Dashboard-e-analytics]] e [[Operacao/PDF-e-sanitizacao]] |
+| Reports | `GET` | `/api/reports/pdf/worker/[workerId]` | [[API/Dashboard-e-analytics]] e [[Operacao/PDF-e-sanitizacao]] |
 | Dashboard | `GET` | `/api/birthdays` | [[API/Dashboard-e-analytics]] |
 | Dashboard | `GET` | `/api/earnings-comparison` | [[API/Dashboard-e-analytics]] |
 | Dashboard | `GET` | `/api/worker-collections` | [[API/Dashboard-e-analytics]] |

@@ -15,6 +15,7 @@ sourceFiles:
   - src/app/worker-productivity/page.tsx
   - src/app/profile/page.tsx
   - src/app/notices/page.tsx
+  - src/app/collections/page.tsx
   - src/components/dashboard/SectionMessage.tsx
   - src/components/dashboard/MetricCard.tsx
   - src/components/charts/chart-theme.ts

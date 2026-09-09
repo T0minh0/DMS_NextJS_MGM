@@ -73,6 +73,26 @@ Efeitos:
 - Atualiza `material_bag_state`.
 - Incrementa `Stock.totalCollectedKg` e `Stock.currentStockKg` apenas pelo delta positivo.
 
+## `POST /api/collections`
+
+Registro de coleta pelo portal, em nome de um catador, com a mesma semantica do app mobile (leitura acumulada do saco + `bag_full`). Exige `manager`/`admin` (`requireManagerOrAdmin`) e `stock:create` no escopo `cooperative`; a cooperativa vem de `cooperative_id` (admin) ou da sessao.
+
+- Body: `worker_id` (obrigatorio, catador ativo da cooperativa; usuarios do tipo gerente/admin sao rejeitados), `material_id`, `amount` (leitura acumulada em kg, 2 casas), `bag_full` (opcional, default `false`), `measured_at` (opcional; default `now()` no servidor). A UI so envia `measured_at` quando o operador altera a data, porque `material_bag_state.last_updated` guarda hora e uma data `YYYY-MM-DD` de hoje seria anterior a uma pesagem mobile do mesmo dia.
+- O dispositivo e resolvido automaticamente (`resolveCooperativeDevice`: primeiro `Devices` da cooperativa, criado se nao existir), como no backend mobile.
+- Reusa `recordMaterialWeighing`: lock de `material_bag_state`, `calculateBagStateDelta`, delta gravado em `Measurments`, `addToStock` quando delta > 0.
+- Respostas: `201` `{ success, message, worker_name, measurement, bag_state, collected_delta_kg, stock }`; `400` campos invalidos; `403` `MANAGER_ROLE_REQUIRED` / `WORKER_SCOPE_DENIED`; `422` `WORKER_NOT_FOUND` / `WORKER_INACTIVE` / `WORKER_ROLE_REQUIRED` / `MATERIAL_NOT_FOUND` / leitura regressiva sem `bag_full` / `measured_at` anterior a ultima leitura.
+
+## `GET /api/collections`
+
+Lista as coletas da cooperativa (escopo via `wastepickerRef.cooperative`, pois `Measurments` nao tem coluna de cooperativa).
+
+- Query: `from`/`to` (`YYYY-MM-DD`, inclusivo; default ultimos 7 dias), `worker_id` (`5` ou `WP005`), `material_id`, `limit` (default 100, max 500), `cooperative_id` (admin).
+- Resposta: `{ collections: [{ id, worker_id, wastepicker_id, worker_name, material_id, material_name, weight_kg, bag_full, date }], count, total_weight_kg, from, to, limit }`. `weight_kg` e o delta coletado (nao a leitura acumulada).
+
+## `GET /api/collections/bag-state`
+
+Estado atual do saco de `(cooperativa, material)` para orientar o operador antes de registrar. Query: `material_id`, `cooperative_id` (admin). Resposta: `{ material_id, cooperative_id, is_begun, current_kg, last_updated | null }`.
+
 ## `GET /api/sales`
 
 Arquivo: `src/app/api/sales/route.ts`.

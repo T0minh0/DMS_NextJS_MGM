@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { AuthSession } from '@/lib/auth/shared';
+import { AuthSession, mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import {
   DecimalInput,
   DecimalValidationError,
@@ -18,7 +18,9 @@ export type MaterialDomainErrorCode =
   | 'WORKER_NOT_FOUND'
   | 'DEVICE_NOT_FOUND'
   | 'DEVICE_SCOPE_DENIED'
-  | 'STOCK_MISSING';
+  | 'STOCK_MISSING'
+  | 'MANAGER_ROLE_REQUIRED'
+  | 'WORKER_INACTIVE';
 
 export class MaterialDomainError extends Error {
   readonly code: MaterialDomainErrorCode;
@@ -67,6 +69,24 @@ export type ParsedInsertMaterialInput = {
 export type RecordMaterialWeighingInput = ParsedInsertMaterialInput & {
   cooperativeId: bigint;
 };
+
+/**
+ * Body accepted by `POST /api/collections`: a manager/admin registering a
+ * cumulative bag reading on behalf of a wastepicker (mobile-app parity).
+ */
+export type ManagedCollectionRequestBody = {
+  workerId?: unknown;
+  worker_id?: unknown;
+  materialId?: unknown;
+  material_id?: unknown;
+  amount?: unknown;
+  bagFull?: unknown;
+  bag_full?: unknown;
+  measuredAt?: unknown;
+  measured_at?: unknown;
+};
+
+export type ManagedCollectionInput = Omit<RecordMaterialWeighingInput, 'deviceId'>;
 
 export type ManualStockInput = {
   cooperativeId: bigint;
@@ -246,6 +266,101 @@ export function parseInsertMaterialRequest(
     measuredAt,
     deviceId: parseBigIntField(body.deviceId ?? body.device_id, 'deviceId'),
   };
+}
+
+function parseOptionalMeasurementTimestamp(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return new Date();
+  }
+
+  return parseMeasurementTimestamp(value);
+}
+
+/**
+ * Parses a managed collection request. Unlike the worker self-service path,
+ * the caller must be a manager or admin and must name the wastepicker. The
+ * cooperative is resolved by the route (`determineTargetCooperative`) so this
+ * module stays free of request/cookie concerns.
+ */
+export function parseManagedCollectionRequest(
+  body: unknown,
+  session: AuthSession,
+  cooperativeId: bigint,
+): ManagedCollectionInput {
+  assertRequestObject(body);
+
+  if (session.role !== 'admin' && session.role !== 'manager') {
+    throw new MaterialDomainError(
+      'MANAGER_ROLE_REQUIRED',
+      'Apenas gestores podem registrar coleta em nome de um catador',
+      403,
+      { role: session.role },
+    );
+  }
+
+  const request = body as ManagedCollectionRequestBody;
+
+  return {
+    cooperativeId,
+    workerId: parseBigIntField(request.workerId ?? request.worker_id, 'workerId'),
+    materialId: parseBigIntField(request.materialId ?? request.material_id, 'materialId'),
+    amountKg: parsePositiveKg(request.amount, 'amount'),
+    bagFull: parseBagFull(request.bagFull ?? request.bag_full),
+    measuredAt: parseOptionalMeasurementTimestamp(request.measuredAt ?? request.measured_at),
+  };
+}
+
+/**
+ * Validates that the target worker is an active wastepicker of the target
+ * cooperative. Unknown user types are rejected (never defaulted to worker).
+ */
+export async function assertManagedWorker(
+  tx: Prisma.TransactionClient,
+  workerId: bigint,
+  cooperativeId: bigint,
+) {
+  const worker = await tx.workers.findUnique({
+    where: { workerId },
+    select: { workerId: true, workerName: true, cooperative: true, userType: true, exitDate: true },
+  });
+
+  if (!worker) {
+    throw new MaterialDomainError(
+      'WORKER_NOT_FOUND',
+      'Catador não encontrado',
+      422,
+      { workerId },
+    );
+  }
+
+  if (worker.cooperative !== cooperativeId) {
+    throw new MaterialDomainError(
+      'WORKER_SCOPE_DENIED',
+      'Catador fora da cooperativa da sessão',
+      403,
+      { workerId, workerCooperativeId: worker.cooperative, cooperativeId },
+    );
+  }
+
+  if (worker.exitDate) {
+    throw new MaterialDomainError(
+      'WORKER_INACTIVE',
+      'Catador desligado não pode receber novas coletas',
+      422,
+      { workerId, exitDate: worker.exitDate },
+    );
+  }
+
+  if (mapDatabaseUserTypeToRole(worker.userType) !== 'worker') {
+    throw new MaterialDomainError(
+      'WORKER_ROLE_REQUIRED',
+      'Coletas só podem ser registradas para catadores',
+      422,
+      { workerId, userType: worker.userType },
+    );
+  }
+
+  return { workerId: worker.workerId, workerName: worker.workerName };
 }
 
 async function ensureBagStateLocked(
@@ -492,6 +607,22 @@ export async function recordMaterialWeighing(
     collectedDeltaKg: delta.collectedDeltaKg,
     stockSnapshot,
   };
+}
+
+/**
+ * Manager/admin collection registration: validates the wastepicker, resolves
+ * the cooperative device and reuses the cumulative bag-reading weighing path so
+ * web and mobile entries share the same bag state and stock semantics.
+ */
+export async function recordManagedCollection(
+  tx: Prisma.TransactionClient,
+  input: ManagedCollectionInput,
+) {
+  const worker = await assertManagedWorker(tx, input.workerId, input.cooperativeId);
+  const deviceId = await resolveCooperativeDevice(tx, input.cooperativeId);
+  const result = await recordMaterialWeighing(tx, { ...input, deviceId });
+
+  return { ...result, workerName: worker.workerName };
 }
 
 export async function addManualStock(

@@ -27,6 +27,9 @@ Todas as rotas ficam em `src/app/api` e usam route handlers do Next.js App Route
 | Materiais | `POST` | `/api/insertMaterial` | [[API/Materiais-e-cooperativas]] e [[API/Vendas-e-estoque]] |
 | Estoque | `GET` | `/api/stock` | [[API/Vendas-e-estoque]] |
 | Estoque | `POST` | `/api/stock` | [[API/Vendas-e-estoque]] |
+| Coletas | `GET` | `/api/collections` | [[API/Vendas-e-estoque]] |
+| Coletas | `POST` | `/api/collections` | [[API/Vendas-e-estoque]] |
+| Coletas | `GET` | `/api/collections/bag-state` | [[API/Vendas-e-estoque]] |
 | Compradores | `GET` | `/api/buyers` | [[API/Vendas-e-estoque]] |
 | Compradores | `POST` | `/api/buyers` | [[API/Vendas-e-estoque]] |
 | Compradores | `GET` | `/api/sales/buyers` | [[API/Vendas-e-estoque]] |

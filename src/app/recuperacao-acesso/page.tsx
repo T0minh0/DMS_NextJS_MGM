@@ -61,12 +61,12 @@ export default function AssistedRecoveryPage() {
     }
   }
   const field =
-    'mt-2 min-h-14 w-full rounded-lg border border-text-secondary bg-surface px-4 py-3 text-lg';
+    'mt-2 min-h-14 w-full rounded-lg border border-text-secondary bg-surface px-4 py-3 text-base';
   return (
     <Layout activePath="/recuperacao-acesso">
       <div className="mx-auto max-w-2xl space-y-6">
-        <h1 className="text-3xl font-bold">Ajudar a recuperar acesso</h1>
-        <p className="text-lg leading-relaxed text-text-secondary">
+        <h1 className="text-2xl font-bold">Ajudar a recuperar acesso</h1>
+        <p className="text-sm leading-relaxed text-text-secondary">
           Atendimento presencial para catadores da sua cooperativa que não
           conseguem recuperar pelo próprio e-mail. O código permite criar uma
           senha; não dá acesso aos dados da conta.
@@ -75,7 +75,7 @@ export default function AssistedRecoveryPage() {
           className="surface-panel space-y-5 rounded-xl p-6"
           onSubmit={submit}
         >
-          <label className="block text-lg">
+          <label className="block text-sm">
             Pessoa atendida
             <select
               required
@@ -101,7 +101,7 @@ export default function AssistedRecoveryPage() {
             A lista mostra somente catadores ativos da sua cooperativa. Confira
             o nome com a pessoa atendida.
           </p>
-          <label className="block text-lg">
+          <label className="block text-sm">
             Motivo do atendimento
             <textarea
               required
@@ -112,7 +112,7 @@ export default function AssistedRecoveryPage() {
               onChange={(e) => setReason(e.target.value)}
             />
           </label>
-          <label className="block text-lg">
+          <label className="block text-sm">
             Sua senha de gestor
             <input
               required
@@ -124,7 +124,7 @@ export default function AssistedRecoveryPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
-          <label className="flex min-h-14 items-center gap-3 text-lg">
+          <label className="flex min-h-14 items-center gap-3 text-sm">
             <input
               required
               className="h-6 w-6"
@@ -135,13 +135,13 @@ export default function AssistedRecoveryPage() {
             Conferi presencialmente a identidade da pessoa.
           </label>
           {error ? (
-            <p role="alert" className="text-lg text-error">
+            <p role="alert" className="text-sm text-error">
               {error}
             </p>
           ) : null}
           <button
             disabled={busy}
-            className="min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-xl font-bold text-on-primary disabled:opacity-60"
+            className="min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-base font-semibold text-on-primary disabled:opacity-60"
           >
             {busy ? 'Emitindo código…' : 'Emitir código de recuperação'}
           </button>
@@ -151,16 +151,16 @@ export default function AssistedRecoveryPage() {
             <h2 className="text-xl font-semibold">
               Entregue este código à pessoa atendida
             </h2>
-            <p className="break-all font-mono text-4xl tracking-wider">
+            <p className="break-all font-mono text-2xl tracking-wider">
               {code}
             </p>
-            <p className="text-lg">
+            <p className="text-sm">
               Válido por 15 minutos, para uma única recuperação. No app, escolha
               “Esqueci minha senha” e “Recebi um código da cooperativa”. A senha
               final deve ser escolhida pela própria pessoa.
             </p>
             <button
-              className="min-h-14 text-lg text-foreground underline"
+              className="min-h-14 text-sm text-foreground underline"
               onClick={() => setCode('')}
             >
               Ocultar código da tela

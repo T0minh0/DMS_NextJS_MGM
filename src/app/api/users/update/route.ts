@@ -1,3 +1,4 @@
+import { AuthError, mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import { validNewPassword } from '@/lib/auth/password';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const updateData: Prisma.WorkersUpdateInput = {
+    const updateData: Prisma.WorkersUncheckedUpdateManyInput = {
       workerName: full_name.trim(),
       email: email?.trim() || existing.email,
       userType: String(userTypeNumber),
@@ -164,11 +165,7 @@ export async function POST(request: Request) {
       enterDate: enterDateObj,
       exitDate: exitDateObj,
       gender: gender?.trim() || null,
-      cooperativeRef: {
-        connect: {
-          cooperativeId: cooperativeBigInt,
-        },
-      },
+      cooperative: cooperativeBigInt,
       lastUpdate: new Date(),
     };
 
@@ -192,9 +189,14 @@ export async function POST(request: Request) {
       updateData.phone = normalizePhoneValue(phone);
     }
 
-    await prisma.workers.update({
-      where: { workerId },
-      data: updateData,
+    await prisma.$transaction(async tx => {
+      const actorId = BigInt(session.workerId);
+      const first = actorId < workerId ? actorId : workerId; const second = actorId < workerId ? workerId : actorId;
+      await tx.$queryRaw`SELECT "Worker_id" FROM "Workers" WHERE "Worker_id" IN (${first}, ${second}) ORDER BY "Worker_id" FOR UPDATE`;
+      const actor = await tx.workers.findUnique({where:{workerId:actorId},select:{authVersion:true,userType:true,cooperative:true}});
+      if (!actor || actor.authVersion !== (session.authVersion ?? 0) || mapDatabaseUserTypeToRole(actor.userType) !== session.role || actor.cooperative.toString() !== session.cooperativeId) throw new AuthError('Sessão alterada', 401, 'SESSION_REVOKED');
+      const changed = await tx.workers.updateMany({where:{workerId,authVersion:existing.authVersion,cooperative:existing.cooperative},data:updateData});
+      if (changed.count !== 1) throw new AuthError('Usuário alterado; atualize a página.', 409, 'CREDENTIAL_CHANGED');
     });
 
     return NextResponse.json({ message: 'Usuário atualizado com sucesso' }, { status: 200 });

@@ -1,3 +1,4 @@
+import { writePasswordIfVersion } from '@/lib/auth/credential-write';
 import { validNewPassword } from '@/lib/auth/password';
 import { mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import { NextResponse } from 'next/server';
@@ -84,14 +85,8 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    await prisma.workers.update({
-      where: { workerId },
-      data: {
-        password: Buffer.from(hashedPassword, 'utf8'),
-        authVersion: { increment: 1 },
-        lastUpdate: new Date(),
-      },
-    });
+    const changed = await writePasswordIfVersion(prisma, workerId, session.authVersion ?? 0, Buffer.from(hashedPassword, 'utf8'));
+    if (!changed) throw new AuthError('Sessão ou credencial alterada. Entre novamente.', 409, 'CREDENTIAL_CHANGED');
 
     return NextResponse.json({ message: 'Senha atualizada com sucesso' });
   } catch (error) {

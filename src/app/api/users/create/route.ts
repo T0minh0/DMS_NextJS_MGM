@@ -1,3 +1,4 @@
+import { AuthError, mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import { validNewPassword } from '@/lib/auth/password';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -111,6 +112,8 @@ export async function POST(request: Request) {
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`LOCK TABLE "Workers" IN SHARE ROW EXCLUSIVE MODE`;
+      const actor = await tx.workers.findUnique({where:{workerId:BigInt(session.workerId)},select:{authVersion:true,userType:true,cooperative:true}});
+      if (!actor || actor.authVersion !== (session.authVersion ?? 0) || mapDatabaseUserTypeToRole(actor.userType) !== session.role || actor.cooperative.toString() !== session.cooperativeId) throw new AuthError('Sessão alterada', 401, 'SESSION_REVOKED');
 
       const existing = await tx.workers.findFirst({
         where: { cpf: cpfBuffer },

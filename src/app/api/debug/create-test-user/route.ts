@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { authErrorResponse, requireAdmin } from '@/lib/auth/server';
 import { getDebugRouteDisabledResponse } from '@/lib/debug-routes';
+import { AuthError, mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import { apiErrorResponse, apiRouteErrorResponse } from '@/lib/api/errors';
 
 const TEST_CPF = '00000000999';
@@ -10,7 +11,7 @@ const TEST_PASSWORD = 'test123';
 
 export async function GET(request: Request) {
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
 
     const disabledResponse = getDebugRouteDisabledResponse({ allowProductionOverride: false });
     if (disabledResponse) {
@@ -31,17 +32,17 @@ export async function GET(request: Request) {
 
     const existing = await prisma.workers.findFirst({
       where: { cpf: cpfBytes },
-      select: { workerId: true },
+      select: { workerId: true, authVersion: true },
     });
 
     if (existing) {
-      await prisma.workers.update({
-        where: { workerId: existing.workerId },
-        data: {
-          password: Buffer.from(hashedPassword, 'utf8'),
-          authVersion: { increment: 1 },
-          lastUpdate: new Date(),
-        },
+      await prisma.$transaction(async tx => {
+        const actorId = BigInt(session.workerId); const first = actorId < existing.workerId ? actorId : existing.workerId; const second = actorId < existing.workerId ? existing.workerId : actorId;
+        await tx.$queryRaw`SELECT "Worker_id" FROM "Workers" WHERE "Worker_id" IN (${first}, ${second}) ORDER BY "Worker_id" FOR UPDATE`;
+        const actor = await tx.workers.findUnique({where:{workerId:actorId},select:{authVersion:true,userType:true,cooperative:true}});
+        if (!actor || actor.authVersion !== (session.authVersion ?? 0) || mapDatabaseUserTypeToRole(actor.userType) !== session.role || actor.cooperative.toString() !== session.cooperativeId) throw new AuthError('Sessão alterada', 401, 'SESSION_REVOKED');
+        const changed = await tx.workers.updateMany({where:{workerId:existing.workerId,authVersion:existing.authVersion},data:{password:Buffer.from(hashedPassword,'utf8'),authVersion:{increment:1},lastUpdate:new Date()}});
+        if (!changed.count) throw new AuthError('Credencial alterada',409,'CREDENTIAL_CHANGED');
       });
 
       return NextResponse.json({

@@ -52,6 +52,7 @@ export default function AssistedRecoveryPage() {
           result.message ?? result.error ?? 'Não foi possível emitir o código.',
         );
       setCode(result.code);
+      setChecked(false);
       setPassword('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não conseguimos conectar.');
@@ -60,7 +61,7 @@ export default function AssistedRecoveryPage() {
     }
   }
   const field =
-    'mt-2 min-h-14 w-full rounded-lg border border-outline bg-surface px-4 py-3 text-lg';
+    'mt-2 min-h-14 w-full rounded-lg border border-text-secondary bg-surface px-4 py-3 text-lg';
   return (
     <Layout activePath="/recuperacao-acesso">
       <div className="mx-auto max-w-2xl space-y-6">
@@ -140,7 +141,7 @@ export default function AssistedRecoveryPage() {
           ) : null}
           <button
             disabled={busy}
-            className="min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-lg font-semibold text-background disabled:opacity-60"
+            className="min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-xl font-bold text-on-primary disabled:opacity-60"
           >
             {busy ? 'Emitindo código…' : 'Emitir código de recuperação'}
           </button>
@@ -159,7 +160,7 @@ export default function AssistedRecoveryPage() {
               final deve ser escolhida pela própria pessoa.
             </p>
             <button
-              className="min-h-14 text-lg text-primary underline"
+              className="min-h-14 text-lg text-foreground underline"
               onClick={() => setCode('')}
             >
               Ocultar código da tela

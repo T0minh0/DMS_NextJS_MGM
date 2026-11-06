@@ -3,9 +3,9 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { recoveryPasswordError } from '@/lib/recovery-password';
 const field =
-  'mt-2 min-h-14 w-full rounded-xl border border-outline bg-surface px-4 py-3 text-lg text-foreground focus-visible:outline-2 focus-visible:outline-primary';
+  'mt-2 min-h-14 w-full rounded-xl border border-text-secondary bg-surface px-4 py-3 text-lg text-foreground focus-visible:outline-2 focus-visible:outline-primary';
 const button =
-  'min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-lg font-semibold text-background disabled:opacity-60';
+  'min-h-14 w-full rounded-xl bg-primary px-5 py-4 text-xl font-bold text-on-primary disabled:opacity-60';
 export function RecoveryForm({
   token,
   confirmEmail = false,
@@ -122,7 +122,7 @@ export function RecoveryForm({
                 </label>
                 <button
                   type="button"
-                  className="min-h-14 text-lg text-primary underline"
+                  className="min-h-14 text-lg text-foreground underline"
                   onClick={() => setNumeric(!numeric)}
                 >
                   {numeric ? 'Minha senha tem letras' : 'Usar só números'}
@@ -162,7 +162,7 @@ export function RecoveryForm({
           </form>
         )}
         <Link
-          className="mt-6 flex min-h-14 items-center text-lg text-primary underline"
+          className="mt-6 flex min-h-14 items-center text-lg text-foreground underline"
           href="/login"
         >
           Acesso da gerência

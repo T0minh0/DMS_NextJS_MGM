@@ -29,6 +29,7 @@ export type RbacAction =
 export type RbacScope = 'public' | 'self' | 'cooperative' | 'global';
 
 export interface AuthTokenPayload {
+  authVersion?: number;
   sub: string;
   workerId: string;
   cooperativeId: string;
@@ -45,6 +46,7 @@ export interface AuthTokenPayload {
 }
 
 export interface AuthSession {
+  authVersion?: number;
   workerId: string;
   cooperativeId: string;
   role: UserRole;
@@ -165,9 +167,11 @@ export function normalizeAuthPayload(payload: unknown): AuthTokenPayload | null 
     return null;
   }
 
+  if (data.authVersion !== undefined && (!Number.isSafeInteger(data.authVersion) || (data.authVersion as number) < 0)) return null;
   const userType = typeof data.userType === 'number' ? data.userType : roleToUserType(role);
 
   return {
+    authVersion: (data.authVersion as number | undefined) ?? 0,
     sub: typeof data.sub === 'string' ? data.sub : workerId,
     workerId,
     cooperativeId,
@@ -191,6 +195,7 @@ export function normalizeAuthPayload(payload: unknown): AuthTokenPayload | null 
 
 export function payloadToSession(payload: AuthTokenPayload): AuthSession {
   return {
+    authVersion: payload.authVersion ?? 0,
     workerId: payload.workerId,
     cooperativeId: payload.cooperativeId,
     role: payload.role,

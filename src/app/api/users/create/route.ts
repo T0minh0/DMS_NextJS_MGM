@@ -1,3 +1,4 @@
+import { validNewPassword } from '@/lib/auth/password';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
         status: 400,
       });
     }
+
+    if (typeof password !== 'string' || !validNewPassword(password, userTypeNumber === 1 ? 'worker' : 'manager')) return apiErrorResponse({ message: 'Senha fora da política.', code: 'INVALID_PASSWORD', status: 400 });
 
     const targetCooperativeId = determineTargetCooperative(session, cooperative_id, { required: true });
     requireScopedPermission(

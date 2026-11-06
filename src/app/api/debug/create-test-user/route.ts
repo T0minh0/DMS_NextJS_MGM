@@ -39,6 +39,7 @@ export async function GET(request: Request) {
         where: { workerId: existing.workerId },
         data: {
           password: Buffer.from(hashedPassword, 'utf8'),
+          authVersion: { increment: 1 },
           lastUpdate: new Date(),
         },
       });

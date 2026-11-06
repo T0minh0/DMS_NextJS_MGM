@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import prisma from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { getJwtSecret } from './secret';
 import { apiErrorResponse } from '@/lib/api/errors';
@@ -19,6 +20,7 @@ import {
 } from './shared';
 
 export interface SignAuthTokenInput {
+  authVersion?: number;
   workerId: string;
   cooperativeId: string;
   role: UserRole;
@@ -30,6 +32,7 @@ export interface SignAuthTokenInput {
 
 export function signAuthToken(input: SignAuthTokenInput) {
   const payload: Omit<AuthTokenPayload, 'iat' | 'exp'> = {
+    authVersion: input.authVersion ?? 0,
     sub: input.workerId,
     workerId: input.workerId,
     cooperativeId: input.cooperativeId,
@@ -70,6 +73,16 @@ export function verifyAuthToken(token: string) {
   }
 }
 
+export async function assertCurrentAuthVersion(
+  session: AuthSession,
+  lookup: (workerId: bigint) => Promise<{ authVersion: number } | null> = workerId => prisma.workers.findUnique({ where: { workerId }, select: { authVersion: true } }),
+) {
+  let workerId: bigint;
+  try { workerId = BigInt(session.workerId); } catch { throw new AuthError('Sessão inválida', 401, 'INVALID_TOKEN'); }
+  const worker = await lookup(workerId);
+  if (!worker || worker.authVersion !== (session.authVersion ?? 0)) throw new AuthError('Sessão inválida ou expirada', 401, 'SESSION_REVOKED');
+}
+
 export async function requireAuth() {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
@@ -78,7 +91,9 @@ export async function requireAuth() {
     throw new AuthError('Sessão não encontrada', 401, 'MISSING_TOKEN');
   }
 
-  return verifyAuthToken(token);
+  const session = verifyAuthToken(token);
+  await assertCurrentAuthVersion(session);
+  return session;
 }
 
 export async function requireAdmin() {

@@ -18,6 +18,7 @@ import {
 import { createLogContext, logInfo, logWarn } from '@/lib/observability/logger';
 
 interface RawWorker {
+  authVersion: number;
   workerId: bigint;
   workerName: string;
   cooperative: bigint;
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
 
     const workers = await prisma.$queryRaw<RawWorker[]>`
       SELECT
+        "authVersion" AS "authVersion",
         "Worker_id"   AS "workerId",
         "Worker_name" AS "workerName",
         "Cooperative" AS "cooperative",
@@ -151,6 +153,7 @@ export async function POST(request: Request) {
     const userType = roleToUserType(role);
 
     const token = signAuthToken({
+      authVersion: worker.authVersion,
       workerId: workerId.toString(),
       cooperativeId: worker.cooperative.toString(),
       cooperativeName: cooperative?.cooperativeName ?? null,

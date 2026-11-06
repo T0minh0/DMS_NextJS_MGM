@@ -1,3 +1,4 @@
+import { validNewPassword } from '@/lib/auth/password';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
@@ -179,9 +180,12 @@ export async function POST(request: Request) {
       updateData.rg = Buffer.from(rgDigits, 'utf8');
     }
 
+    if (password && (typeof password !== 'string' || !validNewPassword(password, userTypeNumber === 1 ? 'worker' : 'manager'))) return apiErrorResponse({ message: 'Senha fora da política.', code: 'INVALID_PASSWORD', status: 400 });
+
     if (password) {
       const passwordHash = await bcrypt.hash(password, 10);
       updateData.password = Buffer.from(passwordHash, 'utf8');
+      updateData.authVersion = { increment: 1 };
     }
 
     if (hasPhone) {

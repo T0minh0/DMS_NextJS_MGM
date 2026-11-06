@@ -1,3 +1,5 @@
+import { validNewPassword } from '@/lib/auth/password';
+import { mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
@@ -61,6 +63,7 @@ export async function POST(request: Request) {
       });
     }
 
+    if (typeof newPassword !== 'string' || !validNewPassword(newPassword, mapDatabaseUserTypeToRole(worker.userType) === 'worker' ? 'worker' : 'manager')) return apiErrorResponse({ message: 'Senha fora da política.', code: 'INVALID_PASSWORD', status: 400 });
     const storedPassword = decodeBytes(worker.password);
     if (!storedPassword) {
       return apiErrorResponse({
@@ -85,6 +88,7 @@ export async function POST(request: Request) {
       where: { workerId },
       data: {
         password: Buffer.from(hashedPassword, 'utf8'),
+        authVersion: { increment: 1 },
         lastUpdate: new Date(),
       },
     });

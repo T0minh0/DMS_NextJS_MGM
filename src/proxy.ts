@@ -4,8 +4,17 @@ import { AUTH_COOKIE_NAME } from '@/lib/auth/shared';
 import { apiErrorResponse } from '@/lib/api/errors';
 import { createLogContext, logWarn } from '@/lib/observability/logger';
 
-const PUBLIC_AUTH_PATHS = ['/login', '/api/auth/login'];
-const PUBLIC_FILE_PATTERN = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json|woff2?)$/i;
+const PUBLIC_AUTH_PATHS = [
+  '/login',
+  '/api/auth/login',
+  '/recuperar-senha',
+  '/confirmar-email',
+  '/api/mobile-auth/forgot-password',
+  '/api/mobile-auth/reset-password',
+  '/api/mobile-auth/verify-recovery-email',
+];
+const PUBLIC_FILE_PATTERN =
+  /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json|woff2?)$/i;
 const MANAGER_PAGE_PATHS = [
   '/',
   '/materials',
@@ -18,6 +27,7 @@ const MANAGER_PAGE_PATHS = [
   '/notices',
   '/gamification',
   '/profile',
+  '/recuperacao-acesso',
   '/admin',
 ];
 
@@ -28,7 +38,9 @@ function clearAuthCookie(response: NextResponse) {
 
 function isPublicPath(pathname: string) {
   if (pathname.startsWith('/api/')) {
-    return PUBLIC_AUTH_PATHS.includes(pathname) || pathname.startsWith('/api/auth/');
+    return (
+      PUBLIC_AUTH_PATHS.includes(pathname) || pathname.startsWith('/api/auth/')
+    );
   }
 
   return (
@@ -40,16 +52,18 @@ function isPublicPath(pathname: string) {
 }
 
 function isManagerPagePath(pathname: string) {
-  return MANAGER_PAGE_PATHS.some((path) => (
-    pathname === path || (path !== '/' && pathname.startsWith(`${path}/`))
-  ));
+  return MANAGER_PAGE_PATHS.some(
+    (path) =>
+      pathname === path || (path !== '/' && pathname.startsWith(`${path}/`)),
+  );
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const context = createLogContext(request, { domain: 'auth' });
   const publicPath = isPublicPath(pathname);
-  const isApiRoute = pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/');
+  const isApiRoute =
+    pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/');
   const authToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   const session = authToken ? await verifyAuthTokenEdge(authToken) : null;
 
@@ -72,37 +86,50 @@ export async function proxy(request: NextRequest) {
       logWarn('auth.proxy.api_unauthorized', context, {
         hasCookie: Boolean(authToken),
       });
-      return clearAuthCookie(apiErrorResponse({
-        message: 'Unauthorized',
-        code: 'UNAUTHORIZED',
-        status: 401,
-        requestId: context.requestId,
-      }));
+      return clearAuthCookie(
+        apiErrorResponse({
+          message: 'Unauthorized',
+          code: 'UNAUTHORIZED',
+          status: 401,
+          requestId: context.requestId,
+        }),
+      );
     }
 
     if (authToken) {
       logWarn('auth.proxy.page_invalid_cookie_redirected', context);
     }
 
-    return clearAuthCookie(NextResponse.redirect(new URL('/login', request.url)));
+    return clearAuthCookie(
+      NextResponse.redirect(new URL('/login', request.url)),
+    );
   }
 
-  if (session.role === 'worker' && (isApiRoute || isManagerPagePath(pathname))) {
+  if (
+    session.role === 'worker' &&
+    (isApiRoute || isManagerPagePath(pathname))
+  ) {
     logWarn('auth.proxy.worker_page_denied', context, {
       workerId: session.workerId,
       role: session.role,
     });
 
     if (isApiRoute) {
-      return clearAuthCookie(apiErrorResponse({
-        message: 'Acesso restrito apenas para gestores',
-        code: 'MANAGER_REQUIRED',
-        status: 403,
-        requestId: context.requestId,
-      }));
+      return clearAuthCookie(
+        apiErrorResponse({
+          message: 'Acesso restrito apenas para gestores',
+          code: 'MANAGER_REQUIRED',
+          status: 403,
+          requestId: context.requestId,
+        }),
+      );
     }
 
-    return clearAuthCookie(NextResponse.redirect(new URL('/login?reason=web-role-denied', request.url)));
+    return clearAuthCookie(
+      NextResponse.redirect(
+        new URL('/login?reason=web-role-denied', request.url),
+      ),
+    );
   }
 
   return NextResponse.next();

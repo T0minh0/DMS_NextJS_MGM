@@ -58,6 +58,7 @@ const navItems: Array<{
   { href: '/collections', icon: FaBalanceScale, label: 'Coletas', roles: MANAGER_NAV_ROLES },
   { href: '/sales', icon: FaShoppingCart, label: 'Vendas', roles: MANAGER_NAV_ROLES },
   { href: '/collective-sales', icon: FaHandshake, label: 'Coletivas', roles: MANAGER_NAV_ROLES },
+  { href: '/recuperacao-acesso', icon: FaUser, label: 'Recuperar acesso', roles: MANAGER_NAV_ROLES },
   { href: '/manage-workers', icon: FaUsers, label: 'Equipe', roles: MANAGER_NAV_ROLES },
   { href: '/worker-productivity', icon: FaChartBar, label: 'Produtividade', roles: MANAGER_NAV_ROLES },
   { href: '/dashboards', icon: FaChartPie, label: 'Dashboards', roles: MANAGER_NAV_ROLES },

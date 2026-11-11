@@ -84,6 +84,7 @@ function createFakeTx() {
   const tx = {
     $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join('?');
+      if (/INSERT INTO measurement_effect/.test(sql)) return 1;
       if (/INSERT INTO "material_bag_state"/.test(sql)) {
         const key = keyFor(toBigInt(values[0]), toBigInt(values[1]));
         if (!bagStates.has(key)) {

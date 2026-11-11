@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { recordCollectionEffect } from './collection-effect';
 import { AuthSession, mapDatabaseUserTypeToRole } from '@/lib/auth/shared';
 import {
   DecimalInput,
@@ -568,6 +569,13 @@ export async function recordMaterialWeighing(
       device: true,
       bagFilled: true,
     },
+  });
+
+  await recordCollectionEffect(tx, {
+    measurementId: measurement.weightingId, cooperativeId: input.cooperativeId,
+    materialId: input.materialId, amount: delta.collectedDeltaKg,
+    bagBefore: lockedBagState,
+    bagAfter: { isBegun: delta.isBegun, currentKg: delta.nextCurrentKg },
   });
 
   await tx.materialBagState.update({

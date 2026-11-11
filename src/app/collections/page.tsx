@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '@/components/Layout';
+import { DeleteCollectionDialog } from '@/components/collections/DeleteCollectionDialog';
 import { SectionMessage } from '@/components/dashboard/SectionMessage';
 import {
   FaBalanceScale,
@@ -10,6 +11,7 @@ import {
   FaFilter,
   FaHistory,
   FaRedo,
+  FaTrash,
 } from 'react-icons/fa';
 
 interface SessionUser {
@@ -215,7 +217,9 @@ function mapServerError(payload: ApiErrorPayload | undefined, fallback: string):
 export default function CollectionsPage() {
   const todayKey = useMemo(() => localDateKey(), []);
   const requestSeq = useRef(0);
+  const bagRequestSeq = useRef(0);
   const submitInFlight = useRef(false);
+  const deleteInFlight = useRef(false);
 
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [workers, setWorkers] = useState<WorkerOption[]>([]);
@@ -245,6 +249,9 @@ export default function CollectionsPage() {
   const [collectionsTotal, setCollectionsTotal] = useState({ count: 0, weightKg: 0 });
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [collectionsError, setCollectionsError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CollectionRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sessionCooperativeId = sessionUser?.cooperative_id ?? '';
 
@@ -320,7 +327,9 @@ export default function CollectionsPage() {
   }, [listMaterialFilter, listWorkerFilter, rangeDays, scopedUrl, todayKey]);
 
   const loadBagState = useCallback(async (selectedMaterialId: string) => {
+    const requestId = ++bagRequestSeq.current;
     if (!selectedMaterialId) {
+      setBagStateLoading(false);
       setBagState(null);
       return;
     }
@@ -331,11 +340,11 @@ export default function CollectionsPage() {
         credentials: 'same-origin',
       });
       const payload = await readJson<BagStatePayload>(response, 'Falha ao consultar o estado do saco');
-      setBagState(payload);
+      if (requestId === bagRequestSeq.current) setBagState(payload);
     } catch {
-      setBagState(null);
+      if (requestId === bagRequestSeq.current) setBagState(null);
     } finally {
-      setBagStateLoading(false);
+      if (requestId === bagRequestSeq.current) setBagStateLoading(false);
     }
   }, [scopedUrl]);
 
@@ -361,6 +370,40 @@ export default function CollectionsPage() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [form.materialId, loadBagState, referenceLoading]);
+
+  const handleDelete = async (reason: string) => {
+    if (!deleteTarget || deleteInFlight.current) return;
+    deleteInFlight.current = true;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(scopedUrl(`/api/collections/${deleteTarget.id}`), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ reason }),
+      });
+      const payload = await readJson<{ success: boolean; removed_current_stock_kg: number }>(response, 'Não foi possível excluir a pesagem');
+      const stockMessage = payload.removed_current_stock_kg > 0
+        ? `${formatWeight(payload.removed_current_stock_kg)} kg retirados do estoque.` : 'Estoque disponível preservado.';
+      setSuccess(`Pesagem #${deleteTarget.id} de ${deleteTarget.worker_name} excluída dos totais de coleta. ${stockMessage}`);
+      setError(null);
+      setReviewing(false);
+      setDeleteTarget(null);
+      void loadCollections();
+      void loadBagState(form.materialId);
+    } catch (deleteFailure) {
+      setDeleteError(deleteFailure instanceof Error ? deleteFailure.message : 'Não foi possível excluir a pesagem.');
+    } finally {
+      deleteInFlight.current = false;
+      setDeleting(false);
+    }
+  };
+
+  const openDelete = (row: CollectionRow) => {
+    setDeleteError(null);
+    setDeleteTarget(row);
+  };
 
   const selectedWorker = workers.find((worker) => workerId(worker) === form.workerId) ?? null;
   const selectedMaterial = materials.find((material) => materialId(material) === form.materialId) ?? null;
@@ -513,7 +556,7 @@ export default function CollectionsPage() {
         ) : null}
 
         {success ? (
-          <div className="rounded-lg border border-success/35 bg-success/10 px-4 py-4">
+          <div role="status" className="rounded-lg border border-success/35 bg-success/10 px-4 py-4">
             <div className="flex items-start gap-3">
               <FaCheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-success" />
               <p className="text-sm text-foreground">{success}</p>
@@ -695,7 +738,7 @@ export default function CollectionsPage() {
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Coletas recentes</h2>
                 <p className="mt-1 text-sm text-text-secondary">
-                  Coletas registradas pelo aplicativo ou pelo painel para a cooperativa.
+                  Coletas registradas pelo aplicativo ou pelo painel para a cooperativa. Exclua um registro feito por engano para corrigir os totais e o estoque.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -767,6 +810,7 @@ export default function CollectionsPage() {
                         <th scope="col" className="px-4 py-3 font-semibold">Material</th>
                         <th scope="col" className="px-4 py-3 text-right font-semibold">Coleta (kg)</th>
                         <th scope="col" className="px-4 py-3 font-semibold">Saco cheio</th>
+                        <th scope="col" className="px-4 py-3 font-semibold">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -780,6 +824,13 @@ export default function CollectionsPage() {
                           <td className="px-4 py-3 text-foreground">{row.material_name}</td>
                           <td className="px-4 py-3 text-right font-semibold text-foreground">{formatWeight(row.weight_kg)}</td>
                           <td className="px-4 py-3 text-text-secondary">{row.bag_full ? 'Sim' : 'Não'}</td>
+                          <td className="px-4 py-3">
+                            <button type="button" onClick={() => openDelete(row)} disabled={deleting || submitting}
+                              aria-label={`Excluir pesagem #${row.id} de ${row.worker_name}`}
+                              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-error hover:bg-error/10 disabled:opacity-60">
+                              <FaTrash aria-hidden="true" className="h-3 w-3" /> Excluir
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -789,7 +840,7 @@ export default function CollectionsPage() {
                           {collectionsTotal.count} coletas no período
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-foreground">{formatWeight(collectionsTotal.weightKg)}</td>
-                        <td className="px-4 py-3" />
+                        <td className="px-4 py-3" colSpan={2} />
                       </tr>
                     </tfoot>
                   </table>
@@ -809,6 +860,11 @@ export default function CollectionsPage() {
                         <FaHistory className="mr-1 inline h-3 w-3" />
                         {formatDateKey(row.date)} · Saco cheio: {row.bag_full ? 'Sim' : 'Não'}
                       </p>
+                      <button type="button" onClick={() => openDelete(row)} disabled={deleting || submitting}
+                        aria-label={`Excluir pesagem #${row.id} de ${row.worker_name}`}
+                        className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm text-error hover:bg-error/10 disabled:opacity-60">
+                        <FaTrash aria-hidden="true" className="h-3 w-3" /> Excluir pesagem
+                      </button>
                     </article>
                   ))}
                   <p className="text-xs text-text-secondary">
@@ -820,6 +876,11 @@ export default function CollectionsPage() {
           </div>
         </section>
       </div>
+      {deleteTarget ? (
+        <DeleteCollectionDialog key={deleteTarget.id} collection={deleteTarget} pending={deleting} error={deleteError}
+          onCancel={() => { if (!deleteInFlight.current) setDeleteTarget(null); }}
+          onConfirm={(reason) => void handleDelete(reason)} />
+      ) : null}
     </Layout>
   );
 }

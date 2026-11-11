@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
+import { recordImportedCollectionEffects } from '@/lib/materials/collection-effect';
 import { decimalToJsonNumber, formatDecimal } from '@/lib/decimal';
 import { resolveCooperativeDevice } from '@/lib/materials/measurements';
 import { addHistoricalCollected, addToStock, type StockSnapshot } from '@/lib/stock/ledger';
@@ -139,6 +140,10 @@ export async function applyOnboardingImport(
         select: { weightingId: true },
       });
       created.forEach((row) => weightingIds.push(row.weightingId));
+      await recordImportedCollectionEffects(tx, {
+        measurementIds: created.map(row => row.weightingId), cooperativeId: plan.cooperativeId,
+        includeCurrent: plan.stockMode === 'collected_and_current',
+      });
     }
 
     const byMaterial: OnboardingImportResult['byMaterial'] = [];

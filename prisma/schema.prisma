@@ -465,3 +465,36 @@ model AuthMailOutbox {
   attempts Int @default(0)
   createdAt DateTime @default(now())
 }
+
+/// Retained independently of operational records so corrections remain traceable.
+model CollectionDeletionAudit {
+  id            BigInt   @id @default(autoincrement())
+  measurementId BigInt   @unique @map("measurement_id")
+  cooperativeId BigInt   @map("cooperative_id")
+  actorWorkerId BigInt   @map("actor_worker_id")
+  actorRole     String   @map("actor_role")
+  reason        String
+  measurement   Json
+  beforeState   Json     @map("before_state")
+  afterState    Json     @map("after_state")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([cooperativeId, createdAt], map: "collection_deletion_audit_cooperative_created_idx")
+  @@map("collection_deletion_audit")
+}
+
+/// Original effects retained after deletion for accounting traceability.
+model MeasurementEffect {
+  measurementId    BigInt   @id @map("measurement_id")
+  cooperativeId    BigInt   @map("cooperative_id")
+  materialId       BigInt   @map("material_id")
+  collectedDeltaKg Decimal  @map("collected_delta_kg") @db.Decimal(65, 2)
+  currentDeltaKg   Decimal  @map("current_delta_kg") @db.Decimal(65, 2)
+  bagBefore        Json?    @map("bag_before")
+  bagAfter         Json?    @map("bag_after")
+  source           String
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([cooperativeId, materialId], map: "measurement_effect_cooperative_material_idx")
+  @@map("measurement_effect")
+}
